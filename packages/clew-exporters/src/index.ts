@@ -1,0 +1,94 @@
+import { type CompatibilityWarning, type ExportResult, type SkillBundle, exportResultSchema } from "@clew/schema";
+
+type Provider = "claude" | "opencode";
+
+export function exportClaudeSkill(bundle: SkillBundle): ExportResult {
+  const warnings = exportWarnings(bundle, "claude");
+  const command = providerExtension(bundle, "claude").slash_command;
+  return exportResultSchema.parse({
+    provider: "claude",
+    artifacts: [
+      {
+        path: `${bundle.manifest.id}/SKILL.md`,
+        contents: [
+          `# ${bundle.manifest.name}`,
+          "",
+          bundle.manifest.description ?? "",
+          command ? `Slash command: ${String(command)}` : "",
+          "",
+          bundle.instructions,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ],
+    warnings,
+  });
+}
+
+export function exportOpenCodeSkill(bundle: SkillBundle): ExportResult {
+  const warnings = exportWarnings(bundle, "opencode");
+  const mode = providerExtension(bundle, "opencode").agent_mode;
+  return exportResultSchema.parse({
+    provider: "opencode",
+    artifacts: [
+      {
+        path: `${bundle.manifest.id}.md`,
+        contents: [
+          `---`,
+          `name: ${bundle.manifest.name}`,
+          `description: ${bundle.manifest.description ?? ""}`,
+          mode ? `mode: ${String(mode)}` : "",
+          `---`,
+          "",
+          bundle.instructions,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ],
+    warnings,
+  });
+}
+
+export function exportProviderSkill(provider: Provider, bundle: SkillBundle): ExportResult {
+  return provider === "claude" ? exportClaudeSkill(bundle) : exportOpenCodeSkill(bundle);
+}
+
+function exportWarnings(bundle: SkillBundle, provider: Provider): CompatibilityWarning[] {
+  const warnings: CompatibilityWarning[] = [];
+  if (!bundle.manifest.compatibility.providers.includes(provider)) {
+    warnings.push({
+      code: "target_provider_not_declared",
+      provider,
+      message: `Skill does not declare ${provider} compatibility; exporting best-effort instructions only.`,
+      severity: "warning",
+    });
+  }
+  if (bundle.manifest.extends.length) {
+    warnings.push({
+      code: "composition_degraded",
+      provider,
+      field: "extends",
+      message: "Provider export does not encode clew inheritance; compose first if parent policies must be inlined.",
+      severity: "warning",
+    });
+  }
+  if (bundle.manifest.capabilities.required.length) {
+    warnings.push({
+      code: "capability_semantics_degraded",
+      provider,
+      field: "capabilities.required",
+      message: "Required runtime capabilities are preserved by clew but are advisory in provider exports.",
+      severity: "warning",
+    });
+  }
+  return warnings;
+}
+
+function providerExtension(bundle: SkillBundle, provider: Provider): Record<string, unknown> {
+  const extension = bundle.manifest.extensions[provider];
+  return typeof extension === "object" && extension !== null && !Array.isArray(extension)
+    ? (extension as Record<string, unknown>)
+    : {};
+}

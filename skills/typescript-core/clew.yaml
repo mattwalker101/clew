@@ -1,0 +1,33 @@
+id: typescript-core
+version: 1.0.0
+kind: instruction_skill
+name: TypeScript Core
+description: TypeScript and pnpm guidance for strict monorepo packages.
+instructions:
+  file: skill.md
+tags:
+  - typescript
+  - pnpm
+  - engineering
+capabilities:
+  required:
+    - filesystem
+    - terminal
+  optional:
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - typescript
+    - pnpm
+    - zod
+extends:
+  - engineering-core
+  - safe-editing
+policies:
+  - keep public types explicit
+  - validate runtime inputs at package boundaries

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmitOnError": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@clew/schema": ["packages/clew-schema/src/index.ts"],
+      "@clew/core": ["packages/clew-core/src/index.ts"],
+      "@clew/importers": ["packages/clew-importers/src/index.ts"],
+      "@clew/exporters": ["packages/clew-exporters/src/index.ts"],
+      "@clew/mcp": ["packages/clew-mcp/src/index.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
+  }
+}

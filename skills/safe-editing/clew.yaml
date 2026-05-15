@@ -1,0 +1,30 @@
+id: safe-editing
+version: 1.0.0
+kind: instruction_skill
+name: Safe Editing
+description: Edit files conservatively while preserving unrelated user changes.
+instructions:
+  file: skill.md
+tags:
+  - safety
+  - editing
+capabilities:
+  required:
+    - filesystem
+  optional:
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - edit
+    - patch
+    - change
+extends:
+  - engineering-core
+policies:
+  - keep edits scoped
+  - never discard unrelated changes

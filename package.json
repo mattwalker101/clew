@@ -1,0 +1,19 @@
+{
+  "name": "clew",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Portable operational knowledge system for coding agents.",
+  "type": "module",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "build": "corepack pnpm -r build",
+    "check": "corepack pnpm -r build && corepack pnpm -r check",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0",
+    "zod": "^3.25.0"
+  }
+}

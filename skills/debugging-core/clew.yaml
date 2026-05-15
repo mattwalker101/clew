@@ -1,0 +1,31 @@
+id: debugging-core
+version: 1.0.0
+kind: instruction_skill
+name: Debugging Core
+description: Reproduce, inspect, instrument, fix, and verify defects systematically.
+instructions:
+  file: skill.md
+tags:
+  - debugging
+  - testing
+capabilities:
+  required:
+    - filesystem
+    - terminal
+  optional:
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - debug
+    - failing
+    - diagnose
+extends:
+  - engineering-core
+policies:
+  - reproduce before fixing
+  - verify with focused tests

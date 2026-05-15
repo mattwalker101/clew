@@ -1,0 +1,32 @@
+id: engineering-core
+version: 1.0.0
+kind: instruction_skill
+name: Engineering Core
+description: Shared engineering judgment for local-first, deterministic software work.
+instructions:
+  file: skill.md
+tags:
+  - engineering
+  - architecture
+capabilities:
+  required:
+    - filesystem
+  optional:
+    - terminal
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - build
+    - implement
+    - architecture
+policies:
+  - preserve project non-goals
+  - prefer deterministic local behavior
+extensions:
+  local:
+    reference: true

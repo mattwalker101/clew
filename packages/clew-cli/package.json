@@ -1,0 +1,28 @@
+{
+  "name": "@clew/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "clew": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@clew/core": "workspace:*",
+    "@clew/exporters": "workspace:*",
+    "@clew/importers": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

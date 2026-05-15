@@ -1,0 +1,39 @@
+id: refactor-safely
+version: 1.0.0
+kind: instruction_skill
+name: Refactor Safely
+description: Refactor code incrementally without changing public behavior.
+instructions:
+  file: skill.md
+tags:
+  - refactoring
+  - safety
+  - engineering
+capabilities:
+  required:
+    - filesystem
+    - terminal
+  optional:
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - refactor
+    - cleanup
+    - technical debt
+extends:
+  - engineering-core
+  - safe-editing
+policies:
+  - preserve public interfaces
+  - prefer incremental diffs
+  - run tests before and after behavior changes
+extensions:
+  claude:
+    slash_command: /refactor-safely
+  opencode:
+    agent_mode: safe
