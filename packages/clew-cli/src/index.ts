@@ -4,11 +4,13 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   ActivationEngine,
+  detectRepoSignals,
   findConflicts,
   findOverlaps,
+  getAgentsMdDiagnostics,
+  openRegistryDb,
   parseAgentsMd,
-  rebuildRegistry,
-  rebuildSqliteIndex,
+  rebuildRegistryIndex,
   SkillRegistry,
 } from "@clew/core";
 import { exportProviderSkill } from "@clew/exporters";
@@ -16,7 +18,9 @@ import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
 
 type Command = (args: string[]) => void | Promise<void>;
 
-const registry = () => SkillRegistry.fromProject(process.cwd());
+const registryDbPath = () => join(process.cwd(), ".clew-registry.db");
+
+const registry = () => new SkillRegistry(rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() }));
 
 const commands: Record<string, Command> = {
   list() {
@@ -27,14 +31,20 @@ const commands: Record<string, Command> = {
   },
   recommend(args) {
     const agentContext = readAgentsContext();
-    printJson(
-      new ActivationEngine(registry()).recommend({
+    const db = openRegistryDb(registryDbPath());
+    try {
+      const recommendations = new ActivationEngine(registry()).recommend({
         query: args.join(" "),
         agentsMd: agentContext.raw,
         activeSkillIds: agentContext.activeSkillIds,
+        repoSignals: detectRepoSignals(process.cwd()),
         capabilities: ["filesystem", "terminal", "git", "mcp"],
-      }),
-    );
+      });
+      for (const recommendation of recommendations) db.recordRecommendation(recommendation.skillId);
+      printJson(recommendations);
+    } finally {
+      db.close();
+    }
   },
   explain(args) {
     const [skillId, ...query] = args;
@@ -45,6 +55,7 @@ const commands: Record<string, Command> = {
         query: query.join(" "),
         agentsMd: agentContext.raw,
         activeSkillIds: agentContext.activeSkillIds,
+        repoSignals: detectRepoSignals(process.cwd()),
         capabilities: ["filesystem", "terminal", "git", "mcp"],
       }) ?? { skillId, score: 0, reasons: ["skill was not recommended for this context"], signals: [], warnings: [] },
     );
@@ -63,10 +74,10 @@ const commands: Record<string, Command> = {
     printJson(exportProviderSkill(provider, bundle));
   },
   enable(args) {
-    stateOnly(args, "enable");
+    setDisabledState(args, false);
   },
   disable(args) {
-    stateOnly(args, "disable");
+    setDisabledState(args, true);
   },
   overlaps() {
     printJson(findOverlaps(registry().list()));
@@ -75,16 +86,29 @@ const commands: Record<string, Command> = {
     printJson(findConflicts(registry().list()));
   },
   async telemetry() {
-    const snapshot = rebuildRegistry({ projectRoot: process.cwd() });
-    printJson(await rebuildSqliteIndex(join(process.cwd(), ".clew-registry.db"), snapshot));
+    const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+    const db = openRegistryDb(registryDbPath());
+    try {
+      printJson({
+        dbPath: registryDbPath(),
+        skills: snapshot.entries.length,
+        telemetry: db.listTelemetry(),
+      });
+    } finally {
+      db.close();
+    }
   },
   doctor() {
-    const bundles = registry().list();
+    const currentRegistry = registry();
+    const bundles = currentRegistry.list();
+    const agentsContext = readAgentsContext();
     printJson({
       skills: bundles.length,
+      dbPath: registryDbPath(),
+      repoSignals: detectRepoSignals(process.cwd()),
       overlaps: findOverlaps(bundles).length,
       conflicts: findConflicts(bundles),
-      warnings: [],
+      warnings: getAgentsMdDiagnostics(agentsContext.raw, currentRegistry),
     });
   },
 };
@@ -125,13 +149,23 @@ function readAgentsContext(): { raw: string; activeSkillIds: string[] } {
   }
 }
 
-function stateOnly(args: string[], action: "enable" | "disable"): void {
+function setDisabledState(args: string[], disabled: boolean): void {
   const [skillId] = args;
+  const action = disabled ? "disable" : "enable";
   if (!skillId) fail(`usage: clew ${action} <skill-id>`);
+  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+  if (!snapshot.entries.some((entry) => entry.bundle.manifest.id === skillId)) fail(`unknown skill: ${skillId}`);
+  const db = openRegistryDb(registryDbPath());
+  try {
+    db.setSkillDisabled(skillId, disabled);
+  } finally {
+    db.close();
+  }
+  const refreshed = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
   printJson({
     skillId,
-    action,
-    warning: "Persistent enable/disable state belongs in derived telemetry; no filesystem bundle was modified.",
+    disabled,
+    active: refreshed.entries.some((entry) => entry.bundle.manifest.id === skillId && !entry.disabled),
   });
 }
 

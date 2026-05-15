@@ -6,5 +6,6 @@ coverage/
 .scratch/
 .pnpm-store/
 .clew-registry.db
+.clew-registry.db-*
 sandbox/
 *.tsbuildinfo
