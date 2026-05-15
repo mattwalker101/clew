@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { basename, join, relative } from "node:path";
+import { join, relative } from "node:path";
+import Database from "better-sqlite3";
 import {
   type ActivationContext,
   activationContextSchema,
@@ -40,12 +42,47 @@ export type SqliteIndexResult = {
   conflicts: number;
 };
 
+export type RegistryOptions = {
+  projectRoot?: string;
+  org?: string;
+  dbPath?: string;
+  sessionBundles?: SkillBundle[];
+  includeReferenceSkills?: boolean;
+};
+
+export type TelemetryRecord = {
+  skillId: string;
+  usageCount: number;
+  lastUsed?: string;
+  disabled: boolean;
+  favorite: boolean;
+};
+
+type SqliteStatement = {
+  get(...values: unknown[]): unknown;
+  all(...values: unknown[]): unknown[];
+  run(...values: unknown[]): unknown;
+};
+
+type SqliteDatabase = {
+  exec(sql: string): void;
+  prepare(sql: string): SqliteStatement;
+  transaction<T>(fn: () => T): () => T;
+  close(): void;
+};
+
 export const registryPrecedence: RegistryLayer[] = ["session", "project", "org", "global"];
 
-export function canonicalRegistryRoots(projectRoot = process.cwd(), org?: string): Record<RegistryLayer, string[]> {
+export function canonicalRegistryRoots(
+  projectRoot = process.cwd(),
+  org?: string,
+  includeReferenceSkills = true,
+): Record<RegistryLayer, string[]> {
+  const projectRoots = [join(projectRoot, ".clew")];
+  if (includeReferenceSkills) projectRoots.push(join(projectRoot, "skills"));
   return {
     session: [],
-    project: [join(projectRoot, ".clew"), join(projectRoot, "skills")],
+    project: projectRoots,
     org: org ? [join(homedir(), ".clew", "orgs", org)] : [],
     global: [join(homedir(), ".clew", "global")],
   };
@@ -75,6 +112,60 @@ export function parseAgentsMd(content: string): { activeSkillIds: string[]; pref
   }
 
   return { activeSkillIds: unique(active), preferences: unique(preferences) };
+}
+
+export function getAgentsMdDiagnostics(content: string, registry: SkillRegistry): CompatibilityWarning[] {
+  const diagnostics: CompatibilityWarning[] = [];
+  const parsed = parseAgentsMd(content);
+  for (const skillId of parsed.activeSkillIds) {
+    const entry = registry.entries.find((candidate) => candidate.bundle.manifest.id === skillId);
+    if (!entry) {
+      diagnostics.push({
+        code: "agents_skill_unknown",
+        message: `AGENTS.md references unknown skill "${skillId}".`,
+        severity: "warning",
+        field: "AGENTS.md",
+      });
+    } else if (entry.disabled) {
+      diagnostics.push({
+        code: "agents_skill_disabled",
+        message: `AGENTS.md references disabled skill "${skillId}".`,
+        severity: "warning",
+        field: "AGENTS.md",
+      });
+    }
+  }
+  return diagnostics;
+}
+
+export function detectRepoSignals(projectRoot = process.cwd()): string[] {
+  const signals = new Set<string>();
+  const packageJsonPath = join(projectRoot, "package.json");
+  if (existsSync(packageJsonPath)) {
+    signals.add("node");
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        packageManager?: string;
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      if (packageJson.packageManager?.startsWith("pnpm@")) signals.add("pnpm");
+      const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      for (const dependency of Object.keys(dependencies)) {
+        if (dependency === "typescript" || dependency.startsWith("@types/")) signals.add("typescript");
+        if (dependency === "zod") signals.add("zod");
+        if (dependency === "vitest") signals.add("testing");
+      }
+    } catch {
+      signals.add("package-json-unreadable");
+    }
+  }
+  if (existsSync(join(projectRoot, "tsconfig.json")) || existsSync(join(projectRoot, "tsconfig.base.json"))) {
+    signals.add("typescript");
+  }
+  if (existsSync(join(projectRoot, "pnpm-lock.yaml"))) signals.add("pnpm");
+  if (existsSync(join(projectRoot, ".git"))) signals.add("git");
+  return [...signals].sort();
 }
 
 export function parseYaml(input: string): unknown {
@@ -175,13 +266,12 @@ export function discoverSkillBundles(root: string): SkillBundle[] {
   return candidates.map(loadSkillBundle).sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
 }
 
-export function rebuildRegistry(options: {
-  projectRoot?: string;
-  org?: string;
-  sessionBundles?: SkillBundle[];
-  telemetry?: TelemetryState;
-} = {}): RegistrySnapshot {
-  const roots = canonicalRegistryRoots(options.projectRoot ?? process.cwd(), options.org);
+export function rebuildRegistry(options: RegistryOptions & { telemetry?: TelemetryState } = {}): RegistrySnapshot {
+  const roots = canonicalRegistryRoots(
+    options.projectRoot ?? process.cwd(),
+    options.org,
+    options.includeReferenceSkills ?? true,
+  );
   const entries: RegistryEntry[] = [];
   const warnings: CompatibilityWarning[] = [];
   const telemetry = options.telemetry ?? { disabled: [], favorites: [], usage: {} };
@@ -203,6 +293,18 @@ export function rebuildRegistry(options: {
   }
   const resolved = [...byId.values()].sort((a, b) => a.bundle.manifest.id.localeCompare(b.bundle.manifest.id));
   return { entries: resolved, warnings };
+}
+
+export function rebuildRegistryIndex(options: RegistryOptions = {}): RegistrySnapshot {
+  const dbPath = options.dbPath ?? join(options.projectRoot ?? process.cwd(), ".clew-registry.db");
+  const db = openRegistryDb(dbPath);
+  try {
+    const snapshot = rebuildRegistry({ ...options, telemetry: db.getTelemetryState() });
+    db.rebuildIndex(snapshot);
+    return snapshot;
+  } finally {
+    db.close();
+  }
 }
 
 export function composeSkill(bundle: SkillBundle, parents: SkillBundle[]): SkillBundle {
@@ -277,20 +379,26 @@ export function findConflicts(bundles: SkillBundle[]): Array<{ ids: string[]; re
   return conflicts.sort((a, b) => a.ids.join(":").localeCompare(b.ids.join(":")));
 }
 
-export async function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnapshot): Promise<SqliteIndexResult> {
-  const sqlite = (await import("node:sqlite")) as unknown as {
-    DatabaseSync: new (path: string) => {
-      exec(sql: string): void;
-      prepare(sql: string): { run(...values: unknown[]): void };
-      close(): void;
-    };
-  };
-  const db = new sqlite.DatabaseSync(dbPath);
-  const bundles = snapshot.entries.map((entry) => entry.bundle);
-  const overlaps = findOverlaps(bundles);
-  const conflicts = findConflicts(bundles);
+export function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnapshot): SqliteIndexResult {
+  const db = openRegistryDb(dbPath);
   try {
-    db.exec(`
+    return db.rebuildIndex(snapshot);
+  } finally {
+    db.close();
+  }
+}
+
+export function openRegistryDb(dbPath: string): RegistryDb {
+  return new RegistryDb(dbPath);
+}
+
+export class RegistryDb {
+  private readonly db: SqliteDatabase;
+
+  constructor(readonly dbPath: string) {
+    this.db = openSqliteDatabase(dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS skills (
         id TEXT PRIMARY KEY,
         layer TEXT NOT NULL,
@@ -304,6 +412,7 @@ export async function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnaps
       CREATE TABLE IF NOT EXISTS telemetry (
         skill_id TEXT PRIMARY KEY,
         usage_count INTEGER NOT NULL DEFAULT 0,
+        last_used TEXT,
         disabled INTEGER NOT NULL DEFAULT 0,
         favorite INTEGER NOT NULL DEFAULT 0
       );
@@ -320,50 +429,176 @@ export async function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnaps
         right_skill_id TEXT NOT NULL,
         reason TEXT NOT NULL
       );
-      DELETE FROM skills;
-      DELETE FROM overlaps;
-      DELETE FROM conflicts;
     `);
-    const insertSkill = db.prepare(
-      "INSERT INTO skills (id, layer, root, version, name, disabled, favorite, manifest_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    );
-    for (const entry of snapshot.entries) {
-      insertSkill.run(
-        entry.bundle.manifest.id,
-        entry.layer,
-        entry.root,
-        entry.bundle.manifest.version,
-        entry.bundle.manifest.name,
-        entry.disabled ? 1 : 0,
-        entry.favorite ? 1 : 0,
-        JSON.stringify(entry.bundle.manifest),
-      );
-      db.prepare(
-        "INSERT INTO telemetry (skill_id, usage_count, disabled, favorite) VALUES (?, 0, ?, ?) ON CONFLICT(skill_id) DO UPDATE SET disabled=excluded.disabled, favorite=excluded.favorite",
-      ).run(entry.bundle.manifest.id, entry.disabled ? 1 : 0, entry.favorite ? 1 : 0);
-    }
-    const insertOverlap = db.prepare(
-      "INSERT INTO overlaps (id, left_skill_id, right_skill_id, triggers_json, tags_json) VALUES (?, ?, ?, ?, ?)",
-    );
-    for (const overlap of overlaps) {
-      insertOverlap.run(
-        overlap.ids.join(":"),
-        overlap.ids[0],
-        overlap.ids[1],
-        JSON.stringify(overlap.triggers),
-        JSON.stringify(overlap.tags),
-      );
-    }
-    const insertConflict = db.prepare(
-      "INSERT INTO conflicts (id, left_skill_id, right_skill_id, reason) VALUES (?, ?, ?, ?)",
-    );
-    for (const conflict of conflicts) {
-      insertConflict.run(conflict.ids.join(":"), conflict.ids[0], conflict.ids[1], conflict.reason);
-    }
-  } finally {
-    db.close();
   }
-  return { dbPath, skills: snapshot.entries.length, overlaps: overlaps.length, conflicts: conflicts.length };
+
+  getTelemetry(skillId: string): TelemetryRecord {
+    const row = this.db
+      .prepare("SELECT skill_id, usage_count, last_used, disabled, favorite FROM telemetry WHERE skill_id = ?")
+      .get(skillId) as
+      | { skill_id: string; usage_count: number; last_used: string | null; disabled: number; favorite: number }
+      | undefined;
+    if (!row) {
+      return { skillId, usageCount: 0, disabled: false, favorite: false };
+    }
+    return {
+      skillId: row.skill_id,
+      usageCount: row.usage_count,
+      ...(row.last_used ? { lastUsed: row.last_used } : {}),
+      disabled: row.disabled === 1,
+      favorite: row.favorite === 1,
+    };
+  }
+
+  getTelemetryState(): TelemetryState {
+    const rows = this.db
+      .prepare("SELECT skill_id, usage_count, disabled, favorite FROM telemetry")
+      .all() as Array<{ skill_id: string; usage_count: number; disabled: number; favorite: number }>;
+    return {
+      disabled: rows.filter((row) => row.disabled === 1).map((row) => row.skill_id).sort(),
+      favorites: rows.filter((row) => row.favorite === 1).map((row) => row.skill_id).sort(),
+      usage: Object.fromEntries(rows.map((row) => [row.skill_id, row.usage_count])),
+    };
+  }
+
+  listTelemetry(): TelemetryRecord[] {
+    const rows = this.db
+      .prepare("SELECT skill_id FROM telemetry ORDER BY skill_id")
+      .all() as Array<{ skill_id: string }>;
+    return rows.map((row) => this.getTelemetry(row.skill_id));
+  }
+
+  setSkillDisabled(skillId: string, disabled: boolean): void {
+    this.db
+      .prepare(
+        "INSERT INTO telemetry (skill_id, disabled) VALUES (?, ?) ON CONFLICT(skill_id) DO UPDATE SET disabled=excluded.disabled",
+      )
+      .run(skillId, disabled ? 1 : 0);
+  }
+
+  setSkillFavorite(skillId: string, favorite: boolean): void {
+    this.db
+      .prepare(
+        "INSERT INTO telemetry (skill_id, favorite) VALUES (?, ?) ON CONFLICT(skill_id) DO UPDATE SET favorite=excluded.favorite",
+      )
+      .run(skillId, favorite ? 1 : 0);
+  }
+
+  recordRecommendation(skillId: string): void {
+    this.db
+      .prepare(
+        "INSERT INTO telemetry (skill_id, usage_count, last_used) VALUES (?, 1, ?) ON CONFLICT(skill_id) DO UPDATE SET usage_count=usage_count + 1, last_used=excluded.last_used",
+      )
+      .run(skillId, new Date().toISOString());
+  }
+
+  rebuildIndex(snapshot: RegistrySnapshot): SqliteIndexResult {
+    const bundles = snapshot.entries.map((entry) => entry.bundle);
+    const overlaps = findOverlaps(bundles);
+    const conflicts = findConflicts(bundles);
+    const transaction = this.db.transaction(() => {
+      this.db.exec("DELETE FROM skills; DELETE FROM overlaps; DELETE FROM conflicts;");
+      const insertSkill = this.db.prepare(
+      "INSERT INTO skills (id, layer, root, version, name, disabled, favorite, manifest_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      );
+      const upsertTelemetry = this.db.prepare(
+        "INSERT INTO telemetry (skill_id, usage_count, disabled, favorite) VALUES (?, 0, ?, ?) ON CONFLICT(skill_id) DO UPDATE SET disabled=excluded.disabled, favorite=excluded.favorite",
+      );
+      for (const entry of snapshot.entries) {
+        insertSkill.run(
+          entry.bundle.manifest.id,
+          entry.layer,
+          entry.root,
+          entry.bundle.manifest.version,
+          entry.bundle.manifest.name,
+          entry.disabled ? 1 : 0,
+          entry.favorite ? 1 : 0,
+          JSON.stringify(entry.bundle.manifest),
+        );
+        upsertTelemetry.run(entry.bundle.manifest.id, entry.disabled ? 1 : 0, entry.favorite ? 1 : 0);
+      }
+      const insertOverlap = this.db.prepare(
+        "INSERT INTO overlaps (id, left_skill_id, right_skill_id, triggers_json, tags_json) VALUES (?, ?, ?, ?, ?)",
+      );
+      for (const overlap of overlaps) {
+        const [leftSkillId, rightSkillId] = overlap.ids;
+        insertOverlap.run(
+          overlap.ids.join(":"),
+          leftSkillId,
+          rightSkillId,
+          JSON.stringify(overlap.triggers),
+          JSON.stringify(overlap.tags),
+        );
+      }
+      const insertConflict = this.db.prepare(
+        "INSERT INTO conflicts (id, left_skill_id, right_skill_id, reason) VALUES (?, ?, ?, ?)",
+      );
+      for (const conflict of conflicts) {
+        const [leftSkillId, rightSkillId] = conflict.ids;
+        insertConflict.run(conflict.ids.join(":"), leftSkillId, rightSkillId, conflict.reason);
+      }
+    });
+    transaction();
+    return { dbPath: this.dbPath, skills: snapshot.entries.length, overlaps: overlaps.length, conflicts: conflicts.length };
+  }
+
+  close(): void {
+    this.db.close();
+  }
+}
+
+function openSqliteDatabase(dbPath: string): SqliteDatabase {
+  try {
+    const db = new Database(dbPath);
+    return {
+      exec(sql: string) {
+        db.exec(sql);
+      },
+      prepare(sql: string) {
+        return db.prepare(sql);
+      },
+      transaction<T>(fn: () => T) {
+        return db.transaction(fn) as () => T;
+      },
+      close() {
+        db.close();
+      },
+    };
+  } catch (error) {
+    const require = createRequire(import.meta.url);
+    const sqlite = require("node:sqlite") as {
+      DatabaseSync: new (path: string) => {
+        exec(sql: string): void;
+        prepare(sql: string): SqliteStatement;
+        close(): void;
+      };
+    };
+    const db = new sqlite.DatabaseSync(dbPath);
+    return {
+      exec(sql: string) {
+        db.exec(sql);
+      },
+      prepare(sql: string) {
+        return db.prepare(sql);
+      },
+      transaction<T>(fn: () => T) {
+        return () => {
+          db.exec("BEGIN");
+          try {
+            const result = fn();
+            db.exec("COMMIT");
+            return result;
+          } catch (transactionError) {
+            db.exec("ROLLBACK");
+            throw transactionError;
+          }
+        };
+      },
+      close() {
+        db.close();
+      },
+    };
+  }
 }
 
 export class SkillRegistry {
@@ -374,7 +609,7 @@ export class SkillRegistry {
   }
 
   static fromProject(projectRoot = process.cwd()): SkillRegistry {
-    return new SkillRegistry(rebuildRegistry({ projectRoot }));
+    return new SkillRegistry(rebuildRegistryIndex({ projectRoot }));
   }
 
   list(): SkillBundle[] {

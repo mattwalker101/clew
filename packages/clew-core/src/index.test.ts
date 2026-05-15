@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ActivationEngine,
   composeSkill,
+  detectRepoSignals,
   findConflicts,
   findOverlaps,
+  getAgentsMdDiagnostics,
+  openRegistryDb,
   parseAgentsMd,
+  rebuildRegistry,
+  rebuildRegistryIndex,
   rebuildSqliteIndex,
   SkillRegistry,
 } from "./index.js";
@@ -129,5 +134,112 @@ describe("@clew/core", () => {
     });
 
     expect(result).toMatchObject({ dbPath, skills: 1, overlaps: 0, conflicts: 0 });
+  });
+
+  it("preserves disabled telemetry across deterministic registry rebuilds", () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
+    const db = openRegistryDb(dbPath);
+    try {
+      db.setSkillDisabled("engineering-core", true);
+      const first = rebuildRegistryIndex({
+        dbPath,
+        sessionBundles: [bundle("engineering-core"), bundle("typescript-core")],
+        includeReferenceSkills: false,
+      });
+      const second = rebuildRegistryIndex({
+        dbPath,
+        sessionBundles: [bundle("engineering-core"), bundle("typescript-core")],
+        includeReferenceSkills: false,
+      });
+
+      expect(first.entries.map((entry) => [entry.bundle.manifest.id, entry.disabled])).toEqual([
+        ["engineering-core", true],
+        ["typescript-core", false],
+      ]);
+      expect(second.entries.map((entry) => [entry.bundle.manifest.id, entry.disabled])).toEqual([
+        ["engineering-core", true],
+        ["typescript-core", false],
+      ]);
+      expect(new SkillRegistry(second).list().map((entry) => entry.manifest.id)).toEqual(["typescript-core"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("records recommendation usage without losing disabled state", () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
+    const db = openRegistryDb(dbPath);
+    try {
+      db.setSkillDisabled("debugging-core", true);
+      db.recordRecommendation("debugging-core");
+      db.recordRecommendation("debugging-core");
+      expect(db.getTelemetry("debugging-core")).toMatchObject({
+        skillId: "debugging-core",
+        usageCount: 2,
+        disabled: true,
+        favorite: false,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("detects repository signals and explains repo heuristic matches", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ devDependencies: { typescript: "latest" } }));
+    writeFileSync(join(projectRoot, "tsconfig.json"), "{}");
+    writeFileSync(join(projectRoot, "pnpm-lock.yaml"), "");
+
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", { tags: ["typescript"], activation: { triggers: ["typescript"], tags: [], weight: 1 } }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const [recommendation] = new ActivationEngine(registry).recommend({
+      query: "update validation",
+      repoSignals: detectRepoSignals(projectRoot),
+    });
+
+    expect(detectRepoSignals(projectRoot)).toEqual(expect.arrayContaining(["node", "typescript", "pnpm"]));
+    expect(recommendation?.reasons).toContain('matched repository signal "typescript"');
+    expect(recommendation?.signals).toContain("repo:typescript");
+  });
+
+  it("warns when AGENTS.md references unknown or disabled skills", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(getAgentsMdDiagnostics("# Active Skills\n- safe-editing\n- missing-skill\n", registry)).toEqual([
+      {
+        code: "agents_skill_disabled",
+        field: "AGENTS.md",
+        message: 'AGENTS.md references disabled skill "safe-editing".',
+        severity: "warning",
+      },
+      {
+        code: "agents_skill_unknown",
+        field: "AGENTS.md",
+        message: 'AGENTS.md references unknown skill "missing-skill".',
+        severity: "warning",
+      },
+    ]);
   });
 });
