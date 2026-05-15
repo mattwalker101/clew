@@ -75,4 +75,56 @@ describe("@clew/cli", () => {
       expect.arrayContaining(["node", "typescript"]),
     );
   });
+
+  it("prints scriptable import JSON with compatibility warnings", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(process.cwd(), "claude-skill.json");
+    writeFileSync(
+      inputPath,
+      JSON.stringify({
+        id: "db-migration",
+        name: "Database Migration",
+        instructions: "Plan migrations.",
+        allowed_tools: ["Bash"],
+        risk_level: "high",
+      }),
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["import", "claude", inputPath]);
+
+    expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
+      provider: "claude",
+      bundles: [{ manifest: { id: "db-migration", extensions: { claude: { risk_level: "high" } } } }],
+      warnings: [{ code: "tool_semantics_degraded" }, { code: "provider_metadata_preserved" }],
+    });
+  });
+
+  it("prints scriptable export JSON with compatibility warnings", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["export", "opencode", "typescript-core"]);
+
+    expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
+      provider: "opencode",
+      artifacts: [{ path: "typescript-core.md" }],
+      warnings: [{ code: "target_provider_not_declared" }],
+    });
+  });
+
+  it("rejects malformed import input before printing JSON", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(process.cwd(), "broken-skill.json");
+    writeFileSync(inputPath, JSON.stringify({ id: "broken", instructions: "" }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(main(["import", "claude", inputPath])).rejects.toThrow(
+      "claude skill must include non-empty instructions or content",
+    );
+    expect(log).not.toHaveBeenCalled();
+  });
 });

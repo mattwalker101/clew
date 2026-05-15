@@ -5,21 +5,21 @@ type Provider = "claude" | "opencode";
 export function exportClaudeSkill(bundle: SkillBundle): ExportResult {
   const warnings = exportWarnings(bundle, "claude");
   const command = providerExtension(bundle, "claude").slash_command;
+  const contents = [`# ${bundle.manifest.name}`, ""];
+  if (bundle.manifest.description) {
+    contents.push(bundle.manifest.description);
+  }
+  if (command) {
+    contents.push(`Slash command: ${String(command)}`);
+  }
+  contents.push("");
+  contents.push(bundle.instructions);
   return exportResultSchema.parse({
     provider: "claude",
     artifacts: [
       {
         path: `${bundle.manifest.id}/SKILL.md`,
-        contents: [
-          `# ${bundle.manifest.name}`,
-          "",
-          bundle.manifest.description ?? "",
-          command ? `Slash command: ${String(command)}` : "",
-          "",
-          bundle.instructions,
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        contents: contents.join("\n"),
       },
     ],
     warnings,
@@ -29,22 +29,15 @@ export function exportClaudeSkill(bundle: SkillBundle): ExportResult {
 export function exportOpenCodeSkill(bundle: SkillBundle): ExportResult {
   const warnings = exportWarnings(bundle, "opencode");
   const mode = providerExtension(bundle, "opencode").agent_mode;
+  const contents = [`---`, `name: ${bundle.manifest.name}`, `description: ${bundle.manifest.description ?? ""}`];
+  if (mode) contents.push(`mode: ${String(mode)}`);
+  contents.push(`---`, "", bundle.instructions);
   return exportResultSchema.parse({
     provider: "opencode",
     artifacts: [
       {
         path: `${bundle.manifest.id}.md`,
-        contents: [
-          `---`,
-          `name: ${bundle.manifest.name}`,
-          `description: ${bundle.manifest.description ?? ""}`,
-          mode ? `mode: ${String(mode)}` : "",
-          `---`,
-          "",
-          bundle.instructions,
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        contents: contents.join("\n"),
       },
     ],
     warnings,

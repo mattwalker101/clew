@@ -1,0 +1,27 @@
+{
+  "manifest": {
+    "id": "interop-core",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Interop Core",
+    "description": "Preserve operational meaning across providers.",
+    "instructions": { "file": "skill.md" },
+    "tags": ["interop"],
+    "capabilities": { "required": ["filesystem"], "optional": ["git"] },
+    "compatibility": { "providers": ["claude", "opencode"], "warnings": [] },
+    "preferences": {},
+    "activation": { "triggers": ["import", "export"], "tags": [], "weight": 1 },
+    "extends": ["engineering-core"],
+    "policies": ["emit compatibility warnings"],
+    "provenance": {},
+    "extensions": {
+      "claude": { "slash_command": "/interop-core" },
+      "opencode": { "agent_mode": "safe" }
+    }
+  },
+  "instructions": "Preserve intent and report degradation.",
+  "assets": [],
+  "examples": [],
+  "templates": [],
+  "tests": []
+}

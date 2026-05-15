@@ -7,7 +7,7 @@ import {
   skillBundleSchema,
 } from "@clew/schema";
 
-type Provider = "claude" | "opencode";
+export type Provider = "claude" | "opencode";
 
 export type ProviderSkillInput = {
   id?: string;
@@ -34,23 +34,34 @@ export function importOpenCodeSkill(input: ProviderSkillInput): ImportResult {
 }
 
 export function importProviderSkill(provider: Provider, input: ProviderSkillInput): ImportResult {
+  assertProviderInput(provider, input);
   const warnings: CompatibilityWarning[] = [];
   const id = slug(input.id ?? input.name ?? `${provider}-skill`);
+  const instructions = providerInstructions(provider, input);
   const unknown = unknownProviderFields(input, provider);
-  if (unknown.length) {
-    warnings.push({
-      code: "provider_metadata_preserved",
-      provider,
-      message: `Unknown ${provider} fields preserved under extensions.${provider}: ${unknown.join(", ")}`,
-      severity: "warning",
-    });
-  }
   if (input.allowed_tools?.length) {
     warnings.push({
       code: "tool_semantics_degraded",
       provider,
       field: "allowed_tools",
       message: "Provider tool allow-list preserved as metadata; clew v0.1 does not execute tools.",
+      severity: "warning",
+    });
+  }
+  if (provider === "opencode" && input.mode && !input.agent_mode) {
+    warnings.push({
+      code: "provider_field_normalized",
+      provider,
+      field: "mode",
+      message: "OpenCode mode normalized to extensions.opencode.agent_mode.",
+      severity: "warning",
+    });
+  }
+  if (unknown.length) {
+    warnings.push({
+      code: "provider_metadata_preserved",
+      provider,
+      message: `Unknown ${provider} fields preserved under extensions.${provider}: ${unknown.join(", ")}`,
       severity: "warning",
     });
   }
@@ -80,7 +91,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
 
   const bundle = skillBundleSchema.parse({
     manifest,
-    instructions: input.instructions ?? input.content ?? "",
+    instructions,
     path: `${provider}:${id}`,
     assets: [],
     examples: [],
@@ -89,6 +100,29 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
   });
 
   return importResultSchema.parse({ provider, bundles: [bundle], warnings, provenance: manifest.provenance });
+}
+
+function assertProviderInput(provider: Provider, input: ProviderSkillInput): void {
+  for (const key of ["id", "name", "description", "instructions", "content", "slash_command", "mode", "agent_mode"] as const) {
+    const value = input[key];
+    if (value !== undefined && typeof value !== "string") {
+      throw new Error(`${provider} field "${key}" must be a string`);
+    }
+  }
+  for (const key of ["tags", "triggers", "allowed_tools"] as const) {
+    const value = input[key];
+    if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== "string"))) {
+      throw new Error(`${provider} field "${key}" must be an array of strings`);
+    }
+  }
+}
+
+function providerInstructions(provider: Provider, input: ProviderSkillInput): string {
+  const instructions = input.instructions ?? input.content;
+  if (!instructions?.trim()) {
+    throw new Error(`${provider} skill must include non-empty instructions or content`);
+  }
+  return instructions;
 }
 
 function providerExtension(input: ProviderSkillInput, provider: Provider): Record<string, unknown> {
@@ -101,7 +135,7 @@ function providerExtension(input: ProviderSkillInput, provider: Provider): Recor
 }
 
 function unknownProviderFields(input: ProviderSkillInput, provider: Provider): string[] {
-  const known = new Set([
+  const known = new Set<string>([
     "id",
     "name",
     "description",
@@ -111,9 +145,12 @@ function unknownProviderFields(input: ProviderSkillInput, provider: Provider): s
     "triggers",
     "allowed_tools",
     "metadata",
-    provider === "claude" ? "slash_command" : "agent_mode",
-    "mode",
   ]);
+  if (provider === "claude") known.add("slash_command");
+  if (provider === "opencode") {
+    known.add("agent_mode");
+    known.add("mode");
+  }
   return Object.keys(input).filter((key) => !known.has(key)).sort();
 }
 

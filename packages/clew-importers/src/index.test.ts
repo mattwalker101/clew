@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { importClaudeSkill, importOpenCodeSkill } from "./index.js";
+import type { ProviderSkillInput } from "./index.js";
+
+const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
+
+function fixture(name: string): ProviderSkillInput {
+  return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
+}
 
 describe("@clew/importers", () => {
   it("imports Claude skills while preserving degraded provider fields", () => {
@@ -20,5 +29,48 @@ describe("@clew/importers", () => {
   it("imports OpenCode agent metadata under extensions.opencode", () => {
     const result = importOpenCodeSkill({ name: "Safe Mode", content: "Stay safe.", mode: "safe" });
     expect(result.bundles[0]?.manifest.extensions.opencode).toMatchObject({ agent_mode: "safe" });
+  });
+
+  it("imports Claude fixture inputs deterministically", () => {
+    const first = importClaudeSkill(fixture("claude-valid.json"));
+    const second = importClaudeSkill(fixture("claude-valid.json"));
+
+    expect(first).toEqual(second);
+    expect(first.bundles[0]).toMatchObject({
+      manifest: {
+        id: "safe-refactor",
+        compatibility: { providers: ["claude"] },
+        capabilities: { optional: ["terminal", "filesystem"] },
+        extensions: { claude: { slash_command: "/safe-refactor" } },
+      },
+      instructions: "Preserve behavior and keep changes incremental.",
+    });
+  });
+
+  it("preserves degraded Claude provider metadata with stable warnings", () => {
+    const result = importClaudeSkill(fixture("claude-degraded.json"));
+
+    expect(result.bundles[0]?.manifest.extensions.claude).toMatchObject({ risk_level: "high" });
+    expect(result.warnings.map((warning) => warning.code)).toEqual([
+      "tool_semantics_degraded",
+      "provider_metadata_preserved",
+    ]);
+  });
+
+  it("normalizes OpenCode mode metadata and reports the transform", () => {
+    const result = importOpenCodeSkill(fixture("opencode-normalized.json"));
+
+    expect(result.bundles[0]?.manifest.id).toBe("opencode-migration");
+    expect(result.bundles[0]?.manifest.extensions.opencode).toMatchObject({ mode: "review", agent_mode: "review" });
+    expect(result.warnings.map((warning) => warning.code)).toEqual(["provider_field_normalized"]);
+  });
+
+  it("rejects malformed provider fixtures with clear errors", () => {
+    expect(() => importClaudeSkill(fixture("claude-malformed.json"))).toThrow(
+      "claude skill must include non-empty instructions or content",
+    );
+    expect(() => importOpenCodeSkill(fixture("opencode-malformed.json"))).toThrow(
+      "opencode skill must include non-empty instructions or content",
+    );
   });
 });

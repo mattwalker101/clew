@@ -1,0 +1,10 @@
+{
+  "id": "safe-refactor",
+  "name": "Safe Refactor",
+  "description": "Refactor existing code safely.",
+  "instructions": "Preserve behavior and keep changes incremental.",
+  "tags": ["refactoring", "safety"],
+  "triggers": ["refactor", "cleanup"],
+  "allowed_tools": ["Bash", "Read", "Edit"],
+  "slash_command": "/safe-refactor"
+}

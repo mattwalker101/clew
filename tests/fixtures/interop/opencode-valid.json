@@ -1,0 +1,9 @@
+{
+  "id": "safe-mode",
+  "name": "Safe Mode",
+  "description": "Prefer careful local edits.",
+  "content": "Inspect before editing and explain compatibility changes.",
+  "tags": ["safety"],
+  "triggers": ["safe"],
+  "agent_mode": "safe"
+}

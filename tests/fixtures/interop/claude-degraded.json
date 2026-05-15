@@ -1,0 +1,8 @@
+{
+  "id": "db-migration",
+  "name": "Database Migration",
+  "instructions": "Plan migrations with rollback steps.",
+  "allowed_tools": ["Bash", "WebFetch", "Git"],
+  "slash_command": "/db-migration",
+  "risk_level": "high"
+}
