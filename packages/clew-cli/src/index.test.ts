@@ -119,12 +119,12 @@ describe("@clew/cli", () => {
     expect(outputAt(log, 0)).toMatchObject({
       skillId: "missing-skill",
       bundle: null,
-      warnings: [{ code: "skill_unknown" }],
+      warnings: [{ code: "skill_unknown", origin: "request" }],
     });
     expect(outputAt(log, 2)).toMatchObject({
       skillId: "typescript-core",
       bundle: null,
-      warnings: [{ code: "skill_disabled" }],
+      warnings: [{ code: "skill_disabled", origin: "request" }],
     });
   });
 
@@ -144,19 +144,19 @@ describe("@clew/cli", () => {
       skillId: "missing-skill",
       query: "typescript",
       recommendation: null,
-      warnings: [{ code: "skill_unknown" }],
+      warnings: [{ code: "skill_unknown", origin: "request" }],
     });
     expect(outputAt(log, 1)).toMatchObject({
       skillId: "typescript-core",
       query: "unrelated",
       recommendation: null,
-      warnings: [{ code: "skill_not_recommended" }],
+      warnings: [{ code: "skill_not_recommended", origin: "request" }],
     });
     expect(outputAt(log, 3)).toMatchObject({
       skillId: "typescript-core",
       query: "typescript",
       recommendation: null,
-      warnings: [{ code: "skill_disabled" }],
+      warnings: [{ code: "skill_disabled", origin: "request" }],
     });
   });
 
@@ -196,6 +196,7 @@ describe("@clew/cli", () => {
       warnings: [
         {
           code: "skill_bundle_invalid",
+          origin: "registry_rebuild",
           severity: "error",
           field: expect.stringContaining("/skills/future-kind"),
         },
@@ -220,11 +221,11 @@ describe("@clew/cli", () => {
       warnings: expect.arrayContaining([expect.objectContaining({ code: "agents_skill_unknown" })]),
     });
     expect(outputAt(log, 1)).toMatchObject({
-      registryWarnings: [expect.objectContaining({ code: "skill_bundle_invalid" })],
-      agentsDiagnostics: [expect.objectContaining({ code: "agents_skill_unknown" })],
+      registryWarnings: [expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" })],
+      agentsDiagnostics: [expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" })],
       warnings: expect.arrayContaining([
-        expect.objectContaining({ code: "skill_bundle_invalid" }),
-        expect.objectContaining({ code: "agents_skill_unknown" }),
+        expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" }),
+        expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" }),
       ]),
     });
   });
@@ -302,7 +303,10 @@ describe("@clew/cli", () => {
     expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
       provider: "claude",
       bundles: [{ manifest: { id: "db-migration", extensions: { claude: { risk_level: "high" } } } }],
-      warnings: [{ code: "tool_semantics_degraded" }, { code: "provider_metadata_preserved" }],
+      warnings: [
+        { code: "tool_semantics_degraded", origin: "provider_import" },
+        { code: "provider_metadata_preserved", origin: "provider_import" },
+      ],
     });
   });
 
@@ -316,7 +320,7 @@ describe("@clew/cli", () => {
     expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
       provider: "opencode",
       artifacts: [{ path: "typescript-core.md" }],
-      warnings: [{ code: "target_provider_not_declared" }],
+      warnings: [{ code: "target_provider_not_declared", origin: "provider_export" }],
     });
   });
 
@@ -346,6 +350,7 @@ describe("@clew/cli", () => {
       warnings: [
         {
           code: "skill_bundle_invalid",
+          origin: "registry_rebuild",
           severity: "error",
           field: expect.stringContaining("/skills/future-kind"),
         },

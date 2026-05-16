@@ -44,6 +44,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
       code: "tool_semantics_degraded",
       provider,
       field: "allowed_tools",
+      origin: "provider_import",
       message: "Provider tool allow-list preserved as metadata; clew v0.1 does not execute tools.",
       severity: "warning",
     });
@@ -53,6 +54,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
       code: "provider_field_normalized",
       provider,
       field: "mode",
+      origin: "provider_import",
       message: "OpenCode mode normalized to extensions.opencode.agent_mode.",
       severity: "warning",
     });
@@ -61,6 +63,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
     warnings.push({
       code: "provider_metadata_preserved",
       provider,
+      origin: "provider_import",
       message: `Unknown ${provider} fields preserved under extensions.${provider}: ${unknown.join(", ")}`,
       severity: "warning",
     });

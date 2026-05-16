@@ -56,6 +56,7 @@ describe("@clew/importers", () => {
       "tool_semantics_degraded",
       "provider_metadata_preserved",
     ]);
+    expect(result.warnings.map((warning) => warning.origin)).toEqual(["provider_import", "provider_import"]);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
@@ -65,6 +66,7 @@ describe("@clew/importers", () => {
     expect(result.bundles[0]?.manifest.id).toBe("opencode-migration");
     expect(result.bundles[0]?.manifest.extensions.opencode).toMatchObject({ mode: "review", agent_mode: "review" });
     expect(result.warnings.map((warning) => warning.code)).toEqual(["provider_field_normalized"]);
+    expect(result.warnings.map((warning) => warning.origin)).toEqual(["provider_import"]);
   });
 
   it("rejects malformed provider fixtures with clear errors", () => {

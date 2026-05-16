@@ -54,6 +54,7 @@ function exportWarnings(bundle: SkillBundle, provider: Provider): CompatibilityW
     warnings.push({
       code: "target_provider_not_declared",
       provider,
+      origin: "provider_export",
       message: `Skill does not declare ${provider} compatibility; exporting best-effort instructions only.`,
       severity: "warning",
     });
@@ -63,6 +64,7 @@ function exportWarnings(bundle: SkillBundle, provider: Provider): CompatibilityW
       code: "composition_degraded",
       provider,
       field: "extends",
+      origin: "provider_export",
       message: "Provider export does not encode clew inheritance; compose first if parent policies must be inlined.",
       severity: "warning",
     });
@@ -72,6 +74,7 @@ function exportWarnings(bundle: SkillBundle, provider: Provider): CompatibilityW
       code: "capability_semantics_degraded",
       provider,
       field: "capabilities.required",
+      origin: "provider_export",
       message: "Required runtime capabilities are preserved by clew but are advisory in provider exports.",
       severity: "warning",
     });

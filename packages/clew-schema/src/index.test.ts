@@ -166,6 +166,7 @@ describe("@clew/schema", () => {
         code: "provider_metadata_preserved",
         provider: "claude",
         field: "metadata",
+        origin: "provider_import",
         message: "Preserved.",
         severity: "info",
       }),
@@ -173,8 +174,30 @@ describe("@clew/schema", () => {
       code: "provider_metadata_preserved",
       provider: "claude",
       field: "metadata",
+      origin: "provider_import",
       message: "Preserved.",
       severity: "info",
     });
+  });
+
+  it("accepts supported optional warning origins and rejects unknown origins", () => {
+    const origins = [
+      "registry_rebuild",
+      "request",
+      "agents_diagnostic",
+      "activation",
+      "provider_import",
+      "provider_export",
+    ] as const;
+
+    for (const origin of origins) {
+      expect(compatibilityWarningSchema.parse({ code: "compat", message: "Degraded.", origin })).toMatchObject({
+        origin,
+      });
+    }
+    expect(compatibilityWarningSchema.parse({ code: "compat", message: "Degraded." })).not.toHaveProperty("origin");
+    expect(() =>
+      compatibilityWarningSchema.parse({ code: "compat", message: "Degraded.", origin: "workflow_runtime" }),
+    ).toThrow();
   });
 });

@@ -153,6 +153,7 @@ describe("@clew/core", () => {
         {
           code: "skill_bundle_invalid",
           severity: "error",
+          origin: "registry_rebuild",
           field: "skills/future-kind",
           message: "Unsupported skill kind.",
           provider: "local",
@@ -173,6 +174,7 @@ describe("@clew/core", () => {
         {
           code: "skill_bundle_invalid",
           severity: "error",
+          origin: "registry_rebuild",
           field: "skills/future-kind",
           message: "Unsupported skill kind.",
           provider: "local",
@@ -278,6 +280,7 @@ describe("@clew/core", () => {
           {
             code: "skill_bundle_invalid",
             severity: "error",
+            origin: "registry_rebuild",
             field: "skills/future-kind",
             message: "Unsupported skill kind.",
           },
@@ -289,6 +292,7 @@ describe("@clew/core", () => {
         {
           code: "skill_bundle_invalid",
           severity: "error",
+          origin: "registry_rebuild",
           field: "skills/future-kind",
           message: "Unsupported skill kind.",
         },
@@ -346,6 +350,28 @@ describe("@clew/core", () => {
     expect(recommendation?.signals).toContain("repo:typescript");
   });
 
+  it("marks recommendation capability warnings as activation provenance", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("terminal-skill", {
+            activation: { triggers: ["build"], tags: [], weight: 1 },
+            capabilities: { required: ["terminal"], optional: [] },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(new ActivationEngine(registry).recommend({ query: "build", capabilities: [] })[0]?.warnings).toEqual([
+      expect.objectContaining({ code: "capability_missing", origin: "activation" }),
+    ]);
+  });
+
   it("warns when AGENTS.md references unknown or disabled skills", () => {
     const registry = new SkillRegistry({
       entries: [
@@ -363,12 +389,14 @@ describe("@clew/core", () => {
     expect(getAgentsMdDiagnostics("# Active Skills\n- safe-editing\n- missing-skill\n", registry)).toEqual([
       {
         code: "agents_skill_disabled",
+        origin: "agents_diagnostic",
         field: "AGENTS.md",
         message: 'AGENTS.md references disabled skill "safe-editing".',
         severity: "warning",
       },
       {
         code: "agents_skill_unknown",
+        origin: "agents_diagnostic",
         field: "AGENTS.md",
         message: 'AGENTS.md references unknown skill "missing-skill".',
         severity: "warning",
@@ -422,6 +450,7 @@ describe("@clew/core", () => {
       {
         code: "skill_bundle_invalid",
         severity: "error",
+        origin: "registry_rebuild",
         field: invalidRoot,
         message: "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
       },
@@ -455,6 +484,7 @@ describe("@clew/core", () => {
       expect.objectContaining({
         code: "skill_bundle_invalid",
         severity: "error",
+        origin: "registry_rebuild",
         field: invalidRoot,
       }),
     ]);

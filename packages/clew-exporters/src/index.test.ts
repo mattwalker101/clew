@@ -68,6 +68,7 @@ describe("@clew/exporters", () => {
       "composition_degraded",
       "capability_semantics_degraded",
     ]);
+    expect(first.warnings.map((warning) => warning.origin)).toEqual(["provider_export", "provider_export"]);
     expect(first.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(first.warnings);
   });
 
@@ -90,5 +91,6 @@ describe("@clew/exporters", () => {
       "composition_degraded",
       "capability_semantics_degraded",
     ]);
+    expect(result.warnings.map((warning) => warning.origin)).toEqual(["provider_export", "provider_export"]);
   });
 });

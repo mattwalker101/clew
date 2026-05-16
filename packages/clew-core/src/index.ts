@@ -132,6 +132,7 @@ export function getAgentsMdDiagnostics(content: string, registry: SkillRegistry)
         code: "agents_skill_unknown",
         message: `AGENTS.md references unknown skill "${skillId}".`,
         severity: "warning",
+        origin: "agents_diagnostic",
         field: "AGENTS.md",
       });
     } else if (entry.disabled) {
@@ -139,6 +140,7 @@ export function getAgentsMdDiagnostics(content: string, registry: SkillRegistry)
         code: "agents_skill_disabled",
         message: `AGENTS.md references disabled skill "${skillId}".`,
         severity: "warning",
+        origin: "agents_diagnostic",
         field: "AGENTS.md",
       });
     }
@@ -292,6 +294,7 @@ export function discoverSkillBundles(root: string): SkillBundleDiscoveryResult {
       warnings.push({
         code: "skill_bundle_invalid",
         severity: "error",
+        origin: "registry_rebuild",
         field: candidate,
         message: error.issues.map(formatValidationIssue).join("\n"),
       });
@@ -762,6 +765,7 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
       code: "capability_missing",
       message: `Runtime is missing required capabilities: ${missing.join(", ")}`,
       severity: "warning",
+      origin: "activation",
     });
   }
 

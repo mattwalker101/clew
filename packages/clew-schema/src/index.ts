@@ -28,10 +28,19 @@ export const reservedExtensionNamespaces = [
 ] as const;
 
 export const registryLayers = ["session", "project", "org", "global"] as const;
+export const compatibilityWarningOrigins = [
+  "registry_rebuild",
+  "request",
+  "agents_diagnostic",
+  "activation",
+  "provider_import",
+  "provider_export",
+] as const;
 
 export const skillKindSchema = z.enum(supportedSkillKinds);
 export const capabilitySchema = z.enum(coreCapabilities);
 export const registryLayerSchema = z.enum(registryLayers);
+export const compatibilityWarningOriginSchema = z.enum(compatibilityWarningOrigins);
 
 const stringArraySchema = z.array(z.string().min(1)).default([]);
 
@@ -41,6 +50,7 @@ export const compatibilityWarningSchema = z.object({
   severity: z.enum(["info", "warning", "error"]).default("warning"),
   provider: z.string().min(1).optional(),
   field: z.string().min(1).optional(),
+  origin: compatibilityWarningOriginSchema.optional(),
 });
 
 export const capabilitySetSchema = z
@@ -213,6 +223,7 @@ export type SkillKind = z.infer<typeof skillKindSchema>;
 export type Capability = z.infer<typeof capabilitySchema>;
 export type RegistryLayer = z.infer<typeof registryLayerSchema>;
 export type CapabilitySet = z.infer<typeof capabilitySetSchema>;
+export type CompatibilityWarningOrigin = z.infer<typeof compatibilityWarningOriginSchema>;
 export type CompatibilityWarning = z.infer<typeof compatibilityWarningSchema>;
 export type SkillManifest = z.infer<typeof skillManifestSchema>;
 export type SkillBundle = z.infer<typeof skillBundleSchema>;

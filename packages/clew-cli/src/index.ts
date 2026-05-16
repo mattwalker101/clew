@@ -230,6 +230,7 @@ function skillStateWarning(registry: SkillRegistry, skillId: string): Compatibil
       code: "skill_unknown",
       message: `Skill "${skillId}" is not registered.`,
       severity: "warning",
+      origin: "request",
     };
   }
   if (entry.disabled) {
@@ -237,6 +238,7 @@ function skillStateWarning(registry: SkillRegistry, skillId: string): Compatibil
       code: "skill_disabled",
       message: `Skill "${skillId}" is disabled.`,
       severity: "warning",
+      origin: "request",
     };
   }
   return undefined;
@@ -247,6 +249,7 @@ function notRecommendedWarning(skillId: string): CompatibilityWarning {
     code: "skill_not_recommended",
     message: `Skill "${skillId}" was not recommended for the supplied activation context.`,
     severity: "warning",
+    origin: "request",
   };
 }
 

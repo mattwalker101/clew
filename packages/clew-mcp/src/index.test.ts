@@ -108,6 +108,7 @@ describe("@clew/mcp", () => {
     const warning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
+      origin: "registry_rebuild" as const,
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
@@ -131,6 +132,7 @@ describe("@clew/mcp", () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
+      origin: "registry_rebuild" as const,
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
@@ -143,7 +145,7 @@ describe("@clew/mcp", () => {
       recommendations: [
         {
           skillId: "terminal-skill",
-          warnings: [{ code: "capability_missing" }],
+          warnings: [{ code: "capability_missing", origin: "activation" }],
         },
       ],
     });
@@ -153,6 +155,7 @@ describe("@clew/mcp", () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
+      origin: "registry_rebuild" as const,
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
@@ -166,18 +169,18 @@ describe("@clew/mcp", () => {
     expect(bridge.lookup("missing-skill")).toMatchObject({
       skillId: "missing-skill",
       bundle: null,
-      warnings: [registryWarning, { code: "skill_unknown" }],
+      warnings: [registryWarning, { code: "skill_unknown", origin: "request" }],
     });
     expect(bridge.lookup("disabled-skill")).toMatchObject({
       skillId: "disabled-skill",
       bundle: null,
-      warnings: [registryWarning, { code: "skill_disabled" }],
+      warnings: [registryWarning, { code: "skill_disabled", origin: "request" }],
     });
     expect(bridge.explain("available-skill", "no match")).toMatchObject({
       skillId: "available-skill",
       query: "no match",
       recommendation: null,
-      warnings: [registryWarning, { code: "skill_not_recommended" }],
+      warnings: [registryWarning, { code: "skill_not_recommended", origin: "request" }],
     });
   });
 });
