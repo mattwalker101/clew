@@ -15,6 +15,7 @@ import {
 } from "@clew/core";
 import { exportProviderSkill } from "@clew/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
+import type { ActivationContext, CompatibilityWarning } from "@clew/schema";
 
 type Command = (args: string[]) => void | Promise<void>;
 
@@ -24,41 +25,68 @@ const registry = () => new SkillRegistry(rebuildRegistryIndex({ projectRoot: pro
 
 const commands: Record<string, Command> = {
   list() {
-    printJson(registry().list().map((bundle) => bundle.manifest));
+    const current = readRegistry();
+    printJsonEnvelope({
+      skills: current.registry.list().map((bundle) => bundle.manifest),
+      warnings: current.warnings,
+    });
   },
   search(args) {
-    printJson(registry().search(args.join(" ")).map((bundle) => bundle.manifest));
+    const query = queryText(args);
+    const current = readRegistry();
+    printJsonEnvelope({
+      query,
+      skills: current.registry.search(query).map((bundle) => bundle.manifest),
+      warnings: current.warnings,
+    });
+  },
+  lookup(args) {
+    const [skillId] = args;
+    if (!skillId) fail("usage: clew lookup <skill-id>");
+    const current = readRegistry();
+    const warning = skillStateWarning(current.registry, skillId);
+    printJsonEnvelope({
+      skillId,
+      bundle: warning ? null : current.registry.lookup(skillId) ?? null,
+      warnings: warning ? [...current.warnings, warning] : current.warnings,
+    });
   },
   recommend(args) {
-    const agentContext = readAgentsContext();
+    const query = queryText(args);
+    const current = readRegistry();
+    const activationContext = buildActivationContext(query);
     const db = openRegistryDb(registryDbPath());
     try {
-      const recommendations = new ActivationEngine(registry()).recommend({
-        query: args.join(" "),
-        agentsMd: agentContext.raw,
-        activeSkillIds: agentContext.activeSkillIds,
-        repoSignals: detectRepoSignals(process.cwd()),
-        capabilities: ["filesystem", "terminal", "git", "mcp"],
-      });
+      const recommendations = new ActivationEngine(current.registry).recommend(activationContext);
       for (const recommendation of recommendations) db.recordRecommendation(recommendation.skillId);
-      printJson(recommendations);
+      printJsonEnvelope({ query, recommendations, warnings: current.warnings });
     } finally {
       db.close();
     }
   },
   explain(args) {
-    const [skillId, ...query] = args;
+    const [skillId, ...queryArgs] = args;
     if (!skillId) fail("usage: clew explain <skill-id> [query]");
-    const agentContext = readAgentsContext();
-    printJson(
-      new ActivationEngine(registry()).explain(skillId, {
-        query: query.join(" "),
-        agentsMd: agentContext.raw,
-        activeSkillIds: agentContext.activeSkillIds,
-        repoSignals: detectRepoSignals(process.cwd()),
-        capabilities: ["filesystem", "terminal", "git", "mcp"],
-      }) ?? { skillId, score: 0, reasons: ["skill was not recommended for this context"], signals: [], warnings: [] },
-    );
+    const query = queryText(queryArgs);
+    const current = readRegistry();
+    const stateWarning = skillStateWarning(current.registry, skillId);
+    if (stateWarning) {
+      printJsonEnvelope({
+        skillId,
+        query,
+        recommendation: null,
+        warnings: [...current.warnings, stateWarning],
+      });
+      return;
+    }
+
+    const recommendation = new ActivationEngine(current.registry).explain(skillId, buildActivationContext(query)) ?? null;
+    printJsonEnvelope({
+      skillId,
+      query,
+      recommendation,
+      warnings: recommendation ? current.warnings : [...current.warnings, notRecommendedWarning(skillId)],
+    });
   },
   import(args) {
     const [provider, file] = args;
@@ -80,10 +108,12 @@ const commands: Record<string, Command> = {
     setDisabledState(args, true);
   },
   overlaps() {
-    printJson(findOverlaps(registry().list()));
+    const current = readRegistry();
+    printJsonEnvelope({ overlaps: findOverlaps(current.registry.list()), warnings: current.warnings });
   },
   conflicts() {
-    printJson(findConflicts(registry().list()));
+    const current = readRegistry();
+    printJsonEnvelope({ conflicts: findConflicts(current.registry.list()), warnings: current.warnings });
   },
   async telemetry() {
     const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
@@ -99,8 +129,8 @@ const commands: Record<string, Command> = {
     }
   },
   doctor() {
-    const currentRegistry = registry();
-    const bundles = currentRegistry.list();
+    const current = readRegistry();
+    const bundles = current.registry.list();
     const agentsContext = readAgentsContext();
     printJson({
       skills: bundles.length,
@@ -108,7 +138,7 @@ const commands: Record<string, Command> = {
       repoSignals: detectRepoSignals(process.cwd()),
       overlaps: findOverlaps(bundles).length,
       conflicts: findConflicts(bundles),
-      warnings: getAgentsMdDiagnostics(agentsContext.raw, currentRegistry),
+      warnings: [...current.warnings, ...getAgentsMdDiagnostics(agentsContext.raw, current.registry)],
     });
   },
 };
@@ -121,6 +151,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "clew commands:",
         "  list",
         "  search <query>",
+        "  lookup <skill-id>",
         "  recommend <query>",
         "  explain <skill-id> [query]",
         "  import <claude|opencode> <json-file>",
@@ -140,6 +171,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   await command(args);
 }
 
+function readRegistry(): { registry: SkillRegistry; warnings: CompatibilityWarning[] } {
+  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+  return { registry: new SkillRegistry(snapshot), warnings: snapshot.warnings };
+}
+
 function readAgentsContext(): { raw: string; activeSkillIds: string[] } {
   try {
     const raw = readFileSync("AGENTS.md", "utf8");
@@ -147,6 +183,48 @@ function readAgentsContext(): { raw: string; activeSkillIds: string[] } {
   } catch {
     return { raw: "", activeSkillIds: [] };
   }
+}
+
+function buildActivationContext(query: string): Partial<ActivationContext> {
+  const agentContext = readAgentsContext();
+  return {
+    query,
+    agentsMd: agentContext.raw,
+    activeSkillIds: agentContext.activeSkillIds,
+    repoSignals: detectRepoSignals(process.cwd()),
+    capabilities: ["filesystem", "terminal", "git", "mcp"],
+  };
+}
+
+function queryText(args: string[]): string {
+  return args.join(" ");
+}
+
+function skillStateWarning(registry: SkillRegistry, skillId: string): CompatibilityWarning | undefined {
+  const entry = registry.entries.find((candidate) => candidate.bundle.manifest.id === skillId);
+  if (!entry) {
+    return {
+      code: "skill_unknown",
+      message: `Skill "${skillId}" is not registered.`,
+      severity: "warning",
+    };
+  }
+  if (entry.disabled) {
+    return {
+      code: "skill_disabled",
+      message: `Skill "${skillId}" is disabled.`,
+      severity: "warning",
+    };
+  }
+  return undefined;
+}
+
+function notRecommendedWarning(skillId: string): CompatibilityWarning {
+  return {
+    code: "skill_not_recommended",
+    message: `Skill "${skillId}" was not recommended for the supplied activation context.`,
+    severity: "warning",
+  };
 }
 
 function setDisabledState(args: string[], disabled: boolean): void {
@@ -171,6 +249,10 @@ function setDisabledState(args: string[], disabled: boolean): void {
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function printJsonEnvelope<T extends { warnings: CompatibilityWarning[] }>(value: T): void {
+  printJson(value);
 }
 
 function fail(message: string): never {

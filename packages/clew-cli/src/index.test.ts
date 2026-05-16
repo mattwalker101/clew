@@ -37,7 +37,138 @@ function createProject(): string {
   return projectRoot;
 }
 
+function outputAt(log: { mock: { calls: unknown[][] } }, index: number): unknown {
+  return JSON.parse(log.mock.calls[index]?.[0] as string);
+}
+
 describe("@clew/cli", () => {
+  it("prints read command JSON envelopes with warnings arrays", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["list"]);
+    await main(["search", "typescript"]);
+    await main(["lookup", "typescript-core"]);
+    await main(["recommend", "typescript"]);
+    await main(["explain", "typescript-core", "typescript"]);
+    await main(["overlaps"]);
+    await main(["conflicts"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      skills: [{ id: "typescript-core" }],
+      warnings: [],
+    });
+    expect(outputAt(log, 1)).toMatchObject({
+      query: "typescript",
+      skills: [{ id: "typescript-core" }],
+      warnings: [],
+    });
+    expect(outputAt(log, 2)).toMatchObject({
+      skillId: "typescript-core",
+      bundle: { manifest: { id: "typescript-core" } },
+      warnings: [],
+    });
+    expect(outputAt(log, 3)).toMatchObject({
+      query: "typescript",
+      recommendations: [{ skillId: "typescript-core" }],
+      warnings: [],
+    });
+    expect(outputAt(log, 4)).toMatchObject({
+      skillId: "typescript-core",
+      query: "typescript",
+      recommendation: { skillId: "typescript-core" },
+      warnings: [],
+    });
+    expect(outputAt(log, 5)).toMatchObject({
+      overlaps: [],
+      warnings: [],
+    });
+    expect(outputAt(log, 6)).toMatchObject({
+      conflicts: [],
+      warnings: [],
+    });
+  });
+
+  it("returns null and explicit warnings for unavailable lookup skills", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["lookup", "missing-skill"]);
+    await main(["disable", "typescript-core"]);
+    await main(["lookup", "typescript-core"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      skillId: "missing-skill",
+      bundle: null,
+      warnings: [{ code: "skill_unknown" }],
+    });
+    expect(outputAt(log, 2)).toMatchObject({
+      skillId: "typescript-core",
+      bundle: null,
+      warnings: [{ code: "skill_disabled" }],
+    });
+  });
+
+  it("returns null and explicit warnings for unavailable explain recommendations", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    writeFileSync(join(projectRoot, "AGENTS.md"), "# Active Skills\n");
+    writeFileSync(join(projectRoot, "package.json"), JSON.stringify({}));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["explain", "missing-skill", "typescript"]);
+    await main(["explain", "typescript-core", "unrelated"]);
+    await main(["disable", "typescript-core"]);
+    await main(["explain", "typescript-core", "typescript"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      skillId: "missing-skill",
+      query: "typescript",
+      recommendation: null,
+      warnings: [{ code: "skill_unknown" }],
+    });
+    expect(outputAt(log, 1)).toMatchObject({
+      skillId: "typescript-core",
+      query: "unrelated",
+      recommendation: null,
+      warnings: [{ code: "skill_not_recommended" }],
+    });
+    expect(outputAt(log, 3)).toMatchObject({
+      skillId: "typescript-core",
+      query: "typescript",
+      recommendation: null,
+      warnings: [{ code: "skill_disabled" }],
+    });
+  });
+
+  it("keeps recommend telemetry while returning an envelope", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["recommend", "typescript"]);
+    await main(["telemetry"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      query: "typescript",
+      recommendations: [{ skillId: "typescript-core" }],
+      warnings: [],
+    });
+    expect(outputAt(log, 1)).toMatchObject({
+      telemetry: [{ skillId: "typescript-core", usageCount: 1 }],
+    });
+  });
+
+  it("lists lookup in help output", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["help"]);
+
+    expect(log.mock.calls[0]?.[0]).toContain("lookup <skill-id>");
+  });
+
   it("persists disabled state and excludes disabled skills from list", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
@@ -51,7 +182,7 @@ describe("@clew/cli", () => {
       disabled: true,
       active: false,
     });
-    expect(JSON.parse(log.mock.calls[1]?.[0] as string)).toEqual([]);
+    expect(JSON.parse(log.mock.calls[1]?.[0] as string)).toEqual({ skills: [], warnings: [] });
   });
 
   it("records recommendation telemetry and reports repo signals", async () => {
@@ -63,9 +194,15 @@ describe("@clew/cli", () => {
     await main(["telemetry"]);
     await main(["doctor"]);
 
-    expect(JSON.parse(log.mock.calls[0]?.[0] as string)[0]).toMatchObject({
-      skillId: "typescript-core",
-      signals: expect.arrayContaining(["trigger:typescript", "tag:typescript", "agents-md", "repo:typescript"]),
+    expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
+      query: "typescript",
+      recommendations: [
+        {
+          skillId: "typescript-core",
+          signals: expect.arrayContaining(["trigger:typescript", "tag:typescript", "agents-md", "repo:typescript"]),
+        },
+      ],
+      warnings: [],
     });
     expect(JSON.parse(log.mock.calls[1]?.[0] as string).telemetry[0]).toMatchObject({
       skillId: "typescript-core",
