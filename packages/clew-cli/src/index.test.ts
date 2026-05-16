@@ -203,7 +203,7 @@ describe("@clew/cli", () => {
     });
   });
 
-  it("keeps AGENTS.md diagnostics out of telemetry but includes them in doctor warnings", async () => {
+  it("keeps AGENTS.md diagnostics out of telemetry and categorizes doctor warnings", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
     writeInvalidFutureKindBundle(projectRoot);
@@ -220,6 +220,8 @@ describe("@clew/cli", () => {
       warnings: expect.arrayContaining([expect.objectContaining({ code: "agents_skill_unknown" })]),
     });
     expect(outputAt(log, 1)).toMatchObject({
+      registryWarnings: [expect.objectContaining({ code: "skill_bundle_invalid" })],
+      agentsDiagnostics: [expect.objectContaining({ code: "agents_skill_unknown" })],
       warnings: expect.arrayContaining([
         expect.objectContaining({ code: "skill_bundle_invalid" }),
         expect.objectContaining({ code: "agents_skill_unknown" }),

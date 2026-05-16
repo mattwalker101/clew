@@ -138,13 +138,17 @@ const commands: Record<string, Command> = {
     const current = readRegistry();
     const bundles = current.registry.list();
     const agentsContext = readAgentsContext();
+    const registryWarnings = current.warnings;
+    const agentsDiagnostics = getAgentsMdDiagnostics(agentsContext.raw, current.registry);
     printJson({
       skills: bundles.length,
       dbPath: registryDbPath(),
       repoSignals: detectRepoSignals(process.cwd()),
       overlaps: findOverlaps(bundles).length,
       conflicts: findConflicts(bundles),
-      warnings: [...current.warnings, ...getAgentsMdDiagnostics(agentsContext.raw, current.registry)],
+      registryWarnings,
+      agentsDiagnostics,
+      warnings: [...registryWarnings, ...agentsDiagnostics],
     });
   },
 };

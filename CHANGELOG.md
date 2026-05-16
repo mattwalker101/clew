@@ -12,3 +12,4 @@
 
 - Added `clew lookup <skill-id>` for scriptable registry lookup.
 - Missing, disabled, and unrecommended skill states now return `null` payloads with explicit warnings such as `skill_unknown`, `skill_disabled`, and `skill_not_recommended`.
+- `clew doctor` now includes `registryWarnings` and `agentsDiagnostics` alongside the backward-compatible combined `warnings` array.
