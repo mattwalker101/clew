@@ -1,26 +1,183 @@
 import { ActivationEngine, SkillRegistry } from "@clew/core";
+import type {
+  ActivationContext,
+  Capability,
+  CompatibilityWarning,
+  Recommendation,
+  SkillBundle,
+  SkillManifest,
+} from "@clew/schema";
 
 export type ClewMcpBridge = {
-  search(query: string): unknown;
-  recommend(query: string): unknown;
-  explain(skillId: string, query: string): unknown;
-  lookup(skillId: string): unknown;
+  search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
+  recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult;
+  explain(skillId: string, query: string): ClewMcpExplainResult;
+  explain(input: ClewMcpExplainInput): ClewMcpExplainResult;
+  lookup(input: string | ClewMcpLookupInput): ClewMcpLookupResult;
 };
 
-export function createClewMcpBridge(registry = SkillRegistry.fromProject()): ClewMcpBridge {
+export type ClewMcpBridgeOptions = {
+  registry?: SkillRegistry;
+  defaultContext?: Partial<ClewMcpRequestContext>;
+  defaultLimit?: number;
+};
+
+export type ClewMcpRequestContext = {
+  tags?: string[];
+  agentsMd?: string;
+  repoSignals?: string[];
+  capabilities?: Capability[];
+  activeSkillIds?: string[];
+};
+
+export type ClewMcpSearchInput = {
+  query: string;
+  limit?: number;
+};
+
+export type ClewMcpRecommendInput = {
+  query: string;
+  context?: Partial<ClewMcpRequestContext>;
+  limit?: number;
+};
+
+export type ClewMcpExplainInput = {
+  skillId: string;
+  query: string;
+  context?: Partial<ClewMcpRequestContext>;
+};
+
+export type ClewMcpLookupInput = {
+  skillId: string;
+};
+
+export type ClewMcpSearchResult = {
+  query: string;
+  skills: SkillManifest[];
+  warnings: CompatibilityWarning[];
+};
+
+export type ClewMcpRecommendResult = {
+  query: string;
+  recommendations: Recommendation[];
+  warnings: CompatibilityWarning[];
+};
+
+export type ClewMcpExplainResult = {
+  skillId: string;
+  query: string;
+  recommendation: Recommendation | null;
+  warnings: CompatibilityWarning[];
+};
+
+export type ClewMcpLookupResult = {
+  skillId: string;
+  bundle: SkillBundle | null;
+  warnings: CompatibilityWarning[];
+};
+
+export function createClewMcpBridge(
+  registryOrOptions: SkillRegistry | ClewMcpBridgeOptions = SkillRegistry.fromProject(),
+): ClewMcpBridge {
+  const options = registryOrOptions instanceof SkillRegistry ? { registry: registryOrOptions } : registryOrOptions;
+  const registry = options.registry ?? SkillRegistry.fromProject();
   const activation = new ActivationEngine(registry);
   return {
-    search(query: string) {
-      return registry.search(query).map((bundle) => bundle.manifest);
+    search(input: string | ClewMcpSearchInput): ClewMcpSearchResult {
+      const request = typeof input === "string" ? { query: input } : input;
+      return {
+        query: request.query,
+        skills: applyLimit(
+          registry.search(request.query).map((bundle) => bundle.manifest),
+          request.limit ?? options.defaultLimit,
+        ),
+        warnings: [],
+      };
     },
-    recommend(query: string) {
-      return activation.recommend({ query });
+    recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult {
+      const request = typeof input === "string" ? { query: input } : input;
+      return {
+        query: request.query,
+        recommendations: applyLimit(
+          activation.recommend(toActivationContext(request.query, options.defaultContext, request.context)),
+          request.limit ?? options.defaultLimit,
+        ),
+        warnings: [],
+      };
     },
-    explain(skillId: string, query: string) {
-      return activation.explain(skillId, { query });
+    explain(skillIdOrInput: string | ClewMcpExplainInput, query?: string): ClewMcpExplainResult {
+      const request =
+        typeof skillIdOrInput === "string"
+          ? { skillId: skillIdOrInput, query: query ?? "" }
+          : skillIdOrInput;
+      const stateWarning = lookupStateWarning(registry, request.skillId);
+      if (stateWarning) {
+        return { skillId: request.skillId, query: request.query, recommendation: null, warnings: [stateWarning] };
+      }
+
+      const recommendation = activation.explain(
+        request.skillId,
+        toActivationContext(request.query, options.defaultContext, request.context),
+      );
+      return {
+        skillId: request.skillId,
+        query: request.query,
+        recommendation: recommendation ?? null,
+        warnings: recommendation ? [] : [notRecommendedWarning(request.skillId)],
+      };
     },
-    lookup(skillId: string) {
-      return registry.lookup(skillId);
+    lookup(input: string | ClewMcpLookupInput): ClewMcpLookupResult {
+      const skillId = typeof input === "string" ? input : input.skillId;
+      const warning = lookupStateWarning(registry, skillId);
+      return {
+        skillId,
+        bundle: warning ? null : registry.lookup(skillId) ?? null,
+        warnings: warning ? [warning] : [],
+      };
     },
+  };
+}
+
+function toActivationContext(
+  query: string,
+  defaultContext: Partial<ClewMcpRequestContext> | undefined,
+  requestContext: Partial<ClewMcpRequestContext> | undefined,
+): Partial<ActivationContext> {
+  return {
+    ...defaultContext,
+    ...requestContext,
+    query,
+  };
+}
+
+function applyLimit<T>(values: T[], limit: number | undefined): T[] {
+  if (limit === undefined) return values;
+  return values.slice(0, Math.max(0, Math.floor(limit)));
+}
+
+function lookupStateWarning(registry: SkillRegistry, skillId: string): CompatibilityWarning | undefined {
+  const entry = registry.entries.find((candidate) => candidate.bundle.manifest.id === skillId);
+  if (!entry) {
+    return {
+      code: "skill_unknown",
+      message: `Skill "${skillId}" is not registered.`,
+      severity: "warning",
+    };
+  }
+  if (entry.disabled) {
+    return {
+      code: "skill_disabled",
+      message: `Skill "${skillId}" is disabled.`,
+      severity: "warning",
+    };
+  }
+  return undefined;
+}
+
+function notRecommendedWarning(skillId: string): CompatibilityWarning {
+  return {
+    code: "skill_not_recommended",
+    message: `Skill "${skillId}" was not recommended for the supplied activation context.`,
+    severity: "warning",
   };
 }

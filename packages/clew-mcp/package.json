@@ -14,7 +14,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@clew/core": "workspace:*"
+    "@clew/core": "workspace:*",
+    "@clew/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
