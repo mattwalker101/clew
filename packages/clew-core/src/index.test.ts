@@ -148,10 +148,64 @@ describe("@clew/core", () => {
           favorite: true,
         },
       ],
-      warnings: [],
+      warnings: [
+        {
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: "skills/future-kind",
+          message: "Unsupported skill kind.",
+          provider: "local",
+        },
+        {
+          code: "provider_metadata_preserved",
+          severity: "info",
+          message: "Provider metadata was preserved.",
+        },
+      ],
     });
 
-    expect(result).toMatchObject({ dbPath, skills: 1, overlaps: 0, conflicts: 0 });
+    expect(result).toMatchObject({ dbPath, skills: 1, overlaps: 0, conflicts: 0, warnings: 2 });
+
+    const db = openRegistryDb(dbPath);
+    try {
+      expect(db.listRegistryWarnings()).toEqual([
+        {
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: "skills/future-kind",
+          message: "Unsupported skill kind.",
+          provider: "local",
+        },
+        {
+          code: "provider_metadata_preserved",
+          severity: "info",
+          message: "Provider metadata was preserved.",
+        },
+      ]);
+
+      db.recordRecommendation("engineering-core");
+      db.rebuildIndex({
+        entries: [
+          {
+            bundle: bundle("engineering-core"),
+            layer: "project",
+            root: "skills",
+            disabled: false,
+            favorite: true,
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(db.listRegistryWarnings()).toEqual([]);
+      expect(db.getTelemetry("engineering-core")).toMatchObject({
+        skillId: "engineering-core",
+        usageCount: 1,
+        favorite: true,
+      });
+    } finally {
+      db.close();
+    }
   });
 
   it("preserves disabled telemetry across deterministic registry rebuilds", () => {

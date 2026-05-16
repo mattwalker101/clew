@@ -127,6 +127,7 @@ const commands: Record<string, Command> = {
       printJson({
         dbPath: registryDbPath(),
         skills: snapshot.entries.length,
+        warnings: db.listRegistryWarnings(),
         telemetry: db.listTelemetry(),
       });
     } finally {

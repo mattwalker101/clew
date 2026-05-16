@@ -157,7 +157,45 @@ describe("@clew/cli", () => {
       warnings: [],
     });
     expect(outputAt(log, 1)).toMatchObject({
+      dbPath: expect.stringContaining(".clew-registry.db"),
+      skills: 1,
+      warnings: [],
       telemetry: [{ skillId: "typescript-core", usageCount: 1 }],
+    });
+  });
+
+  it("reports persisted registry rebuild warnings in telemetry output", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const invalidRoot = join(projectRoot, "skills", "future-kind");
+    mkdirSync(invalidRoot, { recursive: true });
+    writeFileSync(
+      join(invalidRoot, "clew.yaml"),
+      [
+        "id: future-kind",
+        "version: 1.0.0",
+        "kind: workflow_skill",
+        "name: Future Kind",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(invalidRoot, "skill.md"), "Reserved for later.");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["telemetry"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      dbPath: expect.stringContaining(".clew-registry.db"),
+      skills: 1,
+      telemetry: [{ skillId: "typescript-core", usageCount: 0 }],
+      warnings: [
+        {
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: expect.stringContaining("/skills/future-kind"),
+        },
+      ],
     });
   });
 

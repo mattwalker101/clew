@@ -12,6 +12,7 @@ import {
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
+  compatibilityWarningSchema,
   formatValidationIssue,
   parseSkillBundle,
   SkillBundleValidationError,
@@ -46,6 +47,7 @@ export type SqliteIndexResult = {
   skills: number;
   overlaps: number;
   conflicts: number;
+  warnings: number;
 };
 
 export type RegistryOptions = {
@@ -467,6 +469,16 @@ export class RegistryDb {
         right_skill_id TEXT NOT NULL,
         reason TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS registry_warnings (
+        id TEXT PRIMARY KEY,
+        position INTEGER NOT NULL,
+        code TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        field TEXT,
+        message TEXT NOT NULL,
+        provider TEXT,
+        warning_json TEXT NOT NULL
+      );
     `);
   }
 
@@ -506,6 +518,13 @@ export class RegistryDb {
     return rows.map((row) => this.getTelemetry(row.skill_id));
   }
 
+  listRegistryWarnings(): CompatibilityWarning[] {
+    const rows = this.db
+      .prepare("SELECT warning_json FROM registry_warnings ORDER BY position")
+      .all() as Array<{ warning_json: string }>;
+    return rows.map((row) => compatibilityWarningSchema.parse(JSON.parse(row.warning_json)));
+  }
+
   setSkillDisabled(skillId: string, disabled: boolean): void {
     this.db
       .prepare(
@@ -535,9 +554,9 @@ export class RegistryDb {
     const overlaps = findOverlaps(bundles);
     const conflicts = findConflicts(bundles);
     const transaction = this.db.transaction(() => {
-      this.db.exec("DELETE FROM skills; DELETE FROM overlaps; DELETE FROM conflicts;");
+      this.db.exec("DELETE FROM skills; DELETE FROM overlaps; DELETE FROM conflicts; DELETE FROM registry_warnings;");
       const insertSkill = this.db.prepare(
-      "INSERT INTO skills (id, layer, root, version, name, disabled, favorite, manifest_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO skills (id, layer, root, version, name, disabled, favorite, manifest_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       );
       const upsertTelemetry = this.db.prepare(
         "INSERT INTO telemetry (skill_id, usage_count, disabled, favorite) VALUES (?, 0, ?, ?) ON CONFLICT(skill_id) DO UPDATE SET disabled=excluded.disabled, favorite=excluded.favorite",
@@ -575,9 +594,30 @@ export class RegistryDb {
         const [leftSkillId, rightSkillId] = conflict.ids;
         insertConflict.run(conflict.ids.join(":"), leftSkillId, rightSkillId, conflict.reason);
       }
+      const insertWarning = this.db.prepare(
+        "INSERT INTO registry_warnings (id, position, code, severity, field, message, provider, warning_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      );
+      snapshot.warnings.forEach((warning, position) => {
+        insertWarning.run(
+          String(position),
+          position,
+          warning.code,
+          warning.severity,
+          warning.field ?? null,
+          warning.message,
+          warning.provider ?? null,
+          JSON.stringify(warning),
+        );
+      });
     });
     transaction();
-    return { dbPath: this.dbPath, skills: snapshot.entries.length, overlaps: overlaps.length, conflicts: conflicts.length };
+    return {
+      dbPath: this.dbPath,
+      skills: snapshot.entries.length,
+      overlaps: overlaps.length,
+      conflicts: conflicts.length,
+      warnings: snapshot.warnings.length,
+    };
   }
 
   close(): void {
