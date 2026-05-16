@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { SkillRegistry, type RegistryEntry } from "@clew/core";
 import type { CompatibilityWarning } from "@clew/schema";
 import { createClewMcpBridge } from "./index.js";
@@ -183,7 +185,60 @@ describe("@clew/mcp", () => {
       warnings: [registryWarning, { code: "skill_not_recommended", origin: "request" }],
     });
   });
+
+  it("matches the documented public warning contract fixture", () => {
+    const contract = warningContractFixture();
+    const registryWarning = contract.warnings.registryRebuild;
+    const bridge = createClewMcpBridge(
+      registryWithWarnings(
+        [
+          entry("disabled-skill", { disabled: true }),
+          entry("terminal-skill", { requiredCapabilities: ["terminal"] }),
+        ],
+        [registryWarning],
+      ),
+    );
+
+    expect({
+      skillId: bridge.lookup("missing-skill").skillId,
+      bundle: bridge.lookup("missing-skill").bundle,
+      warnings: bridge.lookup("missing-skill").warnings,
+    }).toEqual(contract.envelopes.lookupMissingSkill);
+
+    const recommendation = bridge.recommend({ query: "build", context: { capabilities: [] } });
+    expect({
+      warnings: recommendation.warnings,
+      recommendations: recommendation.recommendations.map((item) => ({
+        skillId: item.skillId,
+        warnings: item.warnings,
+      })),
+    }).toEqual(contract.envelopes.recommendCapabilityWarning);
+  });
 });
+
+function warningContractFixture(): {
+  warnings: { registryRebuild: CompatibilityWarning };
+  envelopes: {
+    lookupMissingSkill: { skillId: string; bundle: null; warnings: CompatibilityWarning[] };
+    recommendCapabilityWarning: {
+      warnings: CompatibilityWarning[];
+      recommendations: Array<{ skillId: string; warnings: CompatibilityWarning[] }>;
+    };
+  };
+} {
+  return JSON.parse(
+    readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", "warning-contract.json"), "utf8"),
+  ) as {
+    warnings: { registryRebuild: CompatibilityWarning };
+    envelopes: {
+      lookupMissingSkill: { skillId: string; bundle: null; warnings: CompatibilityWarning[] };
+      recommendCapabilityWarning: {
+        warnings: CompatibilityWarning[];
+        recommendations: Array<{ skillId: string; warnings: CompatibilityWarning[] }>;
+      };
+    };
+  };
+}
 
 function registryWith(...entries: RegistryEntry[]): SkillRegistry {
   return new SkillRegistry({ entries, warnings: [] });

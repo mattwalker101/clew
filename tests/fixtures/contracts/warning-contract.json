@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "description": "Public warning contract fixture for read envelopes. Warning arrays remain plain arrays of CompatibilityWarning objects; origin is optional provenance metadata on the warning object.",
+  "warnings": {
+    "registryRebuild": {
+      "code": "skill_bundle_invalid",
+      "message": "Unsupported skill kind.",
+      "severity": "error",
+      "field": "skills/future-kind",
+      "origin": "registry_rebuild"
+    },
+    "requestUnknown": {
+      "code": "skill_unknown",
+      "message": "Skill \"missing-skill\" is not registered.",
+      "severity": "warning",
+      "origin": "request"
+    },
+    "activationCapability": {
+      "code": "capability_missing",
+      "message": "Runtime is missing required capabilities: terminal",
+      "severity": "warning",
+      "origin": "activation"
+    }
+  },
+  "envelopes": {
+    "lookupMissingSkill": {
+      "skillId": "missing-skill",
+      "bundle": null,
+      "warnings": [
+        {
+          "code": "skill_bundle_invalid",
+          "message": "Unsupported skill kind.",
+          "severity": "error",
+          "field": "skills/future-kind",
+          "origin": "registry_rebuild"
+        },
+        {
+          "code": "skill_unknown",
+          "message": "Skill \"missing-skill\" is not registered.",
+          "severity": "warning",
+          "origin": "request"
+        }
+      ]
+    },
+    "recommendCapabilityWarning": {
+      "warnings": [
+        {
+          "code": "skill_bundle_invalid",
+          "message": "Unsupported skill kind.",
+          "severity": "error",
+          "field": "skills/future-kind",
+          "origin": "registry_rebuild"
+        }
+      ],
+      "recommendations": [
+        {
+          "skillId": "terminal-skill",
+          "warnings": [
+            {
+              "code": "capability_missing",
+              "message": "Runtime is missing required capabilities: terminal",
+              "severity": "warning",
+              "origin": "activation"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
