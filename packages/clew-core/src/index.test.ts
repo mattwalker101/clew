@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -238,6 +239,66 @@ describe("@clew/core", () => {
     }
   });
 
+  it("opens older SQLite registry databases without registry warning tables", () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
+    const oldDb = openNodeSqliteDatabase(dbPath);
+    oldDb.exec(`
+      CREATE TABLE telemetry (
+        skill_id TEXT PRIMARY KEY,
+        usage_count INTEGER NOT NULL DEFAULT 0,
+        last_used TEXT,
+        disabled INTEGER NOT NULL DEFAULT 0,
+        favorite INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO telemetry (skill_id, usage_count, disabled, favorite)
+      VALUES ('engineering-core', 3, 1, 0);
+    `);
+    oldDb.close();
+
+    const db = openRegistryDb(dbPath);
+    try {
+      expect(db.listRegistryWarnings()).toEqual([]);
+      expect(db.getTelemetry("engineering-core")).toMatchObject({
+        skillId: "engineering-core",
+        usageCount: 3,
+        disabled: true,
+      });
+
+      const result = db.rebuildIndex({
+        entries: [
+          {
+            bundle: bundle("engineering-core"),
+            layer: "project",
+            root: "skills",
+            disabled: true,
+            favorite: false,
+          },
+        ],
+        warnings: [
+          {
+            code: "skill_bundle_invalid",
+            severity: "error",
+            field: "skills/future-kind",
+            message: "Unsupported skill kind.",
+          },
+        ],
+      });
+
+      expect(result.warnings).toBe(1);
+      expect(db.listRegistryWarnings()).toEqual([
+        {
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: "skills/future-kind",
+          message: "Unsupported skill kind.",
+        },
+      ]);
+      expect(db.getTelemetry("engineering-core").usageCount).toBe(3);
+    } finally {
+      db.close();
+    }
+  });
+
   it("records recommendation usage without losing disabled state", () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
     const db = openRegistryDb(dbPath);
@@ -419,3 +480,11 @@ describe("@clew/core", () => {
     expect(() => loadSkillBundle(skillRoot)).toThrow("manifest.kind [invalid_enum_value]");
   });
 });
+
+function openNodeSqliteDatabase(dbPath: string): { exec(sql: string): void; close(): void } {
+  const require = createRequire(import.meta.url);
+  const sqlite = require("node:sqlite") as {
+    DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void };
+  };
+  return new sqlite.DatabaseSync(dbPath);
+}
