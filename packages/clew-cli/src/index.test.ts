@@ -265,7 +265,7 @@ describe("@clew/cli", () => {
     expect(log).not.toHaveBeenCalled();
   });
 
-  it("prints scriptable schema validation error envelopes for invalid registry bundles", async () => {
+  it("lists valid registry bundles and warnings for invalid registry bundles", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
     const skillRoot = join(projectRoot, "skills", "future-kind");
@@ -286,19 +286,16 @@ describe("@clew/cli", () => {
 
     await main(["list"]);
 
-    expect(outputAt(log, 0)).toEqual({
-      ok: false,
-      errors: [
+    expect(outputAt(log, 0)).toMatchObject({
+      skills: [{ id: "typescript-core" }],
+      warnings: [
         {
-          path: "manifest.kind",
-          code: "invalid_enum_value",
-          message: "Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: expect.stringContaining("/skills/future-kind"),
         },
       ],
-      formattedErrors: [
-        "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
-      ],
-      warnings: [],
     });
+    expect(outputAt(log, 0)).not.toHaveProperty("ok");
   });
 });
