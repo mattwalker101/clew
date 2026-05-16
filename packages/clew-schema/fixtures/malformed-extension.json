@@ -1,0 +1,15 @@
+{
+  "manifest": {
+    "id": "malformed-extension",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Malformed Extension",
+    "instructions": {
+      "file": "skill.md"
+    },
+    "extensions": {
+      "Bad Namespace": {}
+    }
+  },
+  "instructions": "This bundle has a malformed extension namespace."
+}

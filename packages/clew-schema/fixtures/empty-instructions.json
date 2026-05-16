@@ -1,0 +1,12 @@
+{
+  "manifest": {
+    "id": "empty-instructions",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Empty Instructions",
+    "instructions": {
+      "file": "skill.md"
+    }
+  },
+  "instructions": ""
+}

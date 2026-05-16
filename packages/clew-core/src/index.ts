@@ -12,8 +12,7 @@ import {
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
-  skillBundleSchema,
-  skillManifestSchema,
+  parseSkillBundle,
 } from "@clew/schema";
 
 export type RegistryEntry = {
@@ -244,8 +243,10 @@ export function stringifyYaml(value: unknown, indent = 0): string {
 
 export function loadSkillBundle(directory: string): SkillBundle {
   const manifestPath = join(directory, "clew.yaml");
-  const manifest = skillManifestSchema.parse(parseYaml(readFileSync(manifestPath, "utf8")));
-  const instructionPath = join(directory, manifest.instructions.file);
+  const manifest = parseYaml(readFileSync(manifestPath, "utf8"));
+  const instructionFile = manifestInstructionFile(manifest);
+  if (!instructionFile) return parseSkillBundle({ manifest, instructions: "" });
+  const instructionPath = join(directory, instructionFile);
   const bundle = {
     manifest,
     instructions: readFileSync(instructionPath, "utf8"),
@@ -255,7 +256,14 @@ export function loadSkillBundle(directory: string): SkillBundle {
     assets: childPaths(directory, "assets"),
     tests: childPaths(directory, "tests"),
   };
-  return skillBundleSchema.parse(bundle);
+  return parseSkillBundle(bundle);
+}
+
+function manifestInstructionFile(manifest: unknown): string | undefined {
+  if (!isRecord(manifest)) return undefined;
+  const instructions = manifest.instructions;
+  if (!isRecord(instructions)) return undefined;
+  return typeof instructions.file === "string" && instructions.file ? instructions.file : undefined;
 }
 
 export function discoverSkillBundles(root: string): SkillBundle[] {

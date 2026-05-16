@@ -172,6 +172,12 @@ export const recommendationSchema = z.object({
   warnings: z.array(compatibilityWarningSchema).default([]),
 });
 
+export const validationIssueSchema = z.object({
+  path: z.string(),
+  code: z.string().min(1),
+  message: z.string().min(1),
+});
+
 export const validationResultSchema = z.discriminatedUnion("ok", [
   z.object({
     ok: z.literal(true),
@@ -180,7 +186,7 @@ export const validationResultSchema = z.discriminatedUnion("ok", [
   }),
   z.object({
     ok: z.literal(false),
-    errors: z.array(z.string()).min(1),
+    errors: z.array(validationIssueSchema).min(1),
     warnings: z.array(compatibilityWarningSchema).default([]),
   }),
 ]);
@@ -212,6 +218,7 @@ export type SkillManifest = z.infer<typeof skillManifestSchema>;
 export type SkillBundle = z.infer<typeof skillBundleSchema>;
 export type ActivationContext = z.infer<typeof activationContextSchema>;
 export type Recommendation = z.infer<typeof recommendationSchema>;
+export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 export type ValidationResult = z.infer<typeof validationResultSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;
 export type ExportResult = z.infer<typeof exportResultSchema>;
@@ -230,7 +237,21 @@ export function validateSkillBundle(input: unknown): ValidationResult {
 
   return {
     ok: false,
-    errors: parsed.error.issues.map((issue) => `${issue.path.join(".") || "bundle"}: ${issue.message}`),
+    errors: parsed.error.issues.map((issue) => ({
+      path: issue.path.join(".") || "bundle",
+      code: issue.code,
+      message: issue.message,
+    })),
     warnings: [],
   };
+}
+
+export function parseSkillBundle(input: unknown): SkillBundle {
+  const result = validateSkillBundle(input);
+  if (result.ok) return result.bundle;
+  throw new Error(result.errors.map(formatValidationIssue).join("\n"));
+}
+
+export function formatValidationIssue(issue: ValidationIssue): string {
+  return `${issue.path} [${issue.code}]: ${issue.message}`;
 }

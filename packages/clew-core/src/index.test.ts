@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +9,7 @@ import {
   findConflicts,
   findOverlaps,
   getAgentsMdDiagnostics,
+  loadSkillBundle,
   openRegistryDb,
   parseAgentsMd,
   rebuildRegistry,
@@ -241,5 +242,46 @@ describe("@clew/core", () => {
         severity: "warning",
       },
     ]);
+  });
+
+  it("loads filesystem bundles through schema defaults", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillRoot = join(projectRoot, "schema-defaults");
+    writeFileSync(join(projectRoot, "placeholder"), "");
+    mkdirSync(skillRoot);
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: schema-defaults",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Schema Defaults",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(skillRoot, "skill.md"), "Use schema defaults.");
+
+    expect(loadSkillBundle(skillRoot).manifest.activation.weight).toBe(1);
+  });
+
+  it("formats filesystem bundle validation errors through the schema contract", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillRoot = join(projectRoot, "future-kind");
+    mkdirSync(skillRoot);
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: future-kind",
+        "version: 1.0.0",
+        "kind: workflow_skill",
+        "name: Future Kind",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(skillRoot, "skill.md"), "Reserved for later.");
+
+    expect(() => loadSkillBundle(skillRoot)).toThrow("manifest.kind [invalid_enum_value]");
   });
 });

@@ -1,0 +1,12 @@
+{
+  "manifest": {
+    "id": "",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Bad Manifest",
+    "instructions": {
+      "file": "skill.md"
+    }
+  },
+  "instructions": "This bundle has an invalid id."
+}
