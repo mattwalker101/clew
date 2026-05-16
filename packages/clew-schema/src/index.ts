@@ -225,6 +225,16 @@ export type ExportResult = z.infer<typeof exportResultSchema>;
 export type ExtensionNamespaces = z.infer<typeof extensionNamespacesSchema>;
 export type Provenance = z.infer<typeof provenanceSchema>;
 
+export class SkillBundleValidationError extends Error {
+  readonly issues: ValidationIssue[];
+
+  constructor(issues: ValidationIssue[]) {
+    super(issues.map(formatValidationIssue).join("\n"));
+    this.name = "SkillBundleValidationError";
+    this.issues = issues;
+  }
+}
+
 export function validateSkillManifest(input: unknown): SkillManifest {
   return skillManifestSchema.parse(input);
 }
@@ -249,7 +259,7 @@ export function validateSkillBundle(input: unknown): ValidationResult {
 export function parseSkillBundle(input: unknown): SkillBundle {
   const result = validateSkillBundle(input);
   if (result.ok) return result.bundle;
-  throw new Error(result.errors.map(formatValidationIssue).join("\n"));
+  throw new SkillBundleValidationError(result.errors);
 }
 
 export function formatValidationIssue(issue: ValidationIssue): string {

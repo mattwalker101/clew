@@ -264,4 +264,41 @@ describe("@clew/cli", () => {
     );
     expect(log).not.toHaveBeenCalled();
   });
+
+  it("prints scriptable schema validation error envelopes for invalid registry bundles", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const skillRoot = join(projectRoot, "skills", "future-kind");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: future-kind",
+        "version: 1.0.0",
+        "kind: workflow_skill",
+        "name: Future Kind",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(skillRoot, "skill.md"), "Reserved for later.");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["list"]);
+
+    expect(outputAt(log, 0)).toEqual({
+      ok: false,
+      errors: [
+        {
+          path: "manifest.kind",
+          code: "invalid_enum_value",
+          message: "Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
+        },
+      ],
+      formattedErrors: [
+        "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
+      ],
+      warnings: [],
+    });
+  });
 });

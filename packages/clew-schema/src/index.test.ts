@@ -6,6 +6,7 @@ import {
   compatibilityWarningSchema,
   formatValidationIssue,
   parseSkillBundle,
+  SkillBundleValidationError,
   skillManifestSchema,
   validateSkillBundle,
 } from "./index.js";
@@ -98,6 +99,7 @@ describe("@clew/schema", () => {
   });
 
   it("throws formatted validation issues when parsing invalid bundles", () => {
+    expect(() => parseSkillBundle(fixture("future-kind.json"))).toThrow(SkillBundleValidationError);
     expect(() => parseSkillBundle(fixture("future-kind.json"))).toThrow(
       "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
     );
