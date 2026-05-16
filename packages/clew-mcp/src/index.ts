@@ -82,6 +82,7 @@ export function createClewMcpBridge(
   const options = registryOrOptions instanceof SkillRegistry ? { registry: registryOrOptions } : registryOrOptions;
   const registry = options.registry ?? SkillRegistry.fromProject();
   const activation = new ActivationEngine(registry);
+  const registryWarnings = registry.warnings;
   return {
     search(input: string | ClewMcpSearchInput): ClewMcpSearchResult {
       const request = typeof input === "string" ? { query: input } : input;
@@ -91,7 +92,7 @@ export function createClewMcpBridge(
           registry.search(request.query).map((bundle) => bundle.manifest),
           request.limit ?? options.defaultLimit,
         ),
-        warnings: [],
+        warnings: registryWarnings,
       };
     },
     recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult {
@@ -102,7 +103,7 @@ export function createClewMcpBridge(
           activation.recommend(toActivationContext(request.query, options.defaultContext, request.context)),
           request.limit ?? options.defaultLimit,
         ),
-        warnings: [],
+        warnings: registryWarnings,
       };
     },
     explain(skillIdOrInput: string | ClewMcpExplainInput, query?: string): ClewMcpExplainResult {
@@ -112,7 +113,12 @@ export function createClewMcpBridge(
           : skillIdOrInput;
       const stateWarning = lookupStateWarning(registry, request.skillId);
       if (stateWarning) {
-        return { skillId: request.skillId, query: request.query, recommendation: null, warnings: [stateWarning] };
+        return {
+          skillId: request.skillId,
+          query: request.query,
+          recommendation: null,
+          warnings: [...registryWarnings, stateWarning],
+        };
       }
 
       const recommendation = activation.explain(
@@ -123,7 +129,7 @@ export function createClewMcpBridge(
         skillId: request.skillId,
         query: request.query,
         recommendation: recommendation ?? null,
-        warnings: recommendation ? [] : [notRecommendedWarning(request.skillId)],
+        warnings: recommendation ? registryWarnings : [...registryWarnings, notRecommendedWarning(request.skillId)],
       };
     },
     lookup(input: string | ClewMcpLookupInput): ClewMcpLookupResult {
@@ -132,7 +138,7 @@ export function createClewMcpBridge(
       return {
         skillId,
         bundle: warning ? null : registry.lookup(skillId) ?? null,
-        warnings: warning ? [warning] : [],
+        warnings: warning ? [...registryWarnings, warning] : registryWarnings,
       };
     },
   };

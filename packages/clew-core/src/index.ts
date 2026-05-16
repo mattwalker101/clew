@@ -681,9 +681,11 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
 
 export class SkillRegistry {
   readonly entries: RegistryEntry[];
+  readonly warnings: CompatibilityWarning[];
 
   constructor(snapshot: RegistrySnapshot) {
     this.entries = snapshot.entries;
+    this.warnings = snapshot.warnings;
   }
 
   static fromProject(projectRoot = process.cwd()): SkillRegistry {

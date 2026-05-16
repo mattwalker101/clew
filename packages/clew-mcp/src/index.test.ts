@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SkillRegistry, type RegistryEntry } from "@clew/core";
+import type { CompatibilityWarning } from "@clew/schema";
 import { createClewMcpBridge } from "./index.js";
 
 describe("@clew/mcp", () => {
@@ -103,35 +104,68 @@ describe("@clew/mcp", () => {
     });
   });
 
+  it("includes registry warnings in successful read envelopes", () => {
+    const warning = {
+      code: "skill_bundle_invalid",
+      severity: "error" as const,
+      field: "skills/future-kind",
+      message: "Unsupported skill kind.",
+    };
+    const bridge = createClewMcpBridge(registryWithWarnings([entry("engineering-core")], [warning]));
+
+    expect(bridge.search("engineering")).toMatchObject({
+      warnings: [warning],
+    });
+    expect(bridge.recommend("build")).toMatchObject({
+      warnings: [warning],
+    });
+    expect(bridge.explain("engineering-core", "build")).toMatchObject({
+      warnings: [warning],
+    });
+    expect(bridge.lookup("engineering-core")).toMatchObject({
+      warnings: [warning],
+    });
+  });
+
   it("returns null plus explicit warnings for missing, disabled, or unrecommended skills", () => {
+    const registryWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error" as const,
+      field: "skills/future-kind",
+      message: "Unsupported skill kind.",
+    };
     const bridge = createClewMcpBridge(
-      registryWith(
-        entry("disabled-skill", { disabled: true }),
-        entry("available-skill", { triggers: ["available"] }),
+      registryWithWarnings(
+        [entry("disabled-skill", { disabled: true }), entry("available-skill", { triggers: ["available"] })],
+        [registryWarning],
       ),
     );
 
     expect(bridge.lookup("missing-skill")).toMatchObject({
       skillId: "missing-skill",
       bundle: null,
-      warnings: [{ code: "skill_unknown" }],
+      warnings: [registryWarning, { code: "skill_unknown" }],
     });
     expect(bridge.lookup("disabled-skill")).toMatchObject({
       skillId: "disabled-skill",
       bundle: null,
-      warnings: [{ code: "skill_disabled" }],
+      warnings: [registryWarning, { code: "skill_disabled" }],
     });
     expect(bridge.explain("available-skill", "no match")).toMatchObject({
       skillId: "available-skill",
       query: "no match",
       recommendation: null,
-      warnings: [{ code: "skill_not_recommended" }],
+      warnings: [registryWarning, { code: "skill_not_recommended" }],
     });
   });
 });
 
 function registryWith(...entries: RegistryEntry[]): SkillRegistry {
   return new SkillRegistry({ entries, warnings: [] });
+}
+
+function registryWithWarnings(entries: RegistryEntry[], warnings: CompatibilityWarning[]): SkillRegistry {
+  return new SkillRegistry({ entries, warnings });
 }
 
 function entry(
