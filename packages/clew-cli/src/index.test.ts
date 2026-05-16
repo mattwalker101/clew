@@ -37,6 +37,23 @@ function createProject(): string {
   return projectRoot;
 }
 
+function writeInvalidFutureKindBundle(projectRoot: string): void {
+  const invalidRoot = join(projectRoot, "skills", "future-kind");
+  mkdirSync(invalidRoot, { recursive: true });
+  writeFileSync(
+    join(invalidRoot, "clew.yaml"),
+    [
+      "id: future-kind",
+      "version: 1.0.0",
+      "kind: workflow_skill",
+      "name: Future Kind",
+      "instructions:",
+      "  file: skill.md",
+    ].join("\n"),
+  );
+  writeFileSync(join(invalidRoot, "skill.md"), "Reserved for later.");
+}
+
 function outputAt(log: { mock: { calls: unknown[][] } }, index: number): unknown {
   return JSON.parse(log.mock.calls[index]?.[0] as string);
 }
@@ -167,20 +184,7 @@ describe("@clew/cli", () => {
   it("reports persisted registry rebuild warnings in telemetry output", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
-    const invalidRoot = join(projectRoot, "skills", "future-kind");
-    mkdirSync(invalidRoot, { recursive: true });
-    writeFileSync(
-      join(invalidRoot, "clew.yaml"),
-      [
-        "id: future-kind",
-        "version: 1.0.0",
-        "kind: workflow_skill",
-        "name: Future Kind",
-        "instructions:",
-        "  file: skill.md",
-      ].join("\n"),
-    );
-    writeFileSync(join(invalidRoot, "skill.md"), "Reserved for later.");
+    writeInvalidFutureKindBundle(projectRoot);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await main(["telemetry"]);
@@ -196,6 +200,30 @@ describe("@clew/cli", () => {
           field: expect.stringContaining("/skills/future-kind"),
         },
       ],
+    });
+  });
+
+  it("keeps AGENTS.md diagnostics out of telemetry but includes them in doctor warnings", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    writeInvalidFutureKindBundle(projectRoot);
+    writeFileSync(join(projectRoot, "AGENTS.md"), "# Active Skills\n- missing-skill\n");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["telemetry"]);
+    await main(["doctor"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      warnings: [{ code: "skill_bundle_invalid" }],
+    });
+    expect(outputAt(log, 0)).not.toMatchObject({
+      warnings: expect.arrayContaining([expect.objectContaining({ code: "agents_skill_unknown" })]),
+    });
+    expect(outputAt(log, 1)).toMatchObject({
+      warnings: expect.arrayContaining([
+        expect.objectContaining({ code: "skill_bundle_invalid" }),
+        expect.objectContaining({ code: "agents_skill_unknown" }),
+      ]),
     });
   });
 
@@ -306,20 +334,7 @@ describe("@clew/cli", () => {
   it("lists valid registry bundles and warnings for invalid registry bundles", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
-    const skillRoot = join(projectRoot, "skills", "future-kind");
-    mkdirSync(skillRoot, { recursive: true });
-    writeFileSync(
-      join(skillRoot, "clew.yaml"),
-      [
-        "id: future-kind",
-        "version: 1.0.0",
-        "kind: workflow_skill",
-        "name: Future Kind",
-        "instructions:",
-        "  file: skill.md",
-      ].join("\n"),
-    );
-    writeFileSync(join(skillRoot, "skill.md"), "Reserved for later.");
+    writeInvalidFutureKindBundle(projectRoot);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await main(["list"]);

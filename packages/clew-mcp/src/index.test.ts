@@ -127,6 +127,28 @@ describe("@clew/mcp", () => {
     });
   });
 
+  it("keeps capability warnings on recommendations while preserving top-level registry warnings", () => {
+    const registryWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error" as const,
+      field: "skills/future-kind",
+      message: "Unsupported skill kind.",
+    };
+    const bridge = createClewMcpBridge(
+      registryWithWarnings([entry("terminal-skill", { requiredCapabilities: ["terminal"] })], [registryWarning]),
+    );
+
+    expect(bridge.recommend({ query: "build", context: { capabilities: [] } })).toMatchObject({
+      warnings: [registryWarning],
+      recommendations: [
+        {
+          skillId: "terminal-skill",
+          warnings: [{ code: "capability_missing" }],
+        },
+      ],
+    });
+  });
+
   it("returns null plus explicit warnings for missing, disabled, or unrecommended skills", () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
