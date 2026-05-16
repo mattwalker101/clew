@@ -4,7 +4,7 @@ import {
   type SkillBundle,
   type SkillManifest,
   importResultSchema,
-  skillBundleSchema,
+  parseSkillBundle,
 } from "@clew/schema";
 
 export type Provider = "claude" | "opencode";
@@ -89,7 +89,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
     },
   };
 
-  const bundle = skillBundleSchema.parse({
+  const bundle = parseSkillBundle({
     manifest,
     instructions,
     path: `${provider}:${id}`,

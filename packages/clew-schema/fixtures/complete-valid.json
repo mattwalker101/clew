@@ -1,0 +1,95 @@
+{
+  "manifest": {
+    "id": "interop-core",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Interop Core",
+    "description": "Preserve operational meaning across providers.",
+    "instructions": {
+      "file": "skill.md"
+    },
+    "tags": [
+      "interop",
+      "migration"
+    ],
+    "capabilities": {
+      "required": [
+        "filesystem"
+      ],
+      "optional": [
+        "terminal",
+        "git"
+      ]
+    },
+    "compatibility": {
+      "providers": [
+        "claude",
+        "opencode"
+      ],
+      "warnings": [
+        {
+          "code": "tool_semantics_degraded",
+          "provider": "claude",
+          "field": "allowed_tools",
+          "message": "Provider tool allow-list preserved as metadata.",
+          "severity": "warning"
+        }
+      ]
+    },
+    "preferences": {
+      "reasoning": {
+        "preferred_models": [
+          "claude-opus"
+        ]
+      }
+    },
+    "activation": {
+      "triggers": [
+        "interop"
+      ],
+      "tags": [
+        "migration"
+      ],
+      "weight": 2
+    },
+    "extends": [
+      "engineering-core"
+    ],
+    "policies": [
+      "preserve public interfaces"
+    ],
+    "provenance": {
+      "source": {
+        "type": "github",
+        "location": "mattpocock/skills",
+        "original_id": "interop-core"
+      },
+      "imported_via": {
+        "importer": "claude",
+        "imported_at": "2026-05-16T00:00:00.000Z"
+      }
+    },
+    "extensions": {
+      "claude": {
+        "slash_command": "/interop-core"
+      },
+      "opencode": {
+        "agent_mode": "safe"
+      }
+    }
+  },
+  "instructions": "Preserve intent and report degradation.",
+  "path": "skills/interop-core",
+  "assets": [
+    "assets/example.txt"
+  ],
+  "examples": [
+    "examples/example.md"
+  ],
+  "templates": [
+    "templates/template.md"
+  ],
+  "tests": [
+    "tests/fixture.md"
+  ]
+}

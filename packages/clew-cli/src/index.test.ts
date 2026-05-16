@@ -264,4 +264,38 @@ describe("@clew/cli", () => {
     );
     expect(log).not.toHaveBeenCalled();
   });
+
+  it("lists valid registry bundles and warnings for invalid registry bundles", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const skillRoot = join(projectRoot, "skills", "future-kind");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: future-kind",
+        "version: 1.0.0",
+        "kind: workflow_skill",
+        "name: Future Kind",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(skillRoot, "skill.md"), "Reserved for later.");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["list"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      skills: [{ id: "typescript-core" }],
+      warnings: [
+        {
+          code: "skill_bundle_invalid",
+          severity: "error",
+          field: expect.stringContaining("/skills/future-kind"),
+        },
+      ],
+    });
+    expect(outputAt(log, 0)).not.toHaveProperty("ok");
+  });
 });

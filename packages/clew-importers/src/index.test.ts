@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { importClaudeSkill, importOpenCodeSkill } from "./index.js";
 import type { ProviderSkillInput } from "./index.js";
+import { compatibilityWarningSchema } from "@clew/schema";
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
 
@@ -55,6 +56,7 @@ describe("@clew/importers", () => {
       "tool_semantics_degraded",
       "provider_metadata_preserved",
     ]);
+    expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {

@@ -15,7 +15,12 @@ import {
 } from "@clew/core";
 import { exportProviderSkill } from "@clew/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
-import type { ActivationContext, CompatibilityWarning } from "@clew/schema";
+import {
+  formatValidationIssue,
+  SkillBundleValidationError,
+  type ActivationContext,
+  type CompatibilityWarning,
+} from "@clew/schema";
 
 type Command = (args: string[]) => void | Promise<void>;
 
@@ -168,7 +173,20 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
   const command = commands[name];
   if (!command) fail(`unknown command: ${name}`);
-  await command(args);
+  try {
+    await command(args);
+  } catch (error) {
+    if (error instanceof SkillBundleValidationError) {
+      printJson({
+        ok: false,
+        errors: error.issues,
+        formattedErrors: error.issues.map(formatValidationIssue),
+        warnings: [],
+      });
+      return;
+    }
+    throw error;
+  }
 }
 
 function readRegistry(): { registry: SkillRegistry; warnings: CompatibilityWarning[] } {

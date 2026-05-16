@@ -1,0 +1,12 @@
+{
+  "manifest": {
+    "id": "safe-refactor",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Safe Refactor",
+    "instructions": {
+      "file": "skill.md"
+    }
+  },
+  "instructions": "Refactor safely."
+}

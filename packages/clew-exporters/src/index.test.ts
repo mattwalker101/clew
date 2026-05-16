@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { exportClaudeSkill, exportOpenCodeSkill } from "./index.js";
-import type { SkillBundle } from "@clew/schema";
+import { compatibilityWarningSchema, type SkillBundle } from "@clew/schema";
 
 const bundle: SkillBundle = {
   manifest: {
@@ -68,6 +68,7 @@ describe("@clew/exporters", () => {
       "composition_degraded",
       "capability_semantics_degraded",
     ]);
+    expect(first.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(first.warnings);
   });
 
   it("exports OpenCode fixtures with provider mode and stable warnings", () => {

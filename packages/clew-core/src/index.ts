@@ -12,8 +12,9 @@ import {
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
-  skillBundleSchema,
-  skillManifestSchema,
+  formatValidationIssue,
+  parseSkillBundle,
+  SkillBundleValidationError,
 } from "@clew/schema";
 
 export type RegistryEntry = {
@@ -26,6 +27,11 @@ export type RegistryEntry = {
 
 export type RegistrySnapshot = {
   entries: RegistryEntry[];
+  warnings: CompatibilityWarning[];
+};
+
+export type SkillBundleDiscoveryResult = {
+  bundles: SkillBundle[];
   warnings: CompatibilityWarning[];
 };
 
@@ -244,8 +250,10 @@ export function stringifyYaml(value: unknown, indent = 0): string {
 
 export function loadSkillBundle(directory: string): SkillBundle {
   const manifestPath = join(directory, "clew.yaml");
-  const manifest = skillManifestSchema.parse(parseYaml(readFileSync(manifestPath, "utf8")));
-  const instructionPath = join(directory, manifest.instructions.file);
+  const manifest = parseYaml(readFileSync(manifestPath, "utf8"));
+  const instructionFile = manifestInstructionFile(manifest);
+  if (!instructionFile) return parseSkillBundle({ manifest, instructions: "" });
+  const instructionPath = join(directory, instructionFile);
   const bundle = {
     manifest,
     instructions: readFileSync(instructionPath, "utf8"),
@@ -255,15 +263,43 @@ export function loadSkillBundle(directory: string): SkillBundle {
     assets: childPaths(directory, "assets"),
     tests: childPaths(directory, "tests"),
   };
-  return skillBundleSchema.parse(bundle);
+  return parseSkillBundle(bundle);
 }
 
-export function discoverSkillBundles(root: string): SkillBundle[] {
-  if (!existsSync(root)) return [];
+function manifestInstructionFile(manifest: unknown): string | undefined {
+  if (!isRecord(manifest)) return undefined;
+  const instructions = manifest.instructions;
+  if (!isRecord(instructions)) return undefined;
+  return typeof instructions.file === "string" && instructions.file ? instructions.file : undefined;
+}
+
+export function discoverSkillBundles(root: string): SkillBundleDiscoveryResult {
+  if (!existsSync(root)) return { bundles: [], warnings: [] };
   const candidates = readdirSync(root)
     .map((name) => join(root, name))
-    .filter((path) => statSync(path).isDirectory() && existsSync(join(path, "clew.yaml")));
-  return candidates.map(loadSkillBundle).sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
+    .filter((path) => statSync(path).isDirectory() && existsSync(join(path, "clew.yaml")))
+    .sort((a, b) => a.localeCompare(b));
+  const bundles: SkillBundle[] = [];
+  const warnings: CompatibilityWarning[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      bundles.push(loadSkillBundle(candidate));
+    } catch (error) {
+      if (!(error instanceof SkillBundleValidationError)) throw error;
+      warnings.push({
+        code: "skill_bundle_invalid",
+        severity: "error",
+        field: candidate,
+        message: error.issues.map(formatValidationIssue).join("\n"),
+      });
+    }
+  }
+
+  return {
+    bundles: bundles.sort((a, b) => a.manifest.id.localeCompare(b.manifest.id)),
+    warnings: sortWarnings(warnings),
+  };
 }
 
 export function rebuildRegistry(options: RegistryOptions & { telemetry?: TelemetryState } = {}): RegistrySnapshot {
@@ -281,7 +317,9 @@ export function rebuildRegistry(options: RegistryOptions & { telemetry?: Telemet
   }
   for (const layer of ["project", "org", "global"] as const) {
     for (const root of roots[layer]) {
-      for (const bundle of discoverSkillBundles(root)) {
+      const discovery = discoverSkillBundles(root);
+      warnings.push(...discovery.warnings);
+      for (const bundle of discovery.bundles) {
         entries.push(toEntry(bundle, layer, root, telemetry));
       }
     }
@@ -292,7 +330,7 @@ export function rebuildRegistry(options: RegistryOptions & { telemetry?: Telemet
     if (!byId.has(entry.bundle.manifest.id)) byId.set(entry.bundle.manifest.id, entry);
   }
   const resolved = [...byId.values()].sort((a, b) => a.bundle.manifest.id.localeCompare(b.bundle.manifest.id));
-  return { entries: resolved, warnings };
+  return { entries: resolved, warnings: sortWarnings(warnings) };
 }
 
 export function rebuildRegistryIndex(options: RegistryOptions = {}): RegistrySnapshot {
@@ -745,6 +783,12 @@ function uniqueCapability(values: Capability[]): Capability[] {
 function intersection(left: string[], right: string[]): string[] {
   const rightSet = new Set(right);
   return unique(left.filter((value) => rightSet.has(value))).sort();
+}
+
+function sortWarnings(warnings: CompatibilityWarning[]): CompatibilityWarning[] {
+  return [...warnings].sort(
+    (a, b) => (a.field ?? "").localeCompare(b.field ?? "") || a.message.localeCompare(b.message),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

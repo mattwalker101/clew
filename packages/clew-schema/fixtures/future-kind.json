@@ -1,0 +1,12 @@
+{
+  "manifest": {
+    "id": "future-kind",
+    "version": "1.0.0",
+    "kind": "workflow_skill",
+    "name": "Future Kind",
+    "instructions": {
+      "file": "skill.md"
+    }
+  },
+  "instructions": "This kind is reserved but not valid in v0.1."
+}
