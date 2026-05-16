@@ -313,16 +313,35 @@ conflicts (
 )  
 ---
 
+## **registry\_warnings**
+
+registry\_warnings (
+  id,
+  position,
+  code,
+  severity,
+  field,
+  message,
+  provider,
+  warning\_json
+)
+
+`registry_warnings` stores compatibility warnings produced while rebuilding the registry index from filesystem bundles. These rows are derived, rebuildable SQLite state; filesystem skill bundles remain canonical truth.
+---
+
 # **12\. Runtime Interfaces**
 
 ## **SkillRegistry**
 
 interface SkillRegistry {  
+  readonly warnings: CompatibilityWarning\[\]
   loadSkills(): Promise\<Skill\[\]\>  
   resolveSkill(id: string): Promise\<Skill\>  
   search(query: string): Promise\<Skill\[\]\>  
   getTelemetry(id: string): Promise\<Telemetry\>  
 }  
+
+The registry retains the warning snapshot produced by the most recent registry rebuild. Read surfaces expose those warnings alongside successful results so callers can detect degraded indexing without treating the read as a total failure.
 ---
 
 ## **ActivationEngine**
@@ -345,6 +364,19 @@ interface Importer {
 interface Exporter {  
   export(skill: SkillBundle): Promise\<ExportResult\>  
 }  
+---
+
+## **MCP Read Envelopes**
+
+MCP `search`, `recommend`, `lookup`, and `explain` return named result fields plus top-level `warnings`. Successful reads include the registry warning snapshot retained by `SkillRegistry`. Request-time degradation, such as unknown, disabled, or unrecommended skills, appends a warning to the same envelope and returns a `null` payload where appropriate. Capability warnings remain attached to the affected recommendation object.
+
+MCP warning objects use the shared compatibility warning shape:
+
+* code
+* message
+* severity
+* optional provider
+* optional field
 ---
 
 # **13\. Activation Context**
@@ -566,4 +598,3 @@ Reserved future systems:
 * remote registries
 
 These MUST remain layered extensions rather than foundational runtime assumptions.
-
