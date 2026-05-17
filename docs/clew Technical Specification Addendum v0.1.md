@@ -203,6 +203,25 @@ Composition does NOT:
 * imply workflow ordering  
 * create dependency graphs
 
+## **Composition Contract**
+
+`clew-schema` owns the portable composition input and result contracts.
+
+Composition input contains:
+
+* the child bundle being composed
+* zero or more parent bundles
+
+Parent bundle ids must be unique. Duplicate parent ids are invalid because they make additive merge provenance ambiguous.
+
+Composition result contains:
+
+* the composed bundle
+* `appliedParentIds`
+* compatibility warnings
+
+`appliedParentIds` must be unique and each applied parent id must be declared in the composed bundle's `manifest.extends`. Composition may ignore available parent bundles that are not explicitly declared by the child. This preserves the v0.1 non-goal that composition does not create implicit dependency graphs.
+
 ---
 
 # **8\. Extension Namespace Rules**
