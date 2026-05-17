@@ -1,0 +1,71 @@
+{
+  "records": [
+    {
+      "skillId": "disabled-skill",
+      "known": true,
+      "enabled": false,
+      "disabled": true,
+      "favorite": false,
+      "usageCount": 0,
+      "evidence": [
+        {
+          "kind": "disabled",
+          "values": [
+            "true"
+          ]
+        }
+      ]
+    },
+    {
+      "skillId": "favorite-skill",
+      "known": true,
+      "enabled": true,
+      "disabled": false,
+      "favorite": true,
+      "usageCount": 3,
+      "evidence": [
+        {
+          "kind": "favorite",
+          "values": [
+            "true"
+          ]
+        },
+        {
+          "kind": "usage_count",
+          "values": [
+            "3"
+          ]
+        }
+      ]
+    },
+    {
+      "skillId": "orphan-skill",
+      "known": false,
+      "enabled": false,
+      "disabled": false,
+      "favorite": false,
+      "usageCount": 1,
+      "lastUsed": "2026-05-17T12:00:00.000Z",
+      "evidence": [
+        {
+          "kind": "orphan",
+          "values": [
+            "true"
+          ]
+        },
+        {
+          "kind": "usage_count",
+          "values": [
+            "1"
+          ]
+        },
+        {
+          "kind": "last_used",
+          "values": [
+            "2026-05-17T12:00:00.000Z"
+          ]
+        }
+      ]
+    }
+  ]
+}

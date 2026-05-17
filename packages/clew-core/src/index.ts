@@ -28,6 +28,8 @@ export type RegistryEntry = {
   root: string;
   disabled: boolean;
   favorite: boolean;
+  usageCount?: number;
+  lastUsed?: string;
 };
 
 export type RegistrySnapshot = {
@@ -44,6 +46,7 @@ export type TelemetryState = {
   disabled: string[];
   favorites: string[];
   usage: Record<string, number>;
+  lastUsed?: Record<string, string>;
 };
 
 export type SqliteIndexResult = {
@@ -99,6 +102,28 @@ export type SkillSearchAnalysisResult = {
   terms: string[];
   index: SkillSearchIndexEntry[];
   matches: SkillSearchMatch[];
+};
+
+export type SkillTelemetryEvidenceKind = "orphan" | "disabled" | "favorite" | "usage_count" | "last_used";
+
+export type SkillTelemetryEvidence = {
+  kind: SkillTelemetryEvidenceKind;
+  values: string[];
+};
+
+export type SkillTelemetryAnalysisRecord = {
+  skillId: string;
+  known: boolean;
+  enabled: boolean;
+  disabled: boolean;
+  favorite: boolean;
+  usageCount: number;
+  lastUsed?: string;
+  evidence: SkillTelemetryEvidence[];
+};
+
+export type SkillTelemetryAnalysisResult = {
+  records: SkillTelemetryAnalysisRecord[];
 };
 
 export type OverlapRelationship = {
@@ -645,12 +670,13 @@ export class RegistryDb {
 
   getTelemetryState(): TelemetryState {
     const rows = this.db
-      .prepare("SELECT skill_id, usage_count, disabled, favorite FROM telemetry")
-      .all() as Array<{ skill_id: string; usage_count: number; disabled: number; favorite: number }>;
+      .prepare("SELECT skill_id, usage_count, last_used, disabled, favorite FROM telemetry")
+      .all() as Array<{ skill_id: string; usage_count: number; last_used: string | null; disabled: number; favorite: number }>;
     return {
       disabled: rows.filter((row) => row.disabled === 1).map((row) => row.skill_id).sort(),
       favorites: rows.filter((row) => row.favorite === 1).map((row) => row.skill_id).sort(),
       usage: Object.fromEntries(rows.map((row) => [row.skill_id, row.usage_count])),
+      lastUsed: Object.fromEntries(rows.flatMap((row) => (row.last_used ? [[row.skill_id, row.last_used]] : []))),
     };
   }
 
@@ -857,6 +883,41 @@ export class SkillRegistry {
     return { query, terms, index, matches };
   }
 
+  analyzeTelemetry(records: TelemetryRecord[] = []): SkillTelemetryAnalysisResult {
+    const knownSkillIds = new Set(this.entries.map((entry) => entry.bundle.manifest.id));
+    const knownRecords = [...this.entries]
+      .sort((a, b) => a.bundle.manifest.id.localeCompare(b.bundle.manifest.id))
+      .map((entry) => {
+        const lastUsed = entry.lastUsed;
+        return telemetryAnalysisRecord({
+          skillId: entry.bundle.manifest.id,
+          known: true,
+          enabled: !entry.disabled,
+          disabled: entry.disabled,
+          favorite: entry.favorite,
+          usageCount: entry.usageCount ?? 0,
+          ...(lastUsed ? { lastUsed } : {}),
+        });
+      });
+    const orphanRecords = records
+      .filter((record) => !knownSkillIds.has(record.skillId))
+      .sort((a, b) => a.skillId.localeCompare(b.skillId))
+      .map((record) => {
+        const lastUsed = record.lastUsed;
+        return telemetryAnalysisRecord({
+          skillId: record.skillId,
+          known: false,
+          enabled: false,
+          disabled: record.disabled,
+          favorite: record.favorite,
+          usageCount: record.usageCount,
+          ...(lastUsed ? { lastUsed } : {}),
+        });
+      });
+
+    return { records: [...knownRecords, ...orphanRecords] };
+  }
+
   search(query: string): SkillBundle[] {
     const bySkillId = new Map(this.list().map((bundle) => [bundle.manifest.id, bundle]));
     return this.analyzeSearch(query).matches.flatMap((match) => {
@@ -872,8 +933,9 @@ export class ActivationEngine {
   recommend(input: Partial<ActivationContext>): Recommendation[] {
     const context = activationContextSchema.parse(input);
     const scored = this.registry
-      .list()
-      .map((bundle) => ({ bundle, recommendation: scoreBundle(bundle, context) }))
+      .entries
+      .filter((entry) => !entry.disabled)
+      .map((entry) => ({ bundle: entry.bundle, recommendation: scoreBundle(entry, context) }))
       .filter(({ recommendation }) => recommendation.score > 0 && recommendation.reasons.length > 0)
       .sort((a, b) => b.recommendation.score - a.recommendation.score || a.recommendation.skillId.localeCompare(b.recommendation.skillId));
 
@@ -885,7 +947,8 @@ export class ActivationEngine {
   }
 }
 
-function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommendation {
+function scoreBundle(entry: RegistryEntry, context: ActivationContext): Recommendation {
+  const bundle = entry.bundle;
   const reasons: string[] = [];
   const signals: RecommendationSignal[] = [];
   const warnings: CompatibilityWarning[] = [...bundle.manifest.compatibility.warnings];
@@ -927,6 +990,19 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
       severity: "warning",
       origin: "activation",
     });
+  }
+  if (score > 0 && reasons.length > 0) {
+    if (entry.favorite) {
+      score += 1;
+      reasons.push("favorite skill");
+      signals.push({ type: "telemetry_favorite", value: "true" });
+    }
+    const usageCount = entry.usageCount ?? 0;
+    if (usageCount > 0) {
+      score += 1;
+      reasons.push(`used ${usageCount} ${usageCount === 1 ? "time" : "times"} previously`);
+      signals.push({ type: "telemetry_usage", value: String(usageCount) });
+    }
   }
 
   return {
@@ -1008,12 +1084,15 @@ function conflictMessage(conflict: ConflictRelationship, otherSkillIds: string[]
 }
 
 function toEntry(bundle: SkillBundle, layer: RegistryLayer, root: string, telemetry: TelemetryState): RegistryEntry {
+  const lastUsed = telemetry.lastUsed?.[bundle.manifest.id];
   return {
     bundle,
     layer,
     root,
     disabled: telemetry.disabled.includes(bundle.manifest.id),
     favorite: telemetry.favorites.includes(bundle.manifest.id),
+    usageCount: telemetry.usage[bundle.manifest.id] ?? 0,
+    ...(lastUsed ? { lastUsed } : {}),
   };
 }
 
@@ -1139,6 +1218,34 @@ function sortSearchEvidence(values: SkillSearchEvidence[]): SkillSearchEvidence[
     .filter((value) => value.values.length > 0)
     .map((value) => ({ ...value, values: [...value.values].sort() }))
     .sort((a, b) => (order.get(a.kind) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.kind) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function telemetryAnalysisRecord(input: {
+  skillId: string;
+  known: boolean;
+  enabled: boolean;
+  disabled: boolean;
+  favorite: boolean;
+  usageCount: number;
+  lastUsed?: string;
+}): SkillTelemetryAnalysisRecord {
+  const evidence: SkillTelemetryEvidence[] = [];
+  if (!input.known) evidence.push({ kind: "orphan", values: ["true"] });
+  if (input.disabled) evidence.push({ kind: "disabled", values: ["true"] });
+  if (input.favorite) evidence.push({ kind: "favorite", values: ["true"] });
+  if (input.usageCount > 0) evidence.push({ kind: "usage_count", values: [String(input.usageCount)] });
+  if (input.lastUsed) evidence.push({ kind: "last_used", values: [input.lastUsed] });
+
+  return {
+    skillId: input.skillId,
+    known: input.known,
+    enabled: input.enabled,
+    disabled: input.disabled,
+    favorite: input.favorite,
+    usageCount: input.usageCount,
+    ...(input.lastUsed ? { lastUsed: input.lastUsed } : {}),
+    evidence,
+  };
 }
 
 function provenanceSearchValues(provenance: SkillManifest["provenance"]): string[] {

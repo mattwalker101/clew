@@ -9,7 +9,7 @@ describe("@clew/mcp", () => {
   it("exposes only read-oriented bridge methods", () => {
     const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
 
-    expect(Object.keys(bridge).sort()).toEqual(["analyzeSearch", "explain", "lookup", "recommend", "search"]);
+    expect(Object.keys(bridge).sort()).toEqual(["analyzeSearch", "analyzeTelemetry", "explain", "lookup", "recommend", "search"]);
     expect("execute" in bridge).toBe(false);
     expect("activate" in bridge).toBe(false);
     expect("run" in bridge).toBe(false);
@@ -68,6 +68,39 @@ describe("@clew/mcp", () => {
         ],
       },
       warnings: [],
+    });
+  });
+
+  it("exposes telemetry analysis with registry warnings", () => {
+    const registryWarning: CompatibilityWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error",
+      origin: "registry_rebuild",
+      message: "Unsupported skill kind.",
+    };
+    const bridge = createClewMcpBridge(
+      registryWithWarnings(
+        [
+          entry("disabled-skill", { disabled: true }),
+          entry("favorite-skill", { favorite: true, usageCount: 2 }),
+        ],
+        [registryWarning],
+      ),
+    );
+
+    expect(
+      bridge.analyzeTelemetry([
+        { skillId: "orphan-skill", usageCount: 1, disabled: false, favorite: false },
+      ]),
+    ).toMatchObject({
+      analysis: {
+        records: [
+          { skillId: "disabled-skill", known: true, enabled: false, disabled: true },
+          { skillId: "favorite-skill", known: true, enabled: true, favorite: true, usageCount: 2 },
+          { skillId: "orphan-skill", known: false, enabled: false, usageCount: 1 },
+        ],
+      },
+      warnings: [registryWarning],
     });
   });
 
@@ -329,6 +362,8 @@ function entry(
   id: string,
   options: {
     disabled?: boolean;
+    favorite?: boolean;
+    usageCount?: number;
     tags?: string[];
     triggers?: string[];
     weight?: number;
@@ -363,7 +398,8 @@ function entry(
     layer: "project",
     root: "skills",
     disabled: options.disabled ?? false,
-    favorite: false,
+    favorite: options.favorite ?? false,
+    usageCount: options.usageCount ?? 0,
   };
 }
 

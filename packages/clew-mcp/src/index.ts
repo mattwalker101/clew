@@ -1,4 +1,10 @@
-import { ActivationEngine, SkillRegistry, type SkillSearchAnalysisResult } from "@clew/core";
+import {
+  ActivationEngine,
+  SkillRegistry,
+  type SkillSearchAnalysisResult,
+  type SkillTelemetryAnalysisResult,
+  type TelemetryRecord,
+} from "@clew/core";
 import type {
   ActivationContext,
   Capability,
@@ -11,6 +17,7 @@ import type {
 export type ClewMcpBridge = {
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
   analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
+  analyzeTelemetry(records?: TelemetryRecord[]): ClewMcpTelemetryAnalysisResult;
   recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult;
   explain(skillId: string, query: string): ClewMcpExplainResult;
   explain(input: ClewMcpExplainInput): ClewMcpExplainResult;
@@ -64,6 +71,11 @@ export type ClewMcpSearchAnalysisResult = {
   warnings: CompatibilityWarning[];
 };
 
+export type ClewMcpTelemetryAnalysisResult = {
+  analysis: SkillTelemetryAnalysisResult;
+  warnings: CompatibilityWarning[];
+};
+
 export type ClewMcpRecommendResult = {
   query: string;
   recommendations: Recommendation[];
@@ -111,6 +123,12 @@ export function createClewMcpBridge(
           ...analysis,
           matches: applyLimit(analysis.matches, request.limit ?? options.defaultLimit),
         },
+        warnings: registryWarnings,
+      };
+    },
+    analyzeTelemetry(records: TelemetryRecord[] = []): ClewMcpTelemetryAnalysisResult {
+      return {
+        analysis: registry.analyzeTelemetry(records),
         warnings: registryWarnings,
       };
     },

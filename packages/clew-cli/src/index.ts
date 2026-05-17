@@ -129,15 +129,18 @@ const commands: Record<string, Command> = {
     const current = readRegistry();
     printJsonEnvelope({ conflicts: findConflicts(current.registry.list()), warnings: current.warnings });
   },
-  async telemetry() {
+  async telemetry(args) {
+    const explain = args[0] === "--explain";
     const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+    const registry = new SkillRegistry(snapshot);
     const db = openRegistryDb(registryDbPath());
     try {
+      const telemetry = db.listTelemetry();
       printJson({
         dbPath: registryDbPath(),
         skills: snapshot.entries.length,
         warnings: db.listRegistryWarnings(),
-        telemetry: db.listTelemetry(),
+        ...(explain ? { analysis: registry.analyzeTelemetry(telemetry) } : { telemetry }),
       });
     } finally {
       db.close();
@@ -181,6 +184,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  overlaps",
         "  conflicts",
         "  telemetry",
+        "  telemetry --explain",
         "  doctor",
       ].join("\n"),
     );
