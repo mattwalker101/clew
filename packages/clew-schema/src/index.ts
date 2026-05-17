@@ -182,6 +182,47 @@ export const skillBundleSchema = z.object({
   tests: stringArraySchema,
 });
 
+export const compositionInputSchema = z
+  .object({
+    bundle: skillBundleSchema,
+    parents: z.array(skillBundleSchema).default([]),
+  })
+  .superRefine((value, ctx) => {
+    const parentIds = value.parents.map((parent) => parent.manifest.id);
+    if (new Set(parentIds).size !== parentIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Composition parent bundle ids must be unique.",
+        path: ["parents"],
+      });
+    }
+  });
+
+export const compositionResultSchema = z
+  .object({
+    bundle: skillBundleSchema,
+    appliedParentIds: stringArraySchema,
+    warnings: z.array(compatibilityWarningSchema).default([]),
+  })
+  .superRefine((value, ctx) => {
+    if (new Set(value.appliedParentIds).size !== value.appliedParentIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Composition appliedParentIds must be unique.",
+        path: ["appliedParentIds"],
+      });
+    }
+    for (const parentId of value.appliedParentIds) {
+      if (!value.bundle.manifest.extends.includes(parentId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Composition applied parent "${parentId}" must be declared in manifest.extends.`,
+          path: ["appliedParentIds"],
+        });
+      }
+    }
+  });
+
 export const activationContextSchema = z
   .object({
     query: z.string().default(""),
@@ -253,6 +294,8 @@ export type CompatibilityWarningOrigin = z.infer<typeof compatibilityWarningOrig
 export type CompatibilityWarning = z.infer<typeof compatibilityWarningSchema>;
 export type SkillManifest = z.infer<typeof skillManifestSchema>;
 export type SkillBundle = z.infer<typeof skillBundleSchema>;
+export type CompositionInput = z.infer<typeof compositionInputSchema>;
+export type CompositionResult = z.infer<typeof compositionResultSchema>;
 export type ActivationContext = z.infer<typeof activationContextSchema>;
 export type Recommendation = z.infer<typeof recommendationSchema>;
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   ActivationEngine,
   composeSkill,
+  composeSkillWithReport,
   detectRepoSignals,
   discoverSkillBundles,
   findConflicts,
@@ -19,7 +20,7 @@ import {
   rebuildSqliteIndex,
   SkillRegistry,
 } from "./index.js";
-import type { SkillBundle } from "@clew/schema";
+import { compositionResultSchema, type SkillBundle } from "@clew/schema";
 
 function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): SkillBundle {
   return {
@@ -95,6 +96,38 @@ describe("@clew/core", () => {
     expect(composed.manifest.policies).toEqual(["prefer deterministic behavior", "validate runtime inputs"]);
     expect(composed.manifest.capabilities.required).toEqual(["filesystem", "terminal"]);
     expect(composed.manifest.compatibility.providers).toEqual(["claude", "opencode"]);
+  });
+
+  it("returns a schema-validated composition report without implicit parents", () => {
+    const engineering = bundle("engineering-core", {
+      tags: ["engineering"],
+      policies: ["prefer deterministic behavior"],
+    });
+    const safeEditing = bundle("safe-editing", {
+      tags: ["safety"],
+      policies: ["preserve public interfaces"],
+    });
+    const unrelated = bundle("debugging-core", {
+      tags: ["debugging"],
+      policies: ["explain failures"],
+    });
+    const child = bundle("typescript-core", {
+      extends: ["safe-editing", "engineering-core"],
+      tags: ["typescript"],
+      policies: ["validate runtime inputs"],
+    });
+
+    const report = composeSkillWithReport(child, [engineering, unrelated, safeEditing]);
+
+    expect(compositionResultSchema.parse(report)).toEqual(report);
+    expect(report.appliedParentIds).toEqual(["safe-editing", "engineering-core"]);
+    expect(report.warnings).toEqual([]);
+    expect(report.bundle.manifest.tags).toEqual(["safety", "engineering", "typescript"]);
+    expect(report.bundle.manifest.policies).toEqual([
+      "preserve public interfaces",
+      "prefer deterministic behavior",
+      "validate runtime inputs",
+    ]);
   });
 
   it("recommends only explained matches", () => {

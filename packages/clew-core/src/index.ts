@@ -7,12 +7,15 @@ import {
   type ActivationContext,
   activationContextSchema,
   type Capability,
+  type CompositionResult,
   type CompatibilityWarning,
   type Recommendation,
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
   compatibilityWarningSchema,
+  compositionInputSchema,
+  compositionResultSchema,
   formatValidationIssue,
   parseSkillBundle,
   SkillBundleValidationError,
@@ -351,30 +354,41 @@ export function rebuildRegistryIndex(options: RegistryOptions = {}): RegistrySna
 }
 
 export function composeSkill(bundle: SkillBundle, parents: SkillBundle[]): SkillBundle {
-  const orderedParents = parents.filter((parent) => bundle.manifest.extends.includes(parent.manifest.id));
+  return composeSkillWithReport(bundle, parents).bundle;
+}
+
+export function composeSkillWithReport(bundle: SkillBundle, parents: SkillBundle[]): CompositionResult {
+  const input = compositionInputSchema.parse({ bundle, parents });
+  const parentsById = new Map(input.parents.map((parent) => [parent.manifest.id, parent]));
+  const orderedParents = input.bundle.manifest.extends
+    .map((parentId) => parentsById.get(parentId))
+    .filter((parent): parent is SkillBundle => parent !== undefined);
   const manifest: SkillManifest = {
-    ...bundle.manifest,
-    tags: unique([...orderedParents.flatMap((parent) => parent.manifest.tags), ...bundle.manifest.tags]),
-    policies: unique([...orderedParents.flatMap((parent) => parent.manifest.policies), ...bundle.manifest.policies]),
-    extends: unique(bundle.manifest.extends),
+    ...input.bundle.manifest,
+    tags: unique([...orderedParents.flatMap((parent) => parent.manifest.tags), ...input.bundle.manifest.tags]),
+    policies: unique([
+      ...orderedParents.flatMap((parent) => parent.manifest.policies),
+      ...input.bundle.manifest.policies,
+    ]),
+    extends: unique(input.bundle.manifest.extends),
     capabilities: {
       required: uniqueCapability([
         ...orderedParents.flatMap((parent) => parent.manifest.capabilities.required),
-        ...bundle.manifest.capabilities.required,
+        ...input.bundle.manifest.capabilities.required,
       ]),
       optional: uniqueCapability([
         ...orderedParents.flatMap((parent) => parent.manifest.capabilities.optional),
-        ...bundle.manifest.capabilities.optional,
+        ...input.bundle.manifest.capabilities.optional,
       ]),
     },
     compatibility: {
       providers: unique([
         ...orderedParents.flatMap((parent) => parent.manifest.compatibility.providers),
-        ...bundle.manifest.compatibility.providers,
+        ...input.bundle.manifest.compatibility.providers,
       ]),
       warnings: [
         ...orderedParents.flatMap((parent) => parent.manifest.compatibility.warnings),
-        ...bundle.manifest.compatibility.warnings,
+        ...input.bundle.manifest.compatibility.warnings,
       ],
     },
     activation: {
@@ -382,19 +396,23 @@ export function composeSkill(bundle: SkillBundle, parents: SkillBundle[]): Skill
         (merged, parent) => ({ ...merged, ...parent.manifest.activation }),
         {},
       ),
-      ...bundle.manifest.activation,
+      ...input.bundle.manifest.activation,
       triggers: unique([
         ...orderedParents.flatMap((parent) => parent.manifest.activation.triggers),
-        ...bundle.manifest.activation.triggers,
+        ...input.bundle.manifest.activation.triggers,
       ]),
       tags: unique([
         ...orderedParents.flatMap((parent) => parent.manifest.activation.tags),
-        ...bundle.manifest.activation.tags,
+        ...input.bundle.manifest.activation.tags,
       ]),
-      weight: bundle.manifest.activation.weight,
+      weight: input.bundle.manifest.activation.weight,
     },
   };
-  return { ...bundle, manifest };
+  return compositionResultSchema.parse({
+    bundle: { ...input.bundle, manifest },
+    appliedParentIds: orderedParents.map((parent) => parent.manifest.id),
+    warnings: [],
+  });
 }
 
 export function findOverlaps(bundles: SkillBundle[]): Array<{ ids: string[]; triggers: string[]; tags: string[] }> {

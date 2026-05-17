@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   compatibilityWarningSchema,
+  compositionInputSchema,
+  compositionResultSchema,
   formatValidationIssue,
   parseSkillBundle,
   provenanceSchema,
@@ -272,5 +274,79 @@ describe("@clew/schema", () => {
     });
 
     expect(result.ok).toBe(true);
+  });
+
+  it("defaults composition inputs and result warnings deterministically", () => {
+    const bundle = parseSkillBundle({ manifest, instructions: "Refactor safely." });
+
+    expect(compositionInputSchema.parse({ bundle })).toEqual({
+      bundle,
+      parents: [],
+    });
+    expect(
+      compositionResultSchema.parse({
+        bundle,
+        appliedParentIds: [],
+      }),
+    ).toEqual({
+      bundle,
+      appliedParentIds: [],
+      warnings: [],
+    });
+  });
+
+  it("rejects composition inputs with duplicate parent bundle ids", () => {
+    const bundle = parseSkillBundle({ manifest, instructions: "Refactor safely." });
+    const parent = parseSkillBundle({
+      manifest: { ...manifest, id: "engineering-core", name: "Engineering Core" },
+      instructions: "Prefer deterministic behavior.",
+    });
+
+    const result = compositionInputSchema.safeParse({ bundle, parents: [parent, parent] });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["parents"],
+          message: "Composition parent bundle ids must be unique.",
+        }),
+      );
+    }
+  });
+
+  it("rejects composition results with duplicate or undeclared applied parents", () => {
+    const bundle = parseSkillBundle({
+      manifest: { ...manifest, extends: ["engineering-core"] },
+      instructions: "Refactor safely.",
+    });
+
+    const duplicateResult = compositionResultSchema.safeParse({
+      bundle,
+      appliedParentIds: ["engineering-core", "engineering-core"],
+    });
+    expect(duplicateResult.success).toBe(false);
+    if (!duplicateResult.success) {
+      expect(duplicateResult.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["appliedParentIds"],
+          message: "Composition appliedParentIds must be unique.",
+        }),
+      );
+    }
+
+    const undeclaredResult = compositionResultSchema.safeParse({
+      bundle,
+      appliedParentIds: ["safe-editing"],
+    });
+    expect(undeclaredResult.success).toBe(false);
+    if (!undeclaredResult.success) {
+      expect(undeclaredResult.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["appliedParentIds"],
+          message: 'Composition applied parent "safe-editing" must be declared in manifest.extends.',
+        }),
+      );
+    }
   });
 });
