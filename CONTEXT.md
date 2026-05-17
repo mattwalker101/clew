@@ -55,4 +55,6 @@ The repository should validate the abstraction layer before adding orchestration
 
 ## Current Priority
 
-Phase 1 is `clew-schema`. It should establish deterministic validation for canonical skill bundles before core registry or CLI work expands.
+Phase 1 `clew-schema` is in closeout. It has established deterministic validation for skill bundles, provenance, extension namespaces, composition results, recommendation outputs, warning envelopes, and public contract fixtures.
+
+The next major priority is Phase 2 `clew-core`: registry resolution, overlays, telemetry, activation behavior, and provenance-aware runtime intelligence.

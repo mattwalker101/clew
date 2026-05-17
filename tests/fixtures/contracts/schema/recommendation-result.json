@@ -1,0 +1,31 @@
+{
+  "skillId": "typescript-core",
+  "score": 10,
+  "reasons": [
+    "query matched trigger \"typescript\"",
+    "matched tag \"typescript\"",
+    "matched repository signal \"typescript\""
+  ],
+  "signals": [
+    {
+      "type": "trigger",
+      "value": "typescript"
+    },
+    {
+      "type": "tag",
+      "value": "typescript"
+    },
+    {
+      "type": "repo_signal",
+      "value": "typescript"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "capability_missing",
+      "message": "Runtime is missing required capabilities: terminal",
+      "severity": "warning",
+      "origin": "activation"
+    }
+  ]
+}

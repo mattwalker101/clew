@@ -1,0 +1,35 @@
+{
+  "manifest": {
+    "id": "safe-refactor",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Safe Refactor",
+    "instructions": {
+      "file": "skill.md"
+    },
+    "tags": [],
+    "capabilities": {
+      "required": [],
+      "optional": []
+    },
+    "compatibility": {
+      "providers": [],
+      "warnings": []
+    },
+    "preferences": {},
+    "activation": {
+      "triggers": [],
+      "tags": [],
+      "weight": 1
+    },
+    "extends": [],
+    "policies": [],
+    "provenance": {},
+    "extensions": {}
+  },
+  "instructions": "Refactor safely.",
+  "assets": [],
+  "examples": [],
+  "templates": [],
+  "tests": []
+}
