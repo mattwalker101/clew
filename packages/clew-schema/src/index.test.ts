@@ -9,6 +9,7 @@ import {
   formatValidationIssue,
   parseSkillBundle,
   provenanceSchema,
+  recommendationSchema,
   SkillBundleValidationError,
   skillManifestSchema,
   validateSkillBundle,
@@ -345,6 +346,103 @@ describe("@clew/schema", () => {
         expect.objectContaining({
           path: ["appliedParentIds"],
           message: 'Composition applied parent "safe-editing" must be declared in manifest.extends.',
+        }),
+      );
+    }
+  });
+
+  it("validates recommendation explainability as deterministic evidence", () => {
+    expect(
+      recommendationSchema.parse({
+        skillId: "typescript-core",
+        score: 10,
+        reasons: ['query matched trigger "test"'],
+        signals: [{ type: "trigger", value: "test" }],
+        warnings: [],
+      }),
+    ).toEqual({
+      skillId: "typescript-core",
+      score: 10,
+      reasons: ['query matched trigger "test"'],
+      signals: [{ type: "trigger", value: "test" }],
+      warnings: [],
+    });
+
+    expect(() =>
+      recommendationSchema.parse({
+        skillId: "typescript-core",
+        score: 10,
+        reasons: [],
+        signals: [{ type: "trigger", value: "test" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      recommendationSchema.parse({
+        skillId: "typescript-core",
+        score: 10,
+        reasons: ['query matched trigger "test"', 'query matched trigger "test"'],
+        signals: [{ type: "trigger", value: "test" }],
+      }),
+    ).toThrow("Recommendation reasons must be unique.");
+    expect(() =>
+      recommendationSchema.parse({
+        skillId: "typescript-core",
+        score: 10,
+        reasons: ['query matched trigger "test"'],
+        signals: ["trigger:test"],
+      }),
+    ).toThrow();
+    expect(() =>
+      recommendationSchema.parse({
+        skillId: "typescript-core",
+        score: 10,
+        reasons: ['query matched trigger "test"'],
+        signals: [
+          { type: "trigger", value: "test" },
+          { type: "trigger", value: "test" },
+        ],
+      }),
+    ).toThrow("Recommendation signals must be unique.");
+  });
+
+  it("requires recommendation capability degradation warnings to come from activation", () => {
+    expect(
+      recommendationSchema.parse({
+        skillId: "terminal-skill",
+        score: 5,
+        reasons: ['query matched trigger "build"'],
+        signals: [{ type: "trigger", value: "build" }],
+        warnings: [
+          {
+            code: "capability_missing",
+            message: "Runtime is missing required capabilities: terminal",
+            severity: "warning",
+            origin: "activation",
+          },
+        ],
+      }).warnings[0],
+    ).toMatchObject({ code: "capability_missing", origin: "activation" });
+
+    const result = recommendationSchema.safeParse({
+      skillId: "terminal-skill",
+      score: 5,
+      reasons: ['query matched trigger "build"'],
+      signals: [{ type: "trigger", value: "build" }],
+      warnings: [
+        {
+          code: "capability_missing",
+          message: "Runtime is missing required capabilities: terminal",
+          severity: "warning",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["warnings", 0, "origin"],
+          message: 'Recommendation capability warning "capability_missing" must use origin "activation".',
         }),
       );
     }

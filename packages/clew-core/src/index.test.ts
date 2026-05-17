@@ -20,7 +20,7 @@ import {
   rebuildSqliteIndex,
   SkillRegistry,
 } from "./index.js";
-import { compositionResultSchema, type SkillBundle } from "@clew/schema";
+import { compositionResultSchema, recommendationSchema, type SkillBundle } from "@clew/schema";
 
 function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): SkillBundle {
   return {
@@ -380,7 +380,7 @@ describe("@clew/core", () => {
 
     expect(detectRepoSignals(projectRoot)).toEqual(expect.arrayContaining(["node", "typescript", "pnpm"]));
     expect(recommendation?.reasons).toContain('matched repository signal "typescript"');
-    expect(recommendation?.signals).toContain("repo:typescript");
+    expect(recommendation?.signals).toContainEqual({ type: "repo_signal", value: "typescript" });
   });
 
   it("marks recommendation capability warnings as activation provenance", () => {
@@ -403,6 +403,33 @@ describe("@clew/core", () => {
     expect(new ActivationEngine(registry).recommend({ query: "build", capabilities: [] })[0]?.warnings).toEqual([
       expect.objectContaining({ code: "capability_missing", origin: "activation" }),
     ]);
+  });
+
+  it("returns schema-valid recommendations from activation", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", {
+            tags: ["typescript"],
+            activation: { triggers: ["test"], tags: [], weight: 1 },
+            capabilities: { required: ["terminal"], optional: [] },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const recommendations = new ActivationEngine(registry).recommend({
+      query: "test typescript",
+      repoSignals: ["typescript"],
+      capabilities: [],
+    });
+
+    expect(recommendations.map((recommendation) => recommendationSchema.parse(recommendation))).toEqual(recommendations);
   });
 
   it("warns when AGENTS.md references unknown or disabled skills", () => {

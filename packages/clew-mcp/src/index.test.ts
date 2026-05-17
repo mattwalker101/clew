@@ -100,7 +100,7 @@ describe("@clew/mcp", () => {
       query: "",
       recommendation: {
         skillId: "safe-editing",
-        signals: ["agents-md"],
+        signals: [{ type: "agents_md", value: "safe-editing" }],
       },
       warnings: [],
     });
