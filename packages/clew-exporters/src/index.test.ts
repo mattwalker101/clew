@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { exportClaudeSkill, exportOpenCodeSkill } from "./index.js";
-import { compatibilityWarningSchema, type SkillBundle } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning, type SkillBundle } from "@clew/schema";
 
 const bundle: SkillBundle = {
   manifest: {
@@ -29,9 +29,23 @@ const bundle: SkillBundle = {
 };
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
+const contractRoot = join(process.cwd(), "tests", "fixtures", "contracts");
+
+type ProviderWarningContract = {
+  exports: {
+    claudeCanonical: { warnings: CompatibilityWarning[] };
+    opencodeFromClaudeOnly: { warnings: CompatibilityWarning[] };
+  };
+};
 
 function canonicalFixture(): SkillBundle {
   return JSON.parse(readFileSync(join(fixtureRoot, "canonical-roundtrip.json"), "utf8")) as SkillBundle;
+}
+
+function providerWarningContract(): ProviderWarningContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-warning-contract.json"), "utf8"),
+  ) as ProviderWarningContract;
 }
 
 describe("@clew/exporters", () => {
@@ -43,12 +57,16 @@ describe("@clew/exporters", () => {
 
   it("warns on undeclared provider compatibility", () => {
     const result = exportOpenCodeSkill(bundle);
-    expect(result.warnings.map((warning) => warning.code)).toContain("target_provider_not_declared");
+    const contract = providerWarningContract();
+
+    expect(result.warnings).toEqual(contract.exports.opencodeFromClaudeOnly.warnings);
+    expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("exports canonical fixtures deterministically with compatibility reports", () => {
     const first = exportClaudeSkill(canonicalFixture());
     const second = exportClaudeSkill(canonicalFixture());
+    const contract = providerWarningContract();
 
     expect(first).toEqual(second);
     expect(first.artifacts).toEqual([
@@ -64,11 +82,7 @@ describe("@clew/exporters", () => {
         ].join("\n"),
       },
     ]);
-    expect(first.warnings.map((warning) => warning.code)).toEqual([
-      "composition_degraded",
-      "capability_semantics_degraded",
-    ]);
-    expect(first.warnings.map((warning) => warning.origin)).toEqual(["provider_export", "provider_export"]);
+    expect(first.warnings).toEqual(contract.exports.claudeCanonical.warnings);
     expect(first.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(first.warnings);
   });
 
