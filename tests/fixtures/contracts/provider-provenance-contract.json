@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "description": "Public provider provenance contract fixture for importer result and manifest provenance. Provider identity stays in canonical provenance while provider-specific metadata stays under extensions.<provider>.",
+  "imports": {
+    "claudeDegraded": {
+      "provenance": {
+        "source": {
+          "type": "claude",
+          "location": "claude",
+          "original_id": "db-migration"
+        },
+        "imported_via": {
+          "importer": "claude"
+        }
+      }
+    },
+    "opencodeNormalized": {
+      "provenance": {
+        "source": {
+          "type": "opencode",
+          "location": "opencode"
+        },
+        "imported_via": {
+          "importer": "opencode"
+        }
+      }
+    }
+  }
+}

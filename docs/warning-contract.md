@@ -41,3 +41,5 @@ Provider interop warnings must keep `origin: "provider_import"` or `origin: "pro
 The public fixture at `tests/fixtures/contracts/warning-contract.json` pins representative read-envelope shapes. It is exercised by the MCP test suite so future refactors catch accidental changes to warning array placement or warning object fields.
 
 The provider interop fixture at `tests/fixtures/contracts/provider-warning-contract.json` pins importer and exporter warning arrays for provider degradation, metadata preservation, field normalization, and undeclared-provider exports.
+
+The provider provenance fixture at `tests/fixtures/contracts/provider-provenance-contract.json` pins importer provenance on both import results and imported bundle manifests. Provenance contracts stay separate from provider metadata so `manifest.extensions.<provider>` remains provider-specific.

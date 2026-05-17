@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { importClaudeSkill, importOpenCodeSkill } from "./index.js";
 import type { ProviderSkillInput } from "./index.js";
-import { compatibilityWarningSchema, type CompatibilityWarning } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning, type ImportResult } from "@clew/schema";
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
 const contractRoot = join(process.cwd(), "tests", "fixtures", "contracts");
@@ -15,6 +15,13 @@ type ProviderWarningContract = {
   };
 };
 
+type ProviderProvenanceContract = {
+  imports: {
+    claudeDegraded: { provenance: ImportResult["provenance"] };
+    opencodeNormalized: { provenance: ImportResult["provenance"] };
+  };
+};
+
 function fixture(name: string): ProviderSkillInput {
   return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
 }
@@ -23,6 +30,12 @@ function providerWarningContract(): ProviderWarningContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-warning-contract.json"), "utf8"),
   ) as ProviderWarningContract;
+}
+
+function providerProvenanceContract(): ProviderProvenanceContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-provenance-contract.json"), "utf8"),
+  ) as ProviderProvenanceContract;
 }
 
 describe("@clew/importers", () => {
@@ -64,20 +77,26 @@ describe("@clew/importers", () => {
 
   it("preserves degraded Claude provider metadata with stable warnings", () => {
     const result = importClaudeSkill(fixture("claude-degraded.json"));
-    const contract = providerWarningContract();
+    const warningContract = providerWarningContract();
+    const provenanceContract = providerProvenanceContract();
 
+    expect(result.provenance).toEqual(provenanceContract.imports.claudeDegraded.provenance);
+    expect(result.bundles[0]?.manifest.provenance).toEqual(provenanceContract.imports.claudeDegraded.provenance);
     expect(result.bundles[0]?.manifest.extensions.claude).toMatchObject({ risk_level: "high" });
-    expect(result.warnings).toEqual(contract.imports.claudeDegraded.warnings);
+    expect(result.warnings).toEqual(warningContract.imports.claudeDegraded.warnings);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {
     const result = importOpenCodeSkill(fixture("opencode-normalized.json"));
-    const contract = providerWarningContract();
+    const warningContract = providerWarningContract();
+    const provenanceContract = providerProvenanceContract();
 
     expect(result.bundles[0]?.manifest.id).toBe("opencode-migration");
+    expect(result.provenance).toEqual(provenanceContract.imports.opencodeNormalized.provenance);
+    expect(result.bundles[0]?.manifest.provenance).toEqual(provenanceContract.imports.opencodeNormalized.provenance);
     expect(result.bundles[0]?.manifest.extensions.opencode).toMatchObject({ mode: "review", agent_mode: "review" });
-    expect(result.warnings).toEqual(contract.imports.opencodeNormalized.warnings);
+    expect(result.warnings).toEqual(warningContract.imports.opencodeNormalized.warnings);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
