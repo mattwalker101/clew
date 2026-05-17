@@ -884,6 +884,178 @@ describe("@clew/core", () => {
     expect(recommendationSchema.parse(recommendations[0])).toEqual(recommendations[0]);
   });
 
+  it("analyzes activation recommendations with included and excluded candidate rows", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+            capabilities: { required: ["terminal"], optional: [] },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 2,
+        },
+        {
+          bundle: bundle("typescript-refactor", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("disabled-skill", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("unmatched-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+      ],
+      warnings: [],
+    });
+
+    const analysis = new ActivationEngine(registry).analyzeRecommendations({
+      query: "typescript",
+      agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
+      repoSignals: ["typescript"],
+      capabilities: [],
+    });
+
+    expect(analysis.candidates.map((candidate) => [candidate.skillId, candidate.status, candidate.rank])).toEqual([
+      ["typescript-core", "included", 1],
+      ["typescript-refactor", "included", 2],
+      ["disabled-skill", "excluded", undefined],
+      ["unmatched-skill", "excluded", undefined],
+    ]);
+    expect(analysis.candidates[0]).toMatchObject({
+      skillId: "typescript-core",
+      enabled: true,
+      score: 16,
+      components: [
+        { kind: "trigger", value: "typescript", points: 5, reason: 'query matched trigger "typescript"' },
+        { kind: "tag", value: "typescript", points: 3, reason: 'matched tag "typescript"' },
+        { kind: "agents_md", value: "typescript-core", points: 4, reason: "referenced by AGENTS.md active skills" },
+        { kind: "repo_signal", value: "typescript", points: 2, reason: 'matched repository signal "typescript"' },
+        { kind: "telemetry_favorite", value: "true", points: 1, reason: "favorite skill" },
+        { kind: "telemetry_usage", value: "2", points: 1, reason: "used 2 times previously" },
+      ],
+      warnings: expect.arrayContaining([
+        expect.objectContaining({ code: "capability_missing", origin: "activation" }),
+        expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+      ]),
+      exclusions: [],
+    });
+    expect(analysis.candidates[2]).toMatchObject({
+      skillId: "disabled-skill",
+      enabled: false,
+      status: "excluded",
+      exclusions: [{ kind: "disabled", reason: "skill is disabled" }],
+    });
+    expect(analysis.candidates[3]).toMatchObject({
+      skillId: "unmatched-skill",
+      enabled: true,
+      status: "excluded",
+      score: 0,
+      exclusions: [{ kind: "unmatched", reason: "no activation evidence matched the supplied context" }],
+    });
+    expect(analysis.recommendations).toEqual(new ActivationEngine(registry).recommend({
+      query: "typescript",
+      agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
+      repoSignals: ["typescript"],
+      capabilities: [],
+    }));
+  });
+
+  it("matches the documented activation analysis contract fixture", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+            capabilities: { required: ["terminal"], optional: [] },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 2,
+        },
+        {
+          bundle: bundle("typescript-refactor", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("conflicted-skill", {
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+            extends: ["missing-parent"],
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("disabled-skill", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("unmatched-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(
+      new ActivationEngine(registry).analyzeRecommendations({
+        query: "typescript",
+        tags: ["typescript"],
+        agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
+        repoSignals: ["typescript"],
+        capabilities: [],
+      }),
+    ).toEqual(contractFixture("activation-analysis-contract.json"));
+  });
+
   it("detects repository signals and explains repo heuristic matches", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ devDependencies: { typescript: "latest" } }));

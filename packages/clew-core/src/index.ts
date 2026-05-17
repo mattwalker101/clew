@@ -126,6 +126,49 @@ export type SkillTelemetryAnalysisResult = {
   records: SkillTelemetryAnalysisRecord[];
 };
 
+export type SkillActivationCandidateStatus = "included" | "excluded";
+
+export type SkillActivationScoreComponentKind =
+  | "trigger"
+  | "tag"
+  | "agents_md"
+  | "repo_signal"
+  | "telemetry_favorite"
+  | "telemetry_usage";
+
+export type SkillActivationScoreComponent = {
+  kind: SkillActivationScoreComponentKind;
+  value: string;
+  points: number;
+  reason: string;
+};
+
+export type SkillActivationExclusionKind = "disabled" | "unmatched";
+
+export type SkillActivationExclusion = {
+  kind: SkillActivationExclusionKind;
+  reason: string;
+};
+
+export type SkillActivationCandidate = {
+  skillId: string;
+  enabled: boolean;
+  status: SkillActivationCandidateStatus;
+  score: number;
+  rank?: number;
+  components: SkillActivationScoreComponent[];
+  reasons: string[];
+  signals: RecommendationSignal[];
+  warnings: CompatibilityWarning[];
+  exclusions: SkillActivationExclusion[];
+};
+
+export type SkillActivationAnalysisResult = {
+  context: ActivationContext;
+  candidates: SkillActivationCandidate[];
+  recommendations: Recommendation[];
+};
+
 export type OverlapRelationship = {
   ids: string[];
   triggers: string[];
@@ -930,16 +973,41 @@ export class SkillRegistry {
 export class ActivationEngine {
   constructor(private readonly registry: SkillRegistry) {}
 
-  recommend(input: Partial<ActivationContext>): Recommendation[] {
+  analyzeRecommendations(input: Partial<ActivationContext>): SkillActivationAnalysisResult {
     const context = activationContextSchema.parse(input);
-    const scored = this.registry
-      .entries
-      .filter((entry) => !entry.disabled)
-      .map((entry) => ({ bundle: entry.bundle, recommendation: scoreBundle(entry, context) }))
-      .filter(({ recommendation }) => recommendation.score > 0 && recommendation.reasons.length > 0)
-      .sort((a, b) => b.recommendation.score - a.recommendation.score || a.recommendation.skillId.localeCompare(b.recommendation.skillId));
+    const candidates = [...this.registry.entries].sort(entrySort).map((entry) => analyzeActivationCandidate(entry, context));
+    const included = candidates
+      .filter((candidate) => candidate.status === "included")
+      .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
+    const bySkillId = new Map(this.registry.entries.map((entry) => [entry.bundle.manifest.id, entry.bundle]));
+    const includedWithWarnings = withActivationRelationshipWarnings(
+      included.flatMap((candidate) => {
+        const bundle = bySkillId.get(candidate.skillId);
+        return bundle ? [{ bundle, recommendation: candidateRecommendation(candidate) }] : [];
+      }),
+      this.registry.list(),
+    );
+    const recommendationBySkillId = new Map(
+      includedWithWarnings.map((item, index) => [item.recommendation.skillId, { recommendation: item.recommendation, rank: index + 1 }]),
+    );
+    const rankedIncluded = included.map((candidate) => {
+      const ranked = recommendationBySkillId.get(candidate.skillId);
+      return {
+        ...candidate,
+        ...(ranked ? { rank: ranked.rank } : {}),
+        warnings: ranked?.recommendation.warnings ?? candidate.warnings,
+      };
+    });
+    const excluded = candidates
+      .filter((candidate) => candidate.status === "excluded")
+      .sort((a, b) => a.skillId.localeCompare(b.skillId));
+    const recommendations = includedWithWarnings.map((item) => item.recommendation);
 
-    return withActivationRelationshipWarnings(scored, this.registry.list()).map(({ recommendation }) => recommendation);
+    return { context, candidates: [...rankedIncluded, ...excluded], recommendations };
+  }
+
+  recommend(input: Partial<ActivationContext>): Recommendation[] {
+    return this.analyzeRecommendations(input).recommendations;
   }
 
   explain(skillId: string, input: Partial<ActivationContext>): Recommendation | undefined {
@@ -947,71 +1015,107 @@ export class ActivationEngine {
   }
 }
 
-function scoreBundle(entry: RegistryEntry, context: ActivationContext): Recommendation {
+function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationContext): SkillActivationCandidate {
   const bundle = entry.bundle;
-  const reasons: string[] = [];
-  const signals: RecommendationSignal[] = [];
-  const warnings: CompatibilityWarning[] = [...bundle.manifest.compatibility.warnings];
-  let score = 0;
+  const components: SkillActivationScoreComponent[] = [];
   const queryTerms = normalizeTerms(context.query);
   const agentsActiveSkillIds = unique([...context.activeSkillIds, ...parseAgentsMd(context.agentsMd).activeSkillIds]);
 
   for (const trigger of bundle.manifest.activation.triggers) {
     if (queryTerms.includes(normalize(trigger))) {
-      score += 5 * bundle.manifest.activation.weight;
-      reasons.push(`query matched trigger "${trigger}"`);
-      signals.push({ type: "trigger", value: trigger });
+      components.push({
+        kind: "trigger",
+        value: trigger,
+        points: 5 * bundle.manifest.activation.weight,
+        reason: `query matched trigger "${trigger}"`,
+      });
     }
   }
   for (const tag of bundle.manifest.tags) {
     if (context.tags.includes(tag) || queryTerms.includes(normalize(tag))) {
-      score += 3;
-      reasons.push(`matched tag "${tag}"`);
-      signals.push({ type: "tag", value: tag });
+      components.push({ kind: "tag", value: tag, points: 3, reason: `matched tag "${tag}"` });
     }
   }
   if (agentsActiveSkillIds.includes(bundle.manifest.id)) {
-    score += 4;
-    reasons.push("referenced by AGENTS.md active skills");
-    signals.push({ type: "agents_md", value: bundle.manifest.id });
+    components.push({
+      kind: "agents_md",
+      value: bundle.manifest.id,
+      points: 4,
+      reason: "referenced by AGENTS.md active skills",
+    });
   }
   for (const repoSignal of context.repoSignals) {
     if (bundle.manifest.tags.includes(repoSignal) || bundle.manifest.activation.triggers.includes(repoSignal)) {
-      score += 2;
-      reasons.push(`matched repository signal "${repoSignal}"`);
-      signals.push({ type: "repo_signal", value: repoSignal });
+      components.push({
+        kind: "repo_signal",
+        value: repoSignal,
+        points: 2,
+        reason: `matched repository signal "${repoSignal}"`,
+      });
     }
   }
-  const missing = bundle.manifest.capabilities.required.filter((capability) => !context.capabilities.includes(capability));
-  if (missing.length) {
-    warnings.push({
-      code: "capability_missing",
-      message: `Runtime is missing required capabilities: ${missing.join(", ")}`,
-      severity: "warning",
-      origin: "activation",
-    });
-  }
-  if (score > 0 && reasons.length > 0) {
+  if (components.length) {
     if (entry.favorite) {
-      score += 1;
-      reasons.push("favorite skill");
-      signals.push({ type: "telemetry_favorite", value: "true" });
+      components.push({ kind: "telemetry_favorite", value: "true", points: 1, reason: "favorite skill" });
     }
     const usageCount = entry.usageCount ?? 0;
     if (usageCount > 0) {
-      score += 1;
-      reasons.push(`used ${usageCount} ${usageCount === 1 ? "time" : "times"} previously`);
-      signals.push({ type: "telemetry_usage", value: String(usageCount) });
+      components.push({
+        kind: "telemetry_usage",
+        value: String(usageCount),
+        points: 1,
+        reason: `used ${usageCount} ${usageCount === 1 ? "time" : "times"} previously`,
+      });
+    }
+  }
+  const score = components.reduce((sum, component) => sum + component.points, 0);
+  const reasons = unique(components.map((component) => component.reason));
+  const enabled = !entry.disabled;
+  const status: SkillActivationCandidateStatus = enabled && score > 0 && reasons.length > 0 ? "included" : "excluded";
+  const exclusions: SkillActivationExclusion[] = [];
+  const warnings: CompatibilityWarning[] = status === "included" ? [...bundle.manifest.compatibility.warnings] : [];
+  if (!enabled) {
+    exclusions.push({ kind: "disabled", reason: "skill is disabled" });
+  } else if (score === 0 || reasons.length === 0) {
+    exclusions.push({ kind: "unmatched", reason: "no activation evidence matched the supplied context" });
+  }
+  if (status === "included") {
+    const missing = bundle.manifest.capabilities.required.filter((capability) => !context.capabilities.includes(capability));
+    if (missing.length) {
+      warnings.push({
+        code: "capability_missing",
+        message: `Runtime is missing required capabilities: ${missing.join(", ")}`,
+        severity: "warning",
+        origin: "activation",
+      });
     }
   }
 
   return {
     skillId: bundle.manifest.id,
+    enabled,
+    status,
     score,
-    reasons: unique(reasons),
-    signals: uniqueSignals(signals),
+    components,
+    reasons,
+    signals: uniqueSignals(components.map(componentSignal)),
     warnings,
+    exclusions,
   };
+}
+
+function candidateRecommendation(candidate: SkillActivationCandidate): Recommendation {
+  return {
+    skillId: candidate.skillId,
+    score: candidate.score,
+    reasons: candidate.reasons,
+    signals: candidate.signals,
+    warnings: candidate.warnings,
+  };
+}
+
+function componentSignal(component: SkillActivationScoreComponent): RecommendationSignal {
+  return { type: component.kind, value: component.value };
 }
 
 function withActivationRelationshipWarnings(
