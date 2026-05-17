@@ -30,9 +30,21 @@ export type RegistryEntry = {
   favorite: boolean;
 };
 
+export type RegistryResolutionDiagnostic = {
+  code: "skill_shadowed";
+  severity: "info";
+  skillId: string;
+  selectedLayer: RegistryLayer;
+  selectedRoot: string;
+  shadowedLayer: RegistryLayer;
+  shadowedRoot: string;
+  message: string;
+};
+
 export type RegistrySnapshot = {
   entries: RegistryEntry[];
   warnings: CompatibilityWarning[];
+  resolutionDiagnostics: RegistryResolutionDiagnostic[];
 };
 
 export type SkillBundleDiscoveryResult = {
@@ -334,12 +346,8 @@ export function rebuildRegistry(options: RegistryOptions & { telemetry?: Telemet
     }
   }
 
-  const byId = new Map<string, RegistryEntry>();
-  for (const entry of entries.sort(entrySort)) {
-    if (!byId.has(entry.bundle.manifest.id)) byId.set(entry.bundle.manifest.id, entry);
-  }
-  const resolved = [...byId.values()].sort((a, b) => a.bundle.manifest.id.localeCompare(b.bundle.manifest.id));
-  return { entries: resolved, warnings: sortWarnings(warnings) };
+  const { entries: resolved, diagnostics } = resolveRegistryEntries(entries);
+  return { entries: resolved, warnings: sortWarnings(warnings), resolutionDiagnostics: diagnostics };
 }
 
 export function rebuildRegistryIndex(options: RegistryOptions = {}): RegistrySnapshot {
@@ -704,10 +712,12 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
 export class SkillRegistry {
   readonly entries: RegistryEntry[];
   readonly warnings: CompatibilityWarning[];
+  readonly resolutionDiagnostics: RegistryResolutionDiagnostic[];
 
   constructor(snapshot: RegistrySnapshot) {
     this.entries = snapshot.entries;
     this.warnings = snapshot.warnings;
+    this.resolutionDiagnostics = snapshot.resolutionDiagnostics;
   }
 
   static fromProject(projectRoot = process.cwd()): SkillRegistry {
@@ -804,6 +814,41 @@ function toEntry(bundle: SkillBundle, layer: RegistryLayer, root: string, teleme
     root,
     disabled: telemetry.disabled.includes(bundle.manifest.id),
     favorite: telemetry.favorites.includes(bundle.manifest.id),
+  };
+}
+
+function resolveRegistryEntries(entries: RegistryEntry[]): {
+  entries: RegistryEntry[];
+  diagnostics: RegistryResolutionDiagnostic[];
+} {
+  const byId = new Map<string, RegistryEntry[]>();
+  for (const entry of [...entries].sort(entrySort)) {
+    const skillId = entry.bundle.manifest.id;
+    byId.set(skillId, [...(byId.get(skillId) ?? []), entry]);
+  }
+
+  const resolved: RegistryEntry[] = [];
+  const diagnostics: RegistryResolutionDiagnostic[] = [];
+  for (const skillId of [...byId.keys()].sort()) {
+    const [selected, ...shadowed] = byId.get(skillId) ?? [];
+    if (!selected) continue;
+    resolved.push(selected);
+    for (const entry of shadowed) diagnostics.push(toShadowedDiagnostic(selected, entry));
+  }
+  return { entries: resolved, diagnostics };
+}
+
+function toShadowedDiagnostic(selected: RegistryEntry, shadowed: RegistryEntry): RegistryResolutionDiagnostic {
+  const skillId = shadowed.bundle.manifest.id;
+  return {
+    code: "skill_shadowed",
+    severity: "info",
+    skillId,
+    selectedLayer: selected.layer,
+    selectedRoot: selected.root,
+    shadowedLayer: shadowed.layer,
+    shadowedRoot: shadowed.root,
+    message: `Skill "${skillId}" from ${shadowed.layer} root "${shadowed.root}" was shadowed by ${selected.layer} root "${selected.root}".`,
   };
 }
 
