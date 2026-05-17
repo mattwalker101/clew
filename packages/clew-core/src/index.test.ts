@@ -146,6 +146,7 @@ describe("@clew/core", () => {
         },
       ],
       warnings: [],
+      resolutionDiagnostics: [],
     });
 
     const [recommendation] = new ActivationEngine(registry).recommend({
@@ -197,6 +198,7 @@ describe("@clew/core", () => {
           message: "Provider metadata was preserved.",
         },
       ],
+      resolutionDiagnostics: [],
     });
 
     expect(result).toMatchObject({ dbPath, skills: 1, overlaps: 0, conflicts: 0, warnings: 2 });
@@ -231,6 +233,7 @@ describe("@clew/core", () => {
           },
         ],
         warnings: [],
+        resolutionDiagnostics: [],
       });
 
       expect(db.listRegistryWarnings()).toEqual([]);
@@ -272,6 +275,149 @@ describe("@clew/core", () => {
     } finally {
       db.close();
     }
+  });
+
+  it("resolves duplicate skill ids by registry precedence and reports shadowed entries", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const fakeHome = mkdtempSync(join(tmpdir(), "clew-home-"));
+    const projectClewRoot = join(projectRoot, ".clew", "layered-skill");
+    const orgRoot = join(fakeHome, ".clew", "orgs", "acme", "layered-skill");
+    const globalRoot = join(fakeHome, ".clew", "global", "layered-skill");
+    writeFilesystemBundle(projectClewRoot, {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Project Clew Skill",
+      instructions: "Use the project .clew skill.",
+    });
+    writeFilesystemBundle(orgRoot, {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Org Skill",
+      instructions: "Use the org skill.",
+    });
+    writeFilesystemBundle(globalRoot, {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Global Skill",
+      instructions: "Use the global skill.",
+    });
+
+    const oldHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    try {
+      const snapshot = rebuildRegistry({
+        projectRoot,
+        org: "acme",
+        includeReferenceSkills: false,
+        sessionBundles: [
+          bundle("layered-skill", { name: "Session Skill" }),
+          bundle("alpha-skill", { name: "Alpha Skill" }),
+        ],
+        telemetry: { disabled: ["layered-skill"], favorites: [], usage: {} },
+      });
+
+      expect(snapshot.entries.map((entry) => [entry.bundle.manifest.id, entry.layer, entry.bundle.manifest.name])).toEqual([
+        ["alpha-skill", "session", "Alpha Skill"],
+        ["layered-skill", "session", "Session Skill"],
+      ]);
+      expect(snapshot.entries.find((entry) => entry.bundle.manifest.id === "layered-skill")?.disabled).toBe(true);
+      expect(snapshot.resolutionDiagnostics).toEqual([
+        {
+          code: "skill_shadowed",
+          severity: "info",
+          skillId: "layered-skill",
+          selectedLayer: "session",
+          selectedRoot: "session",
+          shadowedLayer: "project",
+          shadowedRoot: join(projectRoot, ".clew"),
+          message:
+            'Skill "layered-skill" from project root "' +
+            join(projectRoot, ".clew") +
+            '" was shadowed by session root "session".',
+        },
+        {
+          code: "skill_shadowed",
+          severity: "info",
+          skillId: "layered-skill",
+          selectedLayer: "session",
+          selectedRoot: "session",
+          shadowedLayer: "org",
+          shadowedRoot: join(fakeHome, ".clew", "orgs", "acme"),
+          message:
+            'Skill "layered-skill" from org root "' +
+            join(fakeHome, ".clew", "orgs", "acme") +
+            '" was shadowed by session root "session".',
+        },
+        {
+          code: "skill_shadowed",
+          severity: "info",
+          skillId: "layered-skill",
+          selectedLayer: "session",
+          selectedRoot: "session",
+          shadowedLayer: "global",
+          shadowedRoot: join(fakeHome, ".clew", "global"),
+          message:
+            'Skill "layered-skill" from global root "' +
+            join(fakeHome, ".clew", "global") +
+            '" was shadowed by session root "session".',
+        },
+      ]);
+      expect(snapshot.warnings).toEqual([]);
+      const registry = new SkillRegistry(snapshot);
+      expect(registry.resolutionDiagnostics).toEqual(snapshot.resolutionDiagnostics);
+      expect(registry.list().map((candidate) => candidate.manifest.id)).toEqual(["alpha-skill"]);
+      expect(registry.lookup("layered-skill")).toBeUndefined();
+      expect(registry.search("org")).toEqual([]);
+    } finally {
+      process.env.HOME = oldHome;
+    }
+  });
+
+  it("keeps registry warnings separate from resolution diagnostics", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const validRoot = join(projectRoot, "skills", "valid-skill");
+    const invalidRoot = join(projectRoot, "skills", "future-kind");
+    writeFilesystemBundle(validRoot, {
+      id: "valid-skill",
+      kind: "instruction_skill",
+      name: "Valid Skill",
+      instructions: "Use the valid skill.",
+    });
+    writeFilesystemBundle(invalidRoot, {
+      id: "future-kind",
+      kind: "workflow_skill",
+      name: "Future Kind",
+      instructions: "Reserved for later.",
+    });
+
+    const snapshot = rebuildRegistry({
+      projectRoot,
+      includeReferenceSkills: true,
+      sessionBundles: [bundle("valid-skill", { name: "Session Skill" })],
+    });
+
+    expect(snapshot.entries.map((entry) => [entry.bundle.manifest.id, entry.layer, entry.bundle.manifest.name])).toEqual([
+      ["valid-skill", "session", "Session Skill"],
+    ]);
+    expect(snapshot.warnings).toEqual([
+      expect.objectContaining({
+        code: "skill_bundle_invalid",
+        severity: "error",
+        origin: "registry_rebuild",
+        field: invalidRoot,
+      }),
+    ]);
+    expect(snapshot.resolutionDiagnostics).toEqual([
+      expect.objectContaining({
+        code: "skill_shadowed",
+        severity: "info",
+        skillId: "valid-skill",
+        selectedLayer: "session",
+        selectedRoot: "session",
+        shadowedLayer: "project",
+        shadowedRoot: join(projectRoot, "skills"),
+      }),
+    ]);
   });
 
   it("opens older SQLite registry databases without registry warning tables", () => {
@@ -318,6 +464,7 @@ describe("@clew/core", () => {
             message: "Unsupported skill kind.",
           },
         ],
+        resolutionDiagnostics: [],
       });
 
       expect(result.warnings).toBe(1);
@@ -371,6 +518,7 @@ describe("@clew/core", () => {
         },
       ],
       warnings: [],
+      resolutionDiagnostics: [],
     });
 
     const [recommendation] = new ActivationEngine(registry).recommend({
@@ -398,6 +546,7 @@ describe("@clew/core", () => {
         },
       ],
       warnings: [],
+      resolutionDiagnostics: [],
     });
 
     expect(new ActivationEngine(registry).recommend({ query: "build", capabilities: [] })[0]?.warnings).toEqual([
@@ -421,6 +570,7 @@ describe("@clew/core", () => {
         },
       ],
       warnings: [],
+      resolutionDiagnostics: [],
     });
 
     const recommendations = new ActivationEngine(registry).recommend({
@@ -444,6 +594,7 @@ describe("@clew/core", () => {
         },
       ],
       warnings: [],
+      resolutionDiagnostics: [],
     });
 
     expect(getAgentsMdDiagnostics("# Active Skills\n- safe-editing\n- missing-skill\n", registry)).toEqual([
