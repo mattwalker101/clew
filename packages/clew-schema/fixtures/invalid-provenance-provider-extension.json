@@ -1,0 +1,28 @@
+{
+  "manifest": {
+    "id": "misplaced-provider-metadata",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Misplaced Provider Metadata",
+    "instructions": { "file": "skill.md" },
+    "provenance": {
+      "source": {
+        "type": "claude",
+        "location": "claude:misplaced-provider-metadata",
+        "original_id": "misplaced-provider-metadata"
+      },
+      "imported_via": {
+        "importer": "claude",
+        "imported_at": "2026-05-16T00:00:00.000Z"
+      }
+    },
+    "extensions": {
+      "local": {
+        "claude": {
+          "slash_command": "/misplaced-provider-metadata"
+        }
+      }
+    }
+  },
+  "instructions": "Provider metadata must live in the explicit provider namespace."
+}

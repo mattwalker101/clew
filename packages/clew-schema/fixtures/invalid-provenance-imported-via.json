@@ -1,0 +1,21 @@
+{
+  "manifest": {
+    "id": "missing-source-provenance",
+    "version": "1.0.0",
+    "kind": "instruction_skill",
+    "name": "Missing Source Provenance",
+    "instructions": { "file": "skill.md" },
+    "provenance": {
+      "imported_via": {
+        "importer": "claude",
+        "imported_at": "2026-05-16T00:00:00.000Z"
+      }
+    },
+    "extensions": {
+      "claude": {
+        "slash_command": "/missing-source-provenance"
+      }
+    }
+  },
+  "instructions": "Keep provenance explainable."
+}
