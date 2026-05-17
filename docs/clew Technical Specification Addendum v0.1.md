@@ -420,9 +420,15 @@ interface Recommendation {
   score: number
 
   reasons: string\[\]
+  signals: RecommendationSignal\[\]
 
-  warnings?: string\[\]  
+  warnings?: CompatibilityWarning\[\]  
 }  
+
+interface RecommendationSignal {
+  type: "trigger" | "tag" | "agents_md" | "repo_signal"
+  value: string
+}
 ---
 
 # **15\. Explainability Requirements**
@@ -430,8 +436,8 @@ interface Recommendation {
 All activation recommendations MUST expose:
 
 * why a skill activated  
-* what signals contributed  
-* capability constraints  
+* what typed evidence signals contributed  
+* capability constraints as recommendation warnings with `origin: "activation"`  
 * overlap/conflict warnings
 
 Explainability is mandatory.

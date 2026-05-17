@@ -10,6 +10,7 @@ import {
   type CompositionResult,
   type CompatibilityWarning,
   type Recommendation,
+  type RecommendationSignal,
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
@@ -746,7 +747,7 @@ export class ActivationEngine {
 
 function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommendation {
   const reasons: string[] = [];
-  const signals: string[] = [];
+  const signals: RecommendationSignal[] = [];
   const warnings: CompatibilityWarning[] = [...bundle.manifest.compatibility.warnings];
   let score = 0;
   const queryTerms = normalizeTerms(context.query);
@@ -755,26 +756,26 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
     if (queryTerms.includes(normalize(trigger))) {
       score += 5 * bundle.manifest.activation.weight;
       reasons.push(`query matched trigger "${trigger}"`);
-      signals.push(`trigger:${trigger}`);
+      signals.push({ type: "trigger", value: trigger });
     }
   }
   for (const tag of bundle.manifest.tags) {
     if (context.tags.includes(tag) || queryTerms.includes(normalize(tag))) {
       score += 3;
       reasons.push(`matched tag "${tag}"`);
-      signals.push(`tag:${tag}`);
+      signals.push({ type: "tag", value: tag });
     }
   }
   if (context.activeSkillIds.includes(bundle.manifest.id) || context.agentsMd.includes(bundle.manifest.id)) {
     score += 4;
     reasons.push("referenced by AGENTS.md active skills");
-    signals.push("agents-md");
+    signals.push({ type: "agents_md", value: bundle.manifest.id });
   }
   for (const repoSignal of context.repoSignals) {
     if (bundle.manifest.tags.includes(repoSignal) || bundle.manifest.activation.triggers.includes(repoSignal)) {
       score += 2;
       reasons.push(`matched repository signal "${repoSignal}"`);
-      signals.push(`repo:${repoSignal}`);
+      signals.push({ type: "repo_signal", value: repoSignal });
     }
   }
   const missing = bundle.manifest.capabilities.required.filter((capability) => !context.capabilities.includes(capability));
@@ -791,7 +792,7 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
     skillId: bundle.manifest.id,
     score,
     reasons: unique(reasons),
-    signals: unique(signals),
+    signals: uniqueSignals(signals),
     warnings,
   };
 }
@@ -838,6 +839,19 @@ function searchableText(bundle: SkillBundle): string[] {
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
+}
+
+function uniqueSignals(values: RecommendationSignal[]): RecommendationSignal[] {
+  const seen = new Set<string>();
+  const result: RecommendationSignal[] = [];
+  for (const value of values) {
+    const key = `${value.type}:${value.value}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(value);
+    }
+  }
+  return result;
 }
 
 function uniqueCapability(values: Capability[]): Capability[] {

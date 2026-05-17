@@ -268,7 +268,12 @@ describe("@clew/cli", () => {
       recommendations: [
         {
           skillId: "typescript-core",
-          signals: expect.arrayContaining(["trigger:typescript", "tag:typescript", "agents-md", "repo:typescript"]),
+          signals: expect.arrayContaining([
+            { type: "trigger", value: "typescript" },
+            { type: "tag", value: "typescript" },
+            { type: "agents_md", value: "typescript-core" },
+            { type: "repo_signal", value: "typescript" },
+          ]),
         },
       ],
       warnings: [],

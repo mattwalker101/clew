@@ -36,11 +36,13 @@ export const compatibilityWarningOrigins = [
   "provider_import",
   "provider_export",
 ] as const;
+export const recommendationSignalTypes = ["trigger", "tag", "agents_md", "repo_signal"] as const;
 
 export const skillKindSchema = z.enum(supportedSkillKinds);
 export const capabilitySchema = z.enum(coreCapabilities);
 export const registryLayerSchema = z.enum(registryLayers);
 export const compatibilityWarningOriginSchema = z.enum(compatibilityWarningOrigins);
+export const recommendationSignalTypeSchema = z.enum(recommendationSignalTypes);
 
 const stringArraySchema = z.array(z.string().min(1)).default([]);
 
@@ -241,13 +243,47 @@ export const activationContextSchema = z
     activeSkillIds: [],
   });
 
-export const recommendationSchema = z.object({
-  skillId: z.string().min(1),
-  score: z.number().finite(),
-  reasons: z.array(z.string().min(1)).min(1),
-  signals: z.array(z.string().min(1)).default([]),
-  warnings: z.array(compatibilityWarningSchema).default([]),
+export const recommendationSignalSchema = z.object({
+  type: recommendationSignalTypeSchema,
+  value: z.string().min(1),
 });
+
+export const recommendationSchema = z
+  .object({
+    skillId: z.string().min(1),
+    score: z.number().finite(),
+    reasons: z.array(z.string().min(1)).min(1),
+    signals: z.array(recommendationSignalSchema).default([]),
+    warnings: z.array(compatibilityWarningSchema).default([]),
+  })
+  .superRefine((value, ctx) => {
+    if (new Set(value.reasons).size !== value.reasons.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Recommendation reasons must be unique.",
+        path: ["reasons"],
+      });
+    }
+
+    const signalKeys = value.signals.map((signal) => `${signal.type}:${signal.value}`);
+    if (new Set(signalKeys).size !== signalKeys.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Recommendation signals must be unique.",
+        path: ["signals"],
+      });
+    }
+
+    for (const [index, warning] of value.warnings.entries()) {
+      if (warning.code.startsWith("capability_") && warning.origin !== "activation") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Recommendation capability warning "${warning.code}" must use origin "activation".`,
+          path: ["warnings", index, "origin"],
+        });
+      }
+    }
+  });
 
 export const validationIssueSchema = z.object({
   path: z.string(),
@@ -292,6 +328,8 @@ export type RegistryLayer = z.infer<typeof registryLayerSchema>;
 export type CapabilitySet = z.infer<typeof capabilitySetSchema>;
 export type CompatibilityWarningOrigin = z.infer<typeof compatibilityWarningOriginSchema>;
 export type CompatibilityWarning = z.infer<typeof compatibilityWarningSchema>;
+export type RecommendationSignalType = z.infer<typeof recommendationSignalTypeSchema>;
+export type RecommendationSignal = z.infer<typeof recommendationSignalSchema>;
 export type SkillManifest = z.infer<typeof skillManifestSchema>;
 export type SkillBundle = z.infer<typeof skillBundleSchema>;
 export type CompositionInput = z.infer<typeof compositionInputSchema>;
