@@ -444,6 +444,19 @@ Explainability is mandatory.
 
 ---
 
+# **15.1\. Executable Schema Contract Fixtures**
+
+The public fixtures under `tests/fixtures/contracts/schema/` pin the Phase 1 schema boundary:
+
+* minimal canonical skill bundle
+* composition result
+* recommendation result with typed evidence signals
+* validation failure envelope
+
+These fixtures are parsed by `@clew/schema` tests. Runtime packages may depend on these contracts, but must not redefine them.
+
+---
+
 # **16\. Import Contracts**
 
 ## **Importers MUST**

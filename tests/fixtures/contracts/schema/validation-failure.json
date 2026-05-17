@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "errors": [
+    {
+      "path": "manifest.id",
+      "code": "too_small",
+      "message": "String must contain at least 1 character(s)"
+    }
+  ],
+  "warnings": []
+}

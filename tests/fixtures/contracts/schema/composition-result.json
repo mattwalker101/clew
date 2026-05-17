@@ -1,0 +1,55 @@
+{
+  "bundle": {
+    "manifest": {
+      "id": "typescript-core",
+      "version": "1.0.0",
+      "kind": "instruction_skill",
+      "name": "TypeScript Core",
+      "instructions": {
+        "file": "skill.md"
+      },
+      "tags": [
+        "engineering",
+        "typescript"
+      ],
+      "capabilities": {
+        "required": [
+          "filesystem",
+          "terminal"
+        ],
+        "optional": []
+      },
+      "compatibility": {
+        "providers": [],
+        "warnings": []
+      },
+      "preferences": {},
+      "activation": {
+        "triggers": [
+          "build",
+          "typescript"
+        ],
+        "tags": [],
+        "weight": 1
+      },
+      "extends": [
+        "engineering-core"
+      ],
+      "policies": [
+        "prefer deterministic behavior",
+        "validate runtime inputs"
+      ],
+      "provenance": {},
+      "extensions": {}
+    },
+    "instructions": "Use TypeScript safely.",
+    "assets": [],
+    "examples": [],
+    "templates": [],
+    "tests": []
+  },
+  "appliedParentIds": [
+    "engineering-core"
+  ],
+  "warnings": []
+}

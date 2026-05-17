@@ -9,10 +9,13 @@ import {
   formatValidationIssue,
   parseSkillBundle,
   provenanceSchema,
+  recommendationSignalSchema,
+  recommendationSignalTypeSchema,
   recommendationSchema,
   SkillBundleValidationError,
   skillManifestSchema,
   validateSkillBundle,
+  validationResultSchema,
 } from "./index.js";
 
 const manifest = {
@@ -24,9 +27,14 @@ const manifest = {
 };
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+const contractFixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "tests", "fixtures", "contracts", "schema");
 
 function fixture(name: string): unknown {
   return JSON.parse(readFileSync(join(fixturesRoot, name), "utf8")) as unknown;
+}
+
+function contractFixture(name: string): unknown {
+  return JSON.parse(readFileSync(join(contractFixturesRoot, name), "utf8")) as unknown;
 }
 
 describe("@clew/schema", () => {
@@ -446,5 +454,28 @@ describe("@clew/schema", () => {
         }),
       );
     }
+  });
+
+  it("pins the public schema contract fixtures", () => {
+    expect(parseSkillBundle(contractFixture("minimal-skill-bundle.json"))).toEqual(
+      contractFixture("minimal-skill-bundle.json"),
+    );
+    expect(compositionResultSchema.parse(contractFixture("composition-result.json"))).toEqual(
+      contractFixture("composition-result.json"),
+    );
+    expect(recommendationSchema.parse(contractFixture("recommendation-result.json"))).toEqual(
+      contractFixture("recommendation-result.json"),
+    );
+    expect(validationResultSchema.parse(contractFixture("validation-failure.json"))).toEqual(
+      contractFixture("validation-failure.json"),
+    );
+  });
+
+  it("exports the recommendation signal contract as an intentional public API", () => {
+    expect(recommendationSignalTypeSchema.options).toEqual(["trigger", "tag", "agents_md", "repo_signal"]);
+    expect(recommendationSignalSchema.parse({ type: "repo_signal", value: "typescript" })).toEqual({
+      type: "repo_signal",
+      value: "typescript",
+    });
   });
 });
