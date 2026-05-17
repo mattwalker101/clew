@@ -63,6 +63,44 @@ export type RelationshipEvidence = {
   values: string[];
 };
 
+export type SkillSearchEvidenceKind =
+  | "identity"
+  | "activation_trigger"
+  | "activation_tag"
+  | "tag"
+  | "policy"
+  | "required_capability"
+  | "optional_capability"
+  | "provider"
+  | "parent"
+  | "provenance"
+  | "instructions_text";
+
+export type SkillSearchEvidence = {
+  kind: SkillSearchEvidenceKind;
+  values: string[];
+};
+
+export type SkillSearchIndexEntry = {
+  skillId: string;
+  evidence: SkillSearchEvidence[];
+};
+
+export type SkillSearchMatch = {
+  skillId: string;
+  score: number;
+  matchedTerms: string[];
+  evidence: SkillSearchEvidence[];
+  reasons: string[];
+};
+
+export type SkillSearchAnalysisResult = {
+  query: string;
+  terms: string[];
+  index: SkillSearchIndexEntry[];
+  matches: SkillSearchMatch[];
+};
+
 export type OverlapRelationship = {
   ids: string[];
   triggers: string[];
@@ -807,9 +845,24 @@ export class SkillRegistry {
       .sort(entrySort)[0]?.bundle;
   }
 
-  search(query: string): SkillBundle[] {
+  analyzeSearch(query: string): SkillSearchAnalysisResult {
     const terms = normalizeTerms(query);
-    return this.list().filter((bundle) => searchableText(bundle).some((text) => terms.some((term) => text.includes(term))));
+    const enabledEntries = [...this.entries].filter((entry) => !entry.disabled).sort(entrySort);
+    const index = enabledEntries.map((entry) => buildSearchIndexEntry(entry.bundle));
+    const matches = index
+      .map((entry) => matchSearchIndexEntry(entry, terms))
+      .filter((match): match is SkillSearchMatch => match !== undefined)
+      .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
+
+    return { query, terms, index, matches };
+  }
+
+  search(query: string): SkillBundle[] {
+    const bySkillId = new Map(this.list().map((bundle) => [bundle.manifest.id, bundle]));
+    return this.analyzeSearch(query).matches.flatMap((match) => {
+      const bundle = bySkillId.get(match.skillId);
+      return bundle ? [bundle] : [];
+    });
   }
 }
 
@@ -999,15 +1052,102 @@ function normalizeTerms(value: string): string[] {
   return unique(normalize(value).split(/\s+/).filter(Boolean));
 }
 
-function searchableText(bundle: SkillBundle): string[] {
+const searchEvidenceKindOrder: SkillSearchEvidenceKind[] = [
+  "identity",
+  "activation_trigger",
+  "activation_tag",
+  "tag",
+  "policy",
+  "required_capability",
+  "optional_capability",
+  "provider",
+  "parent",
+  "provenance",
+  "instructions_text",
+];
+
+const searchEvidenceWeights: Record<SkillSearchEvidenceKind, number> = {
+  identity: 4,
+  activation_trigger: 10,
+  activation_tag: 9,
+  tag: 9,
+  policy: 9,
+  required_capability: 9,
+  optional_capability: 9,
+  provider: 9,
+  parent: 9,
+  provenance: 9,
+  instructions_text: 1,
+};
+
+function buildSearchIndexEntry(bundle: SkillBundle): SkillSearchIndexEntry {
+  const manifest = bundle.manifest;
+  return {
+    skillId: manifest.id,
+    evidence: sortSearchEvidence([
+      searchEvidence("identity", [manifest.id, manifest.name, manifest.description ?? ""]),
+      searchEvidence("activation_trigger", manifest.activation.triggers),
+      searchEvidence("activation_tag", manifest.activation.tags),
+      searchEvidence("tag", manifest.tags),
+      searchEvidence("policy", manifest.policies),
+      searchEvidence("required_capability", manifest.capabilities.required),
+      searchEvidence("optional_capability", manifest.capabilities.optional),
+      searchEvidence("provider", manifest.compatibility.providers),
+      searchEvidence("parent", manifest.extends),
+      searchEvidence("provenance", provenanceSearchValues(manifest.provenance)),
+      searchEvidence("instructions_text", normalizeTerms(bundle.instructions)),
+    ]),
+  };
+}
+
+function matchSearchIndexEntry(entry: SkillSearchIndexEntry, terms: string[]): SkillSearchMatch | undefined {
+  const evidence: SkillSearchEvidence[] = [];
+  const reasons: string[] = [];
+  const matchedTerms: string[] = [];
+  let score = 0;
+
+  for (const candidate of entry.evidence) {
+    const matchingValues = candidate.values.filter((value) => terms.some((term) => normalize(value).includes(term)));
+    if (!matchingValues.length) continue;
+    evidence.push({ kind: candidate.kind, values: matchingValues });
+    score += matchingValues.length * searchEvidenceWeights[candidate.kind];
+    for (const value of matchingValues) {
+      reasons.push(`matched ${candidate.kind} "${value}"`);
+      for (const term of terms) {
+        if (normalize(value).includes(term)) matchedTerms.push(term);
+      }
+    }
+  }
+
+  if (!evidence.length) return undefined;
+  return {
+    skillId: entry.skillId,
+    score,
+    matchedTerms: unique(matchedTerms),
+    evidence,
+    reasons: unique(reasons),
+  };
+}
+
+function searchEvidence(kind: SkillSearchEvidenceKind, values: string[]): SkillSearchEvidence {
+  return { kind, values: unique(values.filter(Boolean)) };
+}
+
+function sortSearchEvidence(values: SkillSearchEvidence[]): SkillSearchEvidence[] {
+  const order = new Map(searchEvidenceKindOrder.map((kind, index) => [kind, index]));
+  return values
+    .filter((value) => value.values.length > 0)
+    .map((value) => ({ ...value, values: [...value.values].sort() }))
+    .sort((a, b) => (order.get(a.kind) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.kind) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function provenanceSearchValues(provenance: SkillManifest["provenance"]): string[] {
   return [
-    bundle.manifest.id,
-    bundle.manifest.name,
-    bundle.manifest.description ?? "",
-    ...bundle.manifest.tags,
-    ...bundle.manifest.activation.triggers,
-    bundle.instructions,
-  ].map(normalize);
+    provenance.source?.type,
+    provenance.source?.location,
+    provenance.source?.original_id,
+    provenance.imported_via?.importer,
+  ].filter((value): value is string => Boolean(value));
 }
 
 function unique<T>(values: T[]): T[] {

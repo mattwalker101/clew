@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,6 +66,10 @@ function writeFilesystemBundle(root: string, options: { id: string; kind: string
     ].join("\n"),
   );
   writeFileSync(join(root, "skill.md"), options.instructions);
+}
+
+function contractFixture(name: string): unknown {
+  return JSON.parse(readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", name), "utf8")) as unknown;
 }
 
 describe("@clew/core", () => {
@@ -217,6 +221,176 @@ describe("@clew/core", () => {
     expect(recommendation?.skillId).toBe("debugging-core");
     expect(recommendation?.reasons.length).toBeGreaterThan(0);
     expect(recommendation?.warnings[0]?.code).toBe("capability_missing");
+  });
+
+  it("analyzes deterministic search evidence without embeddings", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("semantic-index", {
+            name: "Semantic Index",
+            description: "Local searchable skill evidence.",
+            tags: ["typescript"],
+            policies: ["preserve deterministic behavior"],
+            capabilities: { required: ["filesystem"], optional: ["git"] },
+            compatibility: { providers: ["codex"], warnings: [] },
+            activation: { triggers: ["index"], tags: ["search"], weight: 1 },
+            extends: ["engineering-core"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "semantic-index-source" },
+              imported_via: { importer: "claude" },
+            },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+    registry.entries[0]!.bundle.instructions = "Build deterministic local-first instructions-derived evidence.";
+
+    expect(registry.analyzeSearch("index typescript deterministic filesystem git codex engineering github claude instructions")).toEqual({
+      query: "index typescript deterministic filesystem git codex engineering github claude instructions",
+      terms: ["index", "typescript", "deterministic", "filesystem", "git", "codex", "engineering", "github", "claude", "instructions"],
+      index: [
+        {
+          skillId: "semantic-index",
+          evidence: [
+            { kind: "identity", values: ["Local searchable skill evidence.", "Semantic Index", "semantic-index"] },
+            { kind: "activation_trigger", values: ["index"] },
+            { kind: "activation_tag", values: ["search"] },
+            { kind: "tag", values: ["typescript"] },
+            { kind: "policy", values: ["preserve deterministic behavior"] },
+            { kind: "required_capability", values: ["filesystem"] },
+            { kind: "optional_capability", values: ["git"] },
+            { kind: "provider", values: ["codex"] },
+            { kind: "parent", values: ["engineering-core"] },
+            { kind: "provenance", values: ["claude", "github", "mattpocock/skills", "semantic-index-source"] },
+            { kind: "instructions_text", values: ["build", "deterministic", "evidence", "instructions-derived", "local-first"] },
+          ],
+        },
+      ],
+      matches: [
+        {
+          skillId: "semantic-index",
+          score: 101,
+          matchedTerms: ["index", "typescript", "deterministic", "filesystem", "git", "codex", "engineering", "claude", "github", "instructions"],
+          evidence: [
+            { kind: "identity", values: ["Semantic Index", "semantic-index"] },
+            { kind: "activation_trigger", values: ["index"] },
+            { kind: "tag", values: ["typescript"] },
+            { kind: "policy", values: ["preserve deterministic behavior"] },
+            { kind: "required_capability", values: ["filesystem"] },
+            { kind: "optional_capability", values: ["git"] },
+            { kind: "provider", values: ["codex"] },
+            { kind: "parent", values: ["engineering-core"] },
+            { kind: "provenance", values: ["claude", "github", "semantic-index-source"] },
+            { kind: "instructions_text", values: ["deterministic", "instructions-derived"] },
+          ],
+          reasons: [
+            'matched identity "Semantic Index"',
+            'matched identity "semantic-index"',
+            'matched activation_trigger "index"',
+            'matched tag "typescript"',
+            'matched policy "preserve deterministic behavior"',
+            'matched required_capability "filesystem"',
+            'matched optional_capability "git"',
+            'matched provider "codex"',
+            'matched parent "engineering-core"',
+            'matched provenance "claude"',
+            'matched provenance "github"',
+            'matched provenance "semantic-index-source"',
+            'matched instructions_text "deterministic"',
+            'matched instructions_text "instructions-derived"',
+          ],
+        },
+      ],
+    });
+  });
+
+  it("orders search analysis matches deterministically by score then skill id", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("beta", { tags: ["search"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        {
+          bundle: bundle("alpha", { tags: ["search"], activation: { triggers: ["search"], tags: [], weight: 1 } }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        { bundle: bundle("gamma", { tags: ["search"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    expect(registry.analyzeSearch("search").matches.map((match) => [match.skillId, match.score])).toEqual([
+      ["alpha", 19],
+      ["beta", 9],
+      ["gamma", 9],
+    ]);
+  });
+
+  it("keeps search returning only bundles derived from search analysis", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("semantic-index", { policies: ["deterministic evidence"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    expect(registry.search("deterministic").map((candidate) => candidate.manifest.id)).toEqual(["semantic-index"]);
+  });
+
+  it("does not analyze disabled skills as search matches", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("disabled-index", { tags: ["search"] }), layer: "project", root: "skills", disabled: true, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    expect(registry.analyzeSearch("search")).toEqual({
+      query: "search",
+      terms: ["search"],
+      index: [],
+      matches: [],
+    });
+  });
+
+  it("matches the documented search analysis contract fixture", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("semantic-index", {
+            name: "Semantic Index",
+            description: "Local searchable skill evidence.",
+            tags: ["typescript"],
+            policies: ["preserve deterministic behavior"],
+            capabilities: { required: ["filesystem"], optional: ["git"] },
+            compatibility: { providers: ["codex"], warnings: [] },
+            activation: { triggers: ["index"], tags: ["search"], weight: 1 },
+            extends: ["engineering-core"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "semantic-index-source" },
+              imported_via: { importer: "claude" },
+            },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+    registry.entries[0]!.bundle.instructions = "Build deterministic local-first instructions-derived evidence.";
+
+    expect(registry.analyzeSearch("index typescript deterministic filesystem git codex engineering github claude instructions")).toEqual(
+      contractFixture("search-analysis-contract.json"),
+    );
   });
 
   it("reports enriched overlap and missing-parent conflict rows", () => {
