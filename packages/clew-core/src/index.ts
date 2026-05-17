@@ -54,6 +54,30 @@ export type SqliteIndexResult = {
   warnings: number;
 };
 
+export type OverlapClassification = "complementary" | "redundant";
+
+export type ConflictClassification = "conflicting";
+
+export type RelationshipEvidence = {
+  kind: string;
+  values: string[];
+};
+
+export type OverlapRelationship = {
+  ids: string[];
+  triggers: string[];
+  tags: string[];
+  classification: OverlapClassification;
+  evidence: RelationshipEvidence[];
+};
+
+export type ConflictRelationship = {
+  ids: string[];
+  reason: string;
+  classification: ConflictClassification;
+  evidence: RelationshipEvidence[];
+};
+
 export type RegistryOptions = {
   projectRoot?: string;
   org?: string;
@@ -427,29 +451,77 @@ export function composeSkillWithReport(bundle: SkillBundle, parents: SkillBundle
   });
 }
 
-export function findOverlaps(bundles: SkillBundle[]): Array<{ ids: string[]; triggers: string[]; tags: string[] }> {
-  const overlaps: Array<{ ids: string[]; triggers: string[]; tags: string[] }> = [];
+const overlapEvidenceKindOrder = [
+  "shared_trigger",
+  "shared_tag",
+  "shared_policy",
+  "shared_required_capability",
+  "shared_optional_capability",
+  "common_parent",
+  "shared_provider",
+] as const;
+
+const conflictEvidenceKindOrder = ["missing_parent"] as const;
+
+export function findOverlaps(bundles: SkillBundle[]): OverlapRelationship[] {
+  const overlaps: OverlapRelationship[] = [];
   for (let left = 0; left < bundles.length; left += 1) {
     for (let right = left + 1; right < bundles.length; right += 1) {
       const a = bundles[left]!;
       const b = bundles[right]!;
       const triggers = intersection(a.manifest.activation.triggers, b.manifest.activation.triggers);
       const tags = intersection(a.manifest.tags, b.manifest.tags);
-      if (triggers.length || tags.length) overlaps.push({ ids: [a.manifest.id, b.manifest.id], triggers, tags });
+      const evidence = sortEvidence(
+        [
+          relationshipEvidence("shared_trigger", triggers),
+          relationshipEvidence("shared_tag", tags),
+          relationshipEvidence("shared_policy", intersection(a.manifest.policies, b.manifest.policies)),
+          relationshipEvidence(
+            "shared_required_capability",
+            intersection(a.manifest.capabilities.required, b.manifest.capabilities.required),
+          ),
+          relationshipEvidence(
+            "shared_optional_capability",
+            intersection(a.manifest.capabilities.optional, b.manifest.capabilities.optional),
+          ),
+          relationshipEvidence("common_parent", intersection(a.manifest.extends, b.manifest.extends)),
+          relationshipEvidence(
+            "shared_provider",
+            intersection(a.manifest.compatibility.providers, b.manifest.compatibility.providers),
+          ),
+        ],
+        overlapEvidenceKindOrder,
+      );
+      if (evidence.length) {
+        overlaps.push({
+          ids: [a.manifest.id, b.manifest.id].sort(),
+          triggers,
+          tags,
+          classification: classifyOverlap(evidence),
+          evidence,
+        });
+      }
     }
   }
-  return overlaps;
+  return sortRelationships(overlaps);
 }
 
-export function findConflicts(bundles: SkillBundle[]): Array<{ ids: string[]; reason: string }> {
-  const conflicts: Array<{ ids: string[]; reason: string }> = [];
+export function findConflicts(bundles: SkillBundle[]): ConflictRelationship[] {
+  const conflicts: ConflictRelationship[] = [];
   const byId = new Map(bundles.map((bundle) => [bundle.manifest.id, bundle]));
   for (const bundle of bundles) {
     for (const parentId of bundle.manifest.extends) {
-      if (!byId.has(parentId)) conflicts.push({ ids: [bundle.manifest.id, parentId], reason: "missing parent skill" });
+      if (!byId.has(parentId)) {
+        conflicts.push({
+          ids: [bundle.manifest.id, parentId],
+          reason: "missing parent skill",
+          classification: "conflicting",
+          evidence: sortEvidence([relationshipEvidence("missing_parent", [parentId])], conflictEvidenceKindOrder),
+        });
+      }
     }
   }
-  return conflicts.sort((a, b) => a.ids.join(":").localeCompare(b.ids.join(":")));
+  return sortRelationships(conflicts);
 }
 
 export function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnapshot): SqliteIndexResult {
@@ -824,14 +896,14 @@ function withActivationRelationshipWarnings(
     if (!leftSkillId || !rightSkillId) continue;
     appendActivationWarning(leftSkillId, {
       code: "activation_overlap",
-      message: overlapMessage(rightSkillId, overlap.triggers, overlap.tags),
+      message: overlapMessage(overlap, rightSkillId),
       severity: "warning",
       origin: "activation",
       field: overlap.ids.join(":"),
     }, bySkillId);
     appendActivationWarning(rightSkillId, {
       code: "activation_overlap",
-      message: overlapMessage(leftSkillId, overlap.triggers, overlap.tags),
+      message: overlapMessage(overlap, leftSkillId),
       severity: "warning",
       origin: "activation",
       field: overlap.ids.join(":"),
@@ -844,7 +916,7 @@ function withActivationRelationshipWarnings(
       if (!otherSkillIds.length) continue;
       appendActivationWarning(skillId, {
         code: "activation_conflict",
-        message: `Recommendation conflicts with "${otherSkillIds.join(", ")}": ${conflict.reason}.`,
+        message: conflictMessage(conflict, otherSkillIds),
         severity: "warning",
         origin: "activation",
         field: conflict.ids.join(":"),
@@ -874,11 +946,12 @@ function appendActivationWarning(
   };
 }
 
-function overlapMessage(otherSkillId: string, triggers: string[], tags: string[]): string {
-  const parts: string[] = [];
-  if (triggers.length) parts.push(`triggers: ${triggers.join(", ")}`);
-  if (tags.length) parts.push(`tags: ${tags.join(", ")}`);
-  return `Recommendation overlaps with "${otherSkillId}" on ${parts.join("; ")}.`;
+function overlapMessage(overlap: OverlapRelationship, otherSkillId: string): string {
+  return `Recommendation has ${overlap.classification} overlap with "${otherSkillId}" using ${formatEvidence(overlap.evidence)}.`;
+}
+
+function conflictMessage(conflict: ConflictRelationship, otherSkillIds: string[]): string {
+  return `Recommendation has ${conflict.classification} relationship with "${otherSkillIds.join(", ")}": ${conflict.reason}. Evidence: ${formatEvidence(conflict.evidence)}.`;
 }
 
 function toEntry(bundle: SkillBundle, layer: RegistryLayer, root: string, telemetry: TelemetryState): RegistryEntry {
@@ -974,6 +1047,40 @@ function uniqueCapability(values: Capability[]): Capability[] {
 function intersection(left: string[], right: string[]): string[] {
   const rightSet = new Set(right);
   return unique(left.filter((value) => rightSet.has(value))).sort();
+}
+
+function relationshipEvidence(kind: string, values: string[]): RelationshipEvidence | undefined {
+  const sortedValues = unique(values).sort();
+  return sortedValues.length ? { kind, values: sortedValues } : undefined;
+}
+
+function sortEvidence(
+  evidence: Array<RelationshipEvidence | undefined>,
+  kindOrder: readonly string[],
+): RelationshipEvidence[] {
+  const order = new Map(kindOrder.map((kind, index) => [kind, index]));
+  return evidence
+    .filter((item): item is RelationshipEvidence => item !== undefined)
+    .sort((a, b) => (order.get(a.kind) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.kind) ?? Number.MAX_SAFE_INTEGER) ||
+      a.kind.localeCompare(b.kind));
+}
+
+function classifyOverlap(evidence: RelationshipEvidence[]): OverlapClassification {
+  const hasActivationEvidence = evidence.some((item) => item.kind === "shared_trigger" || item.kind === "shared_tag");
+  const reinforcingEvidenceKinds = new Set(
+    evidence
+      .map((item) => item.kind)
+      .filter((kind) => kind !== "shared_trigger" && kind !== "shared_tag"),
+  );
+  return hasActivationEvidence && reinforcingEvidenceKinds.size >= 2 ? "redundant" : "complementary";
+}
+
+function sortRelationships<T extends { ids: string[] }>(relationships: T[]): T[] {
+  return [...relationships].sort((a, b) => a.ids.join(":").localeCompare(b.ids.join(":")));
+}
+
+function formatEvidence(evidence: RelationshipEvidence[]): string {
+  return evidence.map((item) => `${item.kind}: ${item.values.join(", ")}`).join("; ");
 }
 
 function sortWarnings(warnings: CompatibilityWarning[]): CompatibilityWarning[] {

@@ -168,7 +168,14 @@ describe("@clew/mcp", () => {
       recommendations: [
         {
           skillId: "incremental-refactor",
-          warnings: [{ code: "activation_overlap", origin: "activation" }],
+          warnings: [
+            {
+              code: "activation_overlap",
+              origin: "activation",
+              message:
+                'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor.',
+            },
+          ],
         },
         {
           skillId: "safe-refactor",
@@ -181,7 +188,14 @@ describe("@clew/mcp", () => {
       query: "typescript",
       recommendation: {
         skillId: "typescript-core",
-        warnings: [{ code: "activation_conflict", origin: "activation" }],
+        warnings: [
+          {
+            code: "activation_conflict",
+            origin: "activation",
+            message:
+              'Recommendation has conflicting relationship with "missing-parent": missing parent skill. Evidence: missing_parent: missing-parent.',
+          },
+        ],
       },
       warnings: [],
     });
