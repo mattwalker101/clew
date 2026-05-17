@@ -472,10 +472,17 @@ describe("@clew/schema", () => {
   });
 
   it("exports the recommendation signal contract as an intentional public API", () => {
-    expect(recommendationSignalTypeSchema.options).toEqual(["trigger", "tag", "agents_md", "repo_signal"]);
-    expect(recommendationSignalSchema.parse({ type: "repo_signal", value: "typescript" })).toEqual({
-      type: "repo_signal",
-      value: "typescript",
+    expect(recommendationSignalTypeSchema.options).toEqual([
+      "trigger",
+      "tag",
+      "agents_md",
+      "repo_signal",
+      "telemetry_favorite",
+      "telemetry_usage",
+    ]);
+    expect(recommendationSignalSchema.parse({ type: "telemetry_usage", value: "3" })).toEqual({
+      type: "telemetry_usage",
+      value: "3",
     });
   });
 });

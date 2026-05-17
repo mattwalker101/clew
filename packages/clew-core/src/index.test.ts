@@ -393,6 +393,77 @@ describe("@clew/core", () => {
     );
   });
 
+  it("analyzes telemetry for enabled, disabled, favorite, used, and orphan skills deterministically", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("beta-skill"), layer: "project", root: "skills", disabled: false, favorite: true, usageCount: 2 },
+        { bundle: bundle("alpha-skill"), layer: "project", root: "skills", disabled: true, favorite: false, usageCount: 0 },
+      ],
+      warnings: [],
+    });
+
+    expect(
+      registry.analyzeTelemetry([
+        { skillId: "orphan-skill", usageCount: 4, lastUsed: "2026-05-17T10:00:00.000Z", disabled: false, favorite: true },
+      ]),
+    ).toEqual({
+      records: [
+        {
+          skillId: "alpha-skill",
+          known: true,
+          enabled: false,
+          disabled: true,
+          favorite: false,
+          usageCount: 0,
+          evidence: [{ kind: "disabled", values: ["true"] }],
+        },
+        {
+          skillId: "beta-skill",
+          known: true,
+          enabled: true,
+          disabled: false,
+          favorite: true,
+          usageCount: 2,
+          evidence: [
+            { kind: "favorite", values: ["true"] },
+            { kind: "usage_count", values: ["2"] },
+          ],
+        },
+        {
+          skillId: "orphan-skill",
+          known: false,
+          enabled: false,
+          disabled: false,
+          favorite: true,
+          usageCount: 4,
+          lastUsed: "2026-05-17T10:00:00.000Z",
+          evidence: [
+            { kind: "orphan", values: ["true"] },
+            { kind: "favorite", values: ["true"] },
+            { kind: "usage_count", values: ["4"] },
+            { kind: "last_used", values: ["2026-05-17T10:00:00.000Z"] },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("matches the documented telemetry analysis contract fixture", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("disabled-skill"), layer: "project", root: "skills", disabled: true, favorite: false, usageCount: 0 },
+        { bundle: bundle("favorite-skill"), layer: "project", root: "skills", disabled: false, favorite: true, usageCount: 3 },
+      ],
+      warnings: [],
+    });
+
+    expect(
+      registry.analyzeTelemetry([
+        { skillId: "orphan-skill", usageCount: 1, lastUsed: "2026-05-17T12:00:00.000Z", disabled: false, favorite: false },
+      ]),
+    ).toEqual(contractFixture("telemetry-analysis-contract.json"));
+  });
+
   it("reports enriched overlap and missing-parent conflict rows", () => {
     const first = bundle("a", { tags: ["typescript"], activation: { triggers: ["refactor"], tags: [], weight: 1 } });
     const second = bundle("b", {
@@ -762,6 +833,55 @@ describe("@clew/core", () => {
     } finally {
       db.close();
     }
+  });
+
+  it("adds conservative telemetry evidence only after normal activation matches", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("plain-skill", { activation: { triggers: ["build"], tags: [], weight: 1 } }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+          usageCount: 0,
+        },
+        {
+          bundle: bundle("favorite-skill", { activation: { triggers: ["build"], tags: [], weight: 1 } }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 3,
+        },
+        {
+          bundle: bundle("telemetry-only"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 10,
+        },
+      ],
+      warnings: [],
+    });
+
+    const recommendations = new ActivationEngine(registry).recommend({ query: "build" });
+
+    expect(recommendations.map((recommendation) => [recommendation.skillId, recommendation.score])).toEqual([
+      ["favorite-skill", 7],
+      ["plain-skill", 5],
+    ]);
+    expect(recommendations[0]).toMatchObject({
+      skillId: "favorite-skill",
+      reasons: ['query matched trigger "build"', "favorite skill", "used 3 times previously"],
+      signals: [
+        { type: "trigger", value: "build" },
+        { type: "telemetry_favorite", value: "true" },
+        { type: "telemetry_usage", value: "3" },
+      ],
+    });
+    expect(recommendationSchema.parse(recommendations[0])).toEqual(recommendations[0]);
   });
 
   it("detects repository signals and explains repo heuristic matches", () => {

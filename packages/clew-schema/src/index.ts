@@ -36,7 +36,14 @@ export const compatibilityWarningOrigins = [
   "provider_import",
   "provider_export",
 ] as const;
-export const recommendationSignalTypes = ["trigger", "tag", "agents_md", "repo_signal"] as const;
+export const recommendationSignalTypes = [
+  "trigger",
+  "tag",
+  "agents_md",
+  "repo_signal",
+  "telemetry_favorite",
+  "telemetry_usage",
+] as const;
 
 export const skillKindSchema = z.enum(supportedSkillKinds);
 export const capabilitySchema = z.enum(coreCapabilities);

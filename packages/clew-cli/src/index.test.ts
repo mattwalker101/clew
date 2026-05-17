@@ -301,6 +301,40 @@ describe("@clew/cli", () => {
     });
   });
 
+  it("prints opt-in telemetry analysis without changing default telemetry", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["recommend", "typescript"]);
+    await main(["telemetry"]);
+    await main(["telemetry", "--explain"]);
+
+    expect(outputAt(log, 1)).toMatchObject({
+      dbPath: expect.stringContaining(".clew-registry.db"),
+      skills: 1,
+      warnings: [],
+      telemetry: [{ skillId: "typescript-core", usageCount: 1 }],
+    });
+    expect(outputAt(log, 1)).not.toHaveProperty("analysis");
+    expect(outputAt(log, 2)).toMatchObject({
+      dbPath: expect.stringContaining(".clew-registry.db"),
+      skills: 1,
+      warnings: [],
+      analysis: {
+        records: [
+          {
+            skillId: "typescript-core",
+            known: true,
+            enabled: true,
+            usageCount: 1,
+            evidence: expect.arrayContaining([{ kind: "usage_count", values: ["1"] }]),
+          },
+        ],
+      },
+    });
+  });
+
   it("keeps AGENTS.md diagnostics out of telemetry and categorizes doctor warnings", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
