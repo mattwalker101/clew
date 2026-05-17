@@ -89,6 +89,10 @@ export type SkillSearchIndexEntry = {
   evidence: SkillSearchEvidence[];
 };
 
+export type SkillIndexAnalysisResult = {
+  index: SkillSearchIndexEntry[];
+};
+
 export type SkillSearchMatch = {
   skillId: string;
   score: number;
@@ -914,10 +918,16 @@ export class SkillRegistry {
       .sort(entrySort)[0]?.bundle;
   }
 
-  analyzeSearch(query: string): SkillSearchAnalysisResult {
-    const terms = normalizeTerms(query);
+  analyzeIndex(): SkillIndexAnalysisResult {
     const enabledEntries = [...this.entries].filter((entry) => !entry.disabled).sort(entrySort);
     const index = enabledEntries.map((entry) => buildSearchIndexEntry(entry.bundle));
+
+    return { index };
+  }
+
+  analyzeSearch(query: string): SkillSearchAnalysisResult {
+    const terms = normalizeTerms(query);
+    const { index } = this.analyzeIndex();
     const matches = index
       .map((entry) => matchSearchIndexEntry(entry, terms))
       .filter((match): match is SkillSearchMatch => match !== undefined)

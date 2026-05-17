@@ -1,0 +1,84 @@
+{
+  "index": [
+    {
+      "skillId": "semantic-index",
+      "evidence": [
+        {
+          "kind": "identity",
+          "values": [
+            "Local searchable skill evidence.",
+            "Semantic Index",
+            "semantic-index"
+          ]
+        },
+        {
+          "kind": "activation_trigger",
+          "values": [
+            "index"
+          ]
+        },
+        {
+          "kind": "activation_tag",
+          "values": [
+            "search"
+          ]
+        },
+        {
+          "kind": "tag",
+          "values": [
+            "typescript"
+          ]
+        },
+        {
+          "kind": "policy",
+          "values": [
+            "preserve deterministic behavior"
+          ]
+        },
+        {
+          "kind": "required_capability",
+          "values": [
+            "filesystem"
+          ]
+        },
+        {
+          "kind": "optional_capability",
+          "values": [
+            "git"
+          ]
+        },
+        {
+          "kind": "provider",
+          "values": [
+            "codex"
+          ]
+        },
+        {
+          "kind": "parent",
+          "values": [
+            "engineering-core"
+          ]
+        },
+        {
+          "kind": "provenance",
+          "values": [
+            "claude",
+            "github",
+            "mattpocock/skills",
+            "semantic-index-source"
+          ]
+        },
+        {
+          "kind": "instructions_text",
+          "values": [
+            "build",
+            "deterministic",
+            "evidence",
+            "instructions-derived",
+            "local-first"
+          ]
+        }
+      ]
+    }
+  ]
+}
