@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ActivationEngine,
+  composeRegistrySkill,
+  composeRegistrySkillWithReport,
   composeSkill,
   composeSkillWithReport,
   detectRepoSignals,
@@ -128,6 +130,66 @@ describe("@clew/core", () => {
       "prefer deterministic behavior",
       "validate runtime inputs",
     ]);
+  });
+
+  it("composes registry skills with the highest-precedence resolved parent", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("typescript-core", { extends: ["engineering-core"], tags: ["typescript"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["project"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["org"] }), layer: "org", root: "org", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["global"] }), layer: "global", root: "global", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["session"] }), layer: "session", root: "session", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    const report = composeRegistrySkillWithReport(registry, "typescript-core");
+
+    expect(report?.appliedParentIds).toEqual(["engineering-core"]);
+    expect(report?.bundle.manifest.tags).toEqual(["session", "typescript"]);
+    expect(composeRegistrySkill(registry, "typescript-core")?.manifest.tags).toEqual(["session", "typescript"]);
+  });
+
+  it("composes registry parents in child extends order", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("child", { extends: ["parent-b", "parent-a"], tags: ["child"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("parent-a", { tags: ["a"], policies: ["policy-a"] }), layer: "session", root: "session", disabled: false, favorite: false },
+        { bundle: bundle("parent-b", { tags: ["b"], policies: ["policy-b"] }), layer: "global", root: "global", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    const report = composeRegistrySkillWithReport(registry, "child");
+
+    expect(report?.appliedParentIds).toEqual(["parent-b", "parent-a"]);
+    expect(report?.bundle.manifest.tags).toEqual(["b", "a", "child"]);
+    expect(report?.bundle.manifest.policies).toEqual(["policy-b", "policy-a"]);
+  });
+
+  it("does not apply disabled registry parents", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("child", { extends: ["parent"], tags: ["child"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("parent", { tags: ["parent"] }), layer: "session", root: "session", disabled: true, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    const report = composeRegistrySkillWithReport(registry, "child");
+
+    expect(report?.appliedParentIds).toEqual([]);
+    expect(report?.warnings).toEqual([]);
+    expect(report?.bundle.manifest.tags).toEqual(["child"]);
+  });
+
+  it("returns undefined for unknown registry children without request-time warnings", () => {
+    const registry = new SkillRegistry({ entries: [], warnings: [] });
+
+    expect(composeRegistrySkill(registry, "missing")).toBeUndefined();
+    expect(composeRegistrySkillWithReport(registry, "missing")).toBeUndefined();
+    expect(registry.warnings).toEqual([]);
   });
 
   it("recommends only explained matches", () => {
