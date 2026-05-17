@@ -353,6 +353,22 @@ export function composeSkill(bundle: SkillBundle, parents: SkillBundle[]): Skill
   return composeSkillWithReport(bundle, parents).bundle;
 }
 
+export function composeRegistrySkill(registry: SkillRegistry, skillId: string): SkillBundle | undefined {
+  return composeRegistrySkillWithReport(registry, skillId)?.bundle;
+}
+
+export function composeRegistrySkillWithReport(
+  registry: SkillRegistry,
+  skillId: string,
+): CompositionResult | undefined {
+  const bundle = registry.lookup(skillId);
+  if (!bundle) return undefined;
+  const parents = bundle.manifest.extends
+    .map((parentId) => registry.lookup(parentId))
+    .filter((parent): parent is SkillBundle => parent !== undefined);
+  return composeSkillWithReport(bundle, parents);
+}
+
 export function composeSkillWithReport(bundle: SkillBundle, parents: SkillBundle[]): CompositionResult {
   const input = compositionInputSchema.parse({ bundle, parents });
   const parentsById = new Map(input.parents.map((parent) => [parent.manifest.id, parent]));
@@ -714,7 +730,9 @@ export class SkillRegistry {
   }
 
   lookup(id: string): SkillBundle | undefined {
-    return this.entries.find((entry) => entry.bundle.manifest.id === id && !entry.disabled)?.bundle;
+    return this.entries
+      .filter((entry) => entry.bundle.manifest.id === id && !entry.disabled)
+      .sort(entrySort)[0]?.bundle;
   }
 
   search(query: string): SkillBundle[] {
