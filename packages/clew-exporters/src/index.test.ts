@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { exportClaudeSkill, exportOpenCodeSkill } from "./index.js";
-import { compatibilityWarningSchema, type CompatibilityWarning, type SkillBundle } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning, type ExportResult, type SkillBundle } from "@clew/schema";
 
 const bundle: SkillBundle = {
   manifest: {
@@ -38,6 +38,13 @@ type ProviderWarningContract = {
   };
 };
 
+type ProviderArtifactContract = {
+  exports: {
+    claudeCanonical: { artifacts: ExportResult["artifacts"] };
+    opencodeCanonical: { artifacts: ExportResult["artifacts"] };
+  };
+};
+
 function canonicalFixture(): SkillBundle {
   return JSON.parse(readFileSync(join(fixtureRoot, "canonical-roundtrip.json"), "utf8")) as SkillBundle;
 }
@@ -46,6 +53,12 @@ function providerWarningContract(): ProviderWarningContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-warning-contract.json"), "utf8"),
   ) as ProviderWarningContract;
+}
+
+function providerArtifactContract(): ProviderArtifactContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-artifact-contract.json"), "utf8"),
+  ) as ProviderArtifactContract;
 }
 
 describe("@clew/exporters", () => {
@@ -66,41 +79,20 @@ describe("@clew/exporters", () => {
   it("exports canonical fixtures deterministically with compatibility reports", () => {
     const first = exportClaudeSkill(canonicalFixture());
     const second = exportClaudeSkill(canonicalFixture());
-    const contract = providerWarningContract();
+    const artifactContract = providerArtifactContract();
+    const warningContract = providerWarningContract();
 
     expect(first).toEqual(second);
-    expect(first.artifacts).toEqual([
-      {
-        path: "interop-core/SKILL.md",
-        contents: [
-          "# Interop Core",
-          "",
-          "Preserve operational meaning across providers.",
-          "Slash command: /interop-core",
-          "",
-          "Preserve intent and report degradation.",
-        ].join("\n"),
-      },
-    ]);
-    expect(first.warnings).toEqual(contract.exports.claudeCanonical.warnings);
+    expect(first.artifacts).toEqual(artifactContract.exports.claudeCanonical.artifacts);
+    expect(first.warnings).toEqual(warningContract.exports.claudeCanonical.warnings);
     expect(first.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(first.warnings);
   });
 
   it("exports OpenCode fixtures with provider mode and stable warnings", () => {
     const result = exportOpenCodeSkill(canonicalFixture());
+    const artifactContract = providerArtifactContract();
 
-    expect(result.artifacts[0]).toEqual({
-      path: "interop-core.md",
-      contents: [
-        "---",
-        "name: Interop Core",
-        "description: Preserve operational meaning across providers.",
-        "mode: safe",
-        "---",
-        "",
-        "Preserve intent and report degradation.",
-      ].join("\n"),
-    });
+    expect(result.artifacts).toEqual(artifactContract.exports.opencodeCanonical.artifacts);
     expect(result.warnings.map((warning) => warning.code)).toEqual([
       "composition_degraded",
       "capability_semantics_degraded",

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "Public provider artifact contract fixture for exported Claude and OpenCode artifact shapes. Export results keep artifacts as plain arrays without provider-specific wrapper envelopes.",
+  "exports": {
+    "claudeCanonical": {
+      "artifacts": [
+        {
+          "path": "interop-core/SKILL.md",
+          "contents": "# Interop Core\n\nPreserve operational meaning across providers.\nSlash command: /interop-core\n\nPreserve intent and report degradation."
+        }
+      ]
+    },
+    "opencodeCanonical": {
+      "artifacts": [
+        {
+          "path": "interop-core.md",
+          "contents": "---\nname: Interop Core\ndescription: Preserve operational meaning across providers.\nmode: safe\n---\n\nPreserve intent and report degradation."
+        }
+      ]
+    }
+  }
+}

@@ -43,3 +43,5 @@ The public fixture at `tests/fixtures/contracts/warning-contract.json` pins repr
 The provider interop fixture at `tests/fixtures/contracts/provider-warning-contract.json` pins importer and exporter warning arrays for provider degradation, metadata preservation, field normalization, and undeclared-provider exports.
 
 The provider provenance fixture at `tests/fixtures/contracts/provider-provenance-contract.json` pins importer provenance on both import results and imported bundle manifests. Provenance contracts stay separate from provider metadata so `manifest.extensions.<provider>` remains provider-specific.
+
+The provider artifact fixture at `tests/fixtures/contracts/provider-artifact-contract.json` pins exported Claude and OpenCode artifact paths and contents. Artifact contracts stay separate from warning contracts so provider export results can preserve plain `artifacts` and `warnings` arrays without wrapping either surface in provider-specific envelopes.
