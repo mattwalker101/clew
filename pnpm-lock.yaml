@@ -90,6 +90,9 @@ importers:
       '@clew/core':
         specifier: workspace:*
         version: link:../clew-core
+      '@clew/schema':
+        specifier: workspace:*
+        version: link:../clew-schema
     devDependencies:
       typescript:
         specifier: ^5.9.0

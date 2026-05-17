@@ -1,6 +1,7 @@
 import {
   ActivationEngine,
   SkillRegistry,
+  type SkillActivationAnalysisResult,
   type SkillSearchAnalysisResult,
   type SkillTelemetryAnalysisResult,
   type TelemetryRecord,
@@ -18,6 +19,7 @@ export type ClewMcpBridge = {
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
   analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
   analyzeTelemetry(records?: TelemetryRecord[]): ClewMcpTelemetryAnalysisResult;
+  analyzeRecommendations(input: string | ClewMcpRecommendInput): ClewMcpRecommendationAnalysisResult;
   recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult;
   explain(skillId: string, query: string): ClewMcpExplainResult;
   explain(input: ClewMcpExplainInput): ClewMcpExplainResult;
@@ -76,6 +78,12 @@ export type ClewMcpTelemetryAnalysisResult = {
   warnings: CompatibilityWarning[];
 };
 
+export type ClewMcpRecommendationAnalysisResult = {
+  query: string;
+  analysis: SkillActivationAnalysisResult;
+  warnings: CompatibilityWarning[];
+};
+
 export type ClewMcpRecommendResult = {
   query: string;
   recommendations: Recommendation[];
@@ -129,6 +137,20 @@ export function createClewMcpBridge(
     analyzeTelemetry(records: TelemetryRecord[] = []): ClewMcpTelemetryAnalysisResult {
       return {
         analysis: registry.analyzeTelemetry(records),
+        warnings: registryWarnings,
+      };
+    },
+    analyzeRecommendations(input: string | ClewMcpRecommendInput): ClewMcpRecommendationAnalysisResult {
+      const request = typeof input === "string" ? { query: input } : input;
+      const analysis = activation.analyzeRecommendations(
+        toActivationContext(request.query, options.defaultContext, request.context),
+      );
+      return {
+        query: request.query,
+        analysis: {
+          ...analysis,
+          recommendations: applyLimit(analysis.recommendations, request.limit ?? options.defaultLimit),
+        },
         warnings: registryWarnings,
       };
     },

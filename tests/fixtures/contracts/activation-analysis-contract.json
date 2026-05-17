@@ -1,0 +1,461 @@
+{
+  "context": {
+    "query": "typescript",
+    "tags": [
+      "typescript"
+    ],
+    "agentsMd": "# Active Skills\n- typescript-core\n- disabled-skill\n",
+    "repoSignals": [
+      "typescript"
+    ],
+    "capabilities": [],
+    "activeSkillIds": []
+  },
+  "candidates": [
+    {
+      "skillId": "typescript-core",
+      "enabled": true,
+      "status": "included",
+      "score": 16,
+      "components": [
+        {
+          "kind": "trigger",
+          "value": "typescript",
+          "points": 5,
+          "reason": "query matched trigger \"typescript\""
+        },
+        {
+          "kind": "tag",
+          "value": "typescript",
+          "points": 3,
+          "reason": "matched tag \"typescript\""
+        },
+        {
+          "kind": "agents_md",
+          "value": "typescript-core",
+          "points": 4,
+          "reason": "referenced by AGENTS.md active skills"
+        },
+        {
+          "kind": "repo_signal",
+          "value": "typescript",
+          "points": 2,
+          "reason": "matched repository signal \"typescript\""
+        },
+        {
+          "kind": "telemetry_favorite",
+          "value": "true",
+          "points": 1,
+          "reason": "favorite skill"
+        },
+        {
+          "kind": "telemetry_usage",
+          "value": "2",
+          "points": 1,
+          "reason": "used 2 times previously"
+        }
+      ],
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "referenced by AGENTS.md active skills",
+        "matched repository signal \"typescript\"",
+        "favorite skill",
+        "used 2 times previously"
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "agents_md",
+          "value": "typescript-core"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        },
+        {
+          "type": "telemetry_favorite",
+          "value": "true"
+        },
+        {
+          "type": "telemetry_usage",
+          "value": "2"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "capability_missing",
+          "message": "Runtime is missing required capabilities: terminal",
+          "severity": "warning",
+          "origin": "activation"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"conflicted-skill\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-core"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-refactor\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        }
+      ],
+      "exclusions": [],
+      "rank": 1
+    },
+    {
+      "skillId": "typescript-refactor",
+      "enabled": true,
+      "status": "included",
+      "score": 10,
+      "components": [
+        {
+          "kind": "trigger",
+          "value": "typescript",
+          "points": 5,
+          "reason": "query matched trigger \"typescript\""
+        },
+        {
+          "kind": "tag",
+          "value": "typescript",
+          "points": 3,
+          "reason": "matched tag \"typescript\""
+        },
+        {
+          "kind": "repo_signal",
+          "value": "typescript",
+          "points": 2,
+          "reason": "matched repository signal \"typescript\""
+        }
+      ],
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "matched repository signal \"typescript\""
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"conflicted-skill\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-refactor"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        }
+      ],
+      "exclusions": [],
+      "rank": 2
+    },
+    {
+      "skillId": "conflicted-skill",
+      "enabled": true,
+      "status": "included",
+      "score": 7,
+      "components": [
+        {
+          "kind": "trigger",
+          "value": "typescript",
+          "points": 5,
+          "reason": "query matched trigger \"typescript\""
+        },
+        {
+          "kind": "repo_signal",
+          "value": "typescript",
+          "points": 2,
+          "reason": "matched repository signal \"typescript\""
+        }
+      ],
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched repository signal \"typescript\""
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-core"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-refactor\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"missing-parent\": missing parent skill. Evidence: missing_parent: missing-parent.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:missing-parent"
+        }
+      ],
+      "exclusions": [],
+      "rank": 3
+    },
+    {
+      "skillId": "disabled-skill",
+      "enabled": false,
+      "status": "excluded",
+      "score": 14,
+      "components": [
+        {
+          "kind": "trigger",
+          "value": "typescript",
+          "points": 5,
+          "reason": "query matched trigger \"typescript\""
+        },
+        {
+          "kind": "tag",
+          "value": "typescript",
+          "points": 3,
+          "reason": "matched tag \"typescript\""
+        },
+        {
+          "kind": "agents_md",
+          "value": "disabled-skill",
+          "points": 4,
+          "reason": "referenced by AGENTS.md active skills"
+        },
+        {
+          "kind": "repo_signal",
+          "value": "typescript",
+          "points": 2,
+          "reason": "matched repository signal \"typescript\""
+        }
+      ],
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "referenced by AGENTS.md active skills",
+        "matched repository signal \"typescript\""
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "agents_md",
+          "value": "disabled-skill"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        }
+      ],
+      "warnings": [],
+      "exclusions": [
+        {
+          "kind": "disabled",
+          "reason": "skill is disabled"
+        }
+      ]
+    },
+    {
+      "skillId": "unmatched-skill",
+      "enabled": true,
+      "status": "excluded",
+      "score": 0,
+      "components": [],
+      "reasons": [],
+      "signals": [],
+      "warnings": [],
+      "exclusions": [
+        {
+          "kind": "unmatched",
+          "reason": "no activation evidence matched the supplied context"
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "skillId": "typescript-core",
+      "score": 16,
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "referenced by AGENTS.md active skills",
+        "matched repository signal \"typescript\"",
+        "favorite skill",
+        "used 2 times previously"
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "agents_md",
+          "value": "typescript-core"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        },
+        {
+          "type": "telemetry_favorite",
+          "value": "true"
+        },
+        {
+          "type": "telemetry_usage",
+          "value": "2"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "capability_missing",
+          "message": "Runtime is missing required capabilities: terminal",
+          "severity": "warning",
+          "origin": "activation"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"conflicted-skill\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-core"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-refactor\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        }
+      ]
+    },
+    {
+      "skillId": "typescript-refactor",
+      "score": 10,
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "matched repository signal \"typescript\""
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"conflicted-skill\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-refactor"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        }
+      ]
+    },
+    {
+      "skillId": "conflicted-skill",
+      "score": 7,
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched repository signal \"typescript\""
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "repo_signal",
+          "value": "typescript"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-core"
+        },
+        {
+          "code": "activation_overlap",
+          "message": "Recommendation has complementary overlap with \"typescript-refactor\" using shared_trigger: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"missing-parent\": missing parent skill. Evidence: missing_parent: missing-parent.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "conflicted-skill:missing-parent"
+        }
+      ]
+    }
+  ]
+}

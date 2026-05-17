@@ -66,12 +66,18 @@ const commands: Record<string, Command> = {
     });
   },
   recommend(args) {
-    const query = queryText(args);
+    const explain = args[0] === "--explain";
+    const query = queryText(explain ? args.slice(1) : args);
     const current = readRegistry();
     const activationContext = buildActivationContext(query);
+    const activation = new ActivationEngine(current.registry);
+    if (explain) {
+      printJsonEnvelope({ query, analysis: activation.analyzeRecommendations(activationContext), warnings: current.warnings });
+      return;
+    }
     const db = openRegistryDb(registryDbPath());
     try {
-      const recommendations = new ActivationEngine(current.registry).recommend(activationContext);
+      const recommendations = activation.recommend(activationContext);
       for (const recommendation of recommendations) db.recordRecommendation(recommendation.skillId);
       printJsonEnvelope({ query, recommendations, warnings: current.warnings });
     } finally {
@@ -176,6 +182,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  search --explain <query>",
         "  lookup <skill-id>",
         "  recommend <query>",
+        "  recommend --explain <query>",
         "  explain <skill-id> [query]",
         "  import <claude|opencode> <json-file>",
         "  export <claude|opencode> <skill-id>",

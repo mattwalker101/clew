@@ -9,7 +9,15 @@ describe("@clew/mcp", () => {
   it("exposes only read-oriented bridge methods", () => {
     const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
 
-    expect(Object.keys(bridge).sort()).toEqual(["analyzeSearch", "analyzeTelemetry", "explain", "lookup", "recommend", "search"]);
+    expect(Object.keys(bridge).sort()).toEqual([
+      "analyzeRecommendations",
+      "analyzeSearch",
+      "analyzeTelemetry",
+      "explain",
+      "lookup",
+      "recommend",
+      "search",
+    ]);
     expect("execute" in bridge).toBe(false);
     expect("activate" in bridge).toBe(false);
     expect("run" in bridge).toBe(false);
@@ -99,6 +107,45 @@ describe("@clew/mcp", () => {
           { skillId: "favorite-skill", known: true, enabled: true, favorite: true, usageCount: 2 },
           { skillId: "orphan-skill", known: false, enabled: false, usageCount: 1 },
         ],
+      },
+      warnings: [registryWarning],
+    });
+  });
+
+  it("exposes opt-in recommendation analysis without changing recommend", () => {
+    const registryWarning: CompatibilityWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error",
+      origin: "registry_rebuild",
+      message: "Unsupported skill kind.",
+    };
+    const bridge = createClewMcpBridge(
+      registryWithWarnings(
+        [
+          entry("terminal-skill", { requiredCapabilities: ["terminal"] }),
+          entry("unmatched-skill", { triggers: ["nomatch"], tags: ["nomatch"] }),
+        ],
+        [registryWarning],
+      ),
+    );
+
+    expect(bridge.recommend({ query: "build", context: { capabilities: [] } })).not.toHaveProperty("analysis");
+    expect(bridge.analyzeRecommendations({ query: "build", context: { capabilities: [] } })).toMatchObject({
+      query: "build",
+      analysis: {
+        candidates: [
+          {
+            skillId: "terminal-skill",
+            status: "included",
+            warnings: [{ code: "capability_missing", origin: "activation" }],
+          },
+          {
+            skillId: "unmatched-skill",
+            status: "excluded",
+            exclusions: [{ kind: "unmatched" }],
+          },
+        ],
+        recommendations: [{ skillId: "terminal-skill" }],
       },
       warnings: [registryWarning],
     });

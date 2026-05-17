@@ -278,6 +278,37 @@ describe("@clew/cli", () => {
     });
   });
 
+  it("prints opt-in recommendation analysis without recording telemetry", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["recommend", "--explain", "typescript"]);
+    await main(["telemetry"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      query: "typescript",
+      analysis: {
+        candidates: [
+          expect.objectContaining({
+            skillId: "typescript-core",
+            status: "included",
+            components: expect.arrayContaining([
+              { kind: "trigger", value: "typescript", points: 5, reason: 'query matched trigger "typescript"' },
+              { kind: "agents_md", value: "typescript-core", points: 4, reason: "referenced by AGENTS.md active skills" },
+              { kind: "repo_signal", value: "typescript", points: 2, reason: 'matched repository signal "typescript"' },
+            ]),
+          }),
+        ],
+      },
+      warnings: [],
+    });
+    expect(outputAt(log, 0)).not.toHaveProperty("recommendations");
+    expect(outputAt(log, 1)).toMatchObject({
+      telemetry: [{ skillId: "typescript-core", usageCount: 0 }],
+    });
+  });
+
   it("reports persisted registry rebuild warnings in telemetry output", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
