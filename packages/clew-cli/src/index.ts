@@ -37,8 +37,17 @@ const commands: Record<string, Command> = {
     });
   },
   search(args) {
-    const query = queryText(args);
+    const explain = args[0] === "--explain";
+    const query = queryText(explain ? args.slice(1) : args);
     const current = readRegistry();
+    if (explain) {
+      printJsonEnvelope({
+        query,
+        analysis: current.registry.analyzeSearch(query),
+        warnings: current.warnings,
+      });
+      return;
+    }
     printJsonEnvelope({
       query,
       skills: current.registry.search(query).map((bundle) => bundle.manifest),
@@ -161,6 +170,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "clew commands:",
         "  list",
         "  search <query>",
+        "  search --explain <query>",
         "  lookup <skill-id>",
         "  recommend <query>",
         "  explain <skill-id> [query]",

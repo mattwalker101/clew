@@ -107,6 +107,46 @@ describe("@clew/cli", () => {
     });
   });
 
+  it("prints opt-in search analysis without changing default search", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["search", "typescript"]);
+    await main(["search", "--explain", "typescript"]);
+
+    expect(outputAt(log, 0)).toEqual({
+      query: "typescript",
+      skills: [
+        expect.objectContaining({
+          id: "typescript-core",
+        }),
+      ],
+      warnings: [],
+    });
+    expect(outputAt(log, 0)).not.toHaveProperty("matches");
+    expect(outputAt(log, 1)).toMatchObject({
+      query: "typescript",
+      analysis: {
+        query: "typescript",
+        terms: ["typescript"],
+        matches: [
+          {
+            skillId: "typescript-core",
+            matchedTerms: ["typescript"],
+            evidence: expect.arrayContaining([
+              { kind: "identity", values: expect.arrayContaining(["TypeScript Core", "typescript-core"]) },
+              { kind: "activation_trigger", values: ["typescript"] },
+              { kind: "tag", values: ["typescript"] },
+              { kind: "instructions_text", values: ["typescript"] },
+            ]),
+          },
+        ],
+      },
+      warnings: [],
+    });
+  });
+
   it("prints enriched overlap and conflict rows inside stable envelopes", async () => {
     const projectRoot = createProject();
     const pairedRoot = join(projectRoot, "skills", "typescript-refactor");

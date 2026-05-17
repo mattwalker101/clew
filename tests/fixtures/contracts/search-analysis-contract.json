@@ -1,0 +1,197 @@
+{
+  "query": "index typescript deterministic filesystem git codex engineering github claude instructions",
+  "terms": [
+    "index",
+    "typescript",
+    "deterministic",
+    "filesystem",
+    "git",
+    "codex",
+    "engineering",
+    "github",
+    "claude",
+    "instructions"
+  ],
+  "index": [
+    {
+      "skillId": "semantic-index",
+      "evidence": [
+        {
+          "kind": "identity",
+          "values": [
+            "Local searchable skill evidence.",
+            "Semantic Index",
+            "semantic-index"
+          ]
+        },
+        {
+          "kind": "activation_trigger",
+          "values": [
+            "index"
+          ]
+        },
+        {
+          "kind": "activation_tag",
+          "values": [
+            "search"
+          ]
+        },
+        {
+          "kind": "tag",
+          "values": [
+            "typescript"
+          ]
+        },
+        {
+          "kind": "policy",
+          "values": [
+            "preserve deterministic behavior"
+          ]
+        },
+        {
+          "kind": "required_capability",
+          "values": [
+            "filesystem"
+          ]
+        },
+        {
+          "kind": "optional_capability",
+          "values": [
+            "git"
+          ]
+        },
+        {
+          "kind": "provider",
+          "values": [
+            "codex"
+          ]
+        },
+        {
+          "kind": "parent",
+          "values": [
+            "engineering-core"
+          ]
+        },
+        {
+          "kind": "provenance",
+          "values": [
+            "claude",
+            "github",
+            "mattpocock/skills",
+            "semantic-index-source"
+          ]
+        },
+        {
+          "kind": "instructions_text",
+          "values": [
+            "build",
+            "deterministic",
+            "evidence",
+            "instructions-derived",
+            "local-first"
+          ]
+        }
+      ]
+    }
+  ],
+  "matches": [
+    {
+      "skillId": "semantic-index",
+      "score": 101,
+      "matchedTerms": [
+        "index",
+        "typescript",
+        "deterministic",
+        "filesystem",
+        "git",
+        "codex",
+        "engineering",
+        "claude",
+        "github",
+        "instructions"
+      ],
+      "evidence": [
+        {
+          "kind": "identity",
+          "values": [
+            "Semantic Index",
+            "semantic-index"
+          ]
+        },
+        {
+          "kind": "activation_trigger",
+          "values": [
+            "index"
+          ]
+        },
+        {
+          "kind": "tag",
+          "values": [
+            "typescript"
+          ]
+        },
+        {
+          "kind": "policy",
+          "values": [
+            "preserve deterministic behavior"
+          ]
+        },
+        {
+          "kind": "required_capability",
+          "values": [
+            "filesystem"
+          ]
+        },
+        {
+          "kind": "optional_capability",
+          "values": [
+            "git"
+          ]
+        },
+        {
+          "kind": "provider",
+          "values": [
+            "codex"
+          ]
+        },
+        {
+          "kind": "parent",
+          "values": [
+            "engineering-core"
+          ]
+        },
+        {
+          "kind": "provenance",
+          "values": [
+            "claude",
+            "github",
+            "semantic-index-source"
+          ]
+        },
+        {
+          "kind": "instructions_text",
+          "values": [
+            "deterministic",
+            "instructions-derived"
+          ]
+        }
+      ],
+      "reasons": [
+        "matched identity \"Semantic Index\"",
+        "matched identity \"semantic-index\"",
+        "matched activation_trigger \"index\"",
+        "matched tag \"typescript\"",
+        "matched policy \"preserve deterministic behavior\"",
+        "matched required_capability \"filesystem\"",
+        "matched optional_capability \"git\"",
+        "matched provider \"codex\"",
+        "matched parent \"engineering-core\"",
+        "matched provenance \"claude\"",
+        "matched provenance \"github\"",
+        "matched provenance \"semantic-index-source\"",
+        "matched instructions_text \"deterministic\"",
+        "matched instructions_text \"instructions-derived\""
+      ]
+    }
+  ]
+}

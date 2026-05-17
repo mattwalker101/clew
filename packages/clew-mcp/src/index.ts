@@ -1,4 +1,4 @@
-import { ActivationEngine, SkillRegistry } from "@clew/core";
+import { ActivationEngine, SkillRegistry, type SkillSearchAnalysisResult } from "@clew/core";
 import type {
   ActivationContext,
   Capability,
@@ -10,6 +10,7 @@ import type {
 
 export type ClewMcpBridge = {
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
+  analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
   recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult;
   explain(skillId: string, query: string): ClewMcpExplainResult;
   explain(input: ClewMcpExplainInput): ClewMcpExplainResult;
@@ -57,6 +58,12 @@ export type ClewMcpSearchResult = {
   warnings: CompatibilityWarning[];
 };
 
+export type ClewMcpSearchAnalysisResult = {
+  query: string;
+  analysis: SkillSearchAnalysisResult;
+  warnings: CompatibilityWarning[];
+};
+
 export type ClewMcpRecommendResult = {
   query: string;
   recommendations: Recommendation[];
@@ -92,6 +99,18 @@ export function createClewMcpBridge(
           registry.search(request.query).map((bundle) => bundle.manifest),
           request.limit ?? options.defaultLimit,
         ),
+        warnings: registryWarnings,
+      };
+    },
+    analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult {
+      const request = typeof input === "string" ? { query: input } : input;
+      const analysis = registry.analyzeSearch(request.query);
+      return {
+        query: request.query,
+        analysis: {
+          ...analysis,
+          matches: applyLimit(analysis.matches, request.limit ?? options.defaultLimit),
+        },
         warnings: registryWarnings,
       };
     },

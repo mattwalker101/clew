@@ -9,7 +9,7 @@ describe("@clew/mcp", () => {
   it("exposes only read-oriented bridge methods", () => {
     const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
 
-    expect(Object.keys(bridge).sort()).toEqual(["explain", "lookup", "recommend", "search"]);
+    expect(Object.keys(bridge).sort()).toEqual(["analyzeSearch", "explain", "lookup", "recommend", "search"]);
     expect("execute" in bridge).toBe(false);
     expect("activate" in bridge).toBe(false);
     expect("run" in bridge).toBe(false);
@@ -38,6 +38,35 @@ describe("@clew/mcp", () => {
     expect(bridge.lookup("engineering-core")).toMatchObject({
       skillId: "engineering-core",
       bundle: { manifest: { id: "engineering-core" } },
+      warnings: [],
+    });
+  });
+
+  it("exposes opt-in deterministic search analysis without changing search", () => {
+    const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
+
+    expect(bridge.search("engineering")).toMatchObject({
+      query: "engineering",
+      skills: [{ id: "engineering-core" }],
+      warnings: [],
+    });
+    expect(bridge.search("engineering")).not.toHaveProperty("analysis");
+    expect(bridge.analyzeSearch("engineering")).toMatchObject({
+      query: "engineering",
+      analysis: {
+        query: "engineering",
+        terms: ["engineering"],
+        matches: [
+          {
+            skillId: "engineering-core",
+            matchedTerms: ["engineering"],
+            evidence: expect.arrayContaining([
+              { kind: "identity", values: ["Engineering Core", "engineering-core"] },
+              { kind: "tag", values: ["engineering-core"] },
+            ]),
+          },
+        ],
+      },
       warnings: [],
     });
   });
