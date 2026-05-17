@@ -223,6 +223,48 @@ describe("@clew/core", () => {
     expect(recommendation?.warnings[0]?.code).toBe("capability_missing");
   });
 
+  it("analyzes the deterministic semantic index without embeddings", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("semantic-index", {
+            name: "Semantic Index",
+            description: "Local searchable skill evidence.",
+            tags: ["typescript"],
+            policies: ["preserve deterministic behavior"],
+            capabilities: { required: ["filesystem"], optional: ["git"] },
+            compatibility: { providers: ["codex"], warnings: [] },
+            activation: { triggers: ["index"], tags: ["search"], weight: 1 },
+            extends: ["engineering-core"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "semantic-index-source" },
+              imported_via: { importer: "claude" },
+            },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+    registry.entries[0]!.bundle.instructions = "Build deterministic local-first instructions-derived evidence.";
+
+    expect(registry.analyzeIndex()).toEqual(contractFixture("semantic-index-contract.json"));
+  });
+
+  it("does not include disabled skills in semantic index analysis", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("disabled-index", { tags: ["search"] }), layer: "project", root: "skills", disabled: true, favorite: false },
+      ],
+      warnings: [],
+    });
+
+    expect(registry.analyzeIndex()).toEqual({ index: [] });
+  });
+
   it("analyzes deterministic search evidence without embeddings", () => {
     const registry = new SkillRegistry({
       entries: [
