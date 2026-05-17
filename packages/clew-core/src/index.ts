@@ -764,6 +764,7 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
   const warnings: CompatibilityWarning[] = [...bundle.manifest.compatibility.warnings];
   let score = 0;
   const queryTerms = normalizeTerms(context.query);
+  const agentsActiveSkillIds = unique([...context.activeSkillIds, ...parseAgentsMd(context.agentsMd).activeSkillIds]);
 
   for (const trigger of bundle.manifest.activation.triggers) {
     if (queryTerms.includes(normalize(trigger))) {
@@ -779,7 +780,7 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
       signals.push({ type: "tag", value: tag });
     }
   }
-  if (context.activeSkillIds.includes(bundle.manifest.id) || context.agentsMd.includes(bundle.manifest.id)) {
+  if (agentsActiveSkillIds.includes(bundle.manifest.id)) {
     score += 4;
     reasons.push("referenced by AGENTS.md active skills");
     signals.push({ type: "agents_md", value: bundle.manifest.id });

@@ -549,6 +549,142 @@ describe("@clew/core", () => {
     expect(recommendation?.signals).toContainEqual({ type: "repo_signal", value: "typescript" });
   });
 
+  it("recommends active skill ids with AGENTS.md activation provenance", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(new ActivationEngine(registry).recommend({ activeSkillIds: ["safe-editing"] })).toEqual([
+      expect.objectContaining({
+        skillId: "safe-editing",
+        reasons: ["referenced by AGENTS.md active skills"],
+        signals: [{ type: "agents_md", value: "safe-editing" }],
+      }),
+    ]);
+  });
+
+  it("activates only parsed AGENTS.md active skills, not raw prose mentions", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("debugging-core"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const recommendations = new ActivationEngine(registry).recommend({
+      agentsMd: [
+        "# Active Skills",
+        "- safe-editing",
+        "",
+        "Mention debugging-core in prose, but do not activate it.",
+      ].join("\n"),
+    });
+
+    expect(recommendations.map((recommendation) => recommendation.skillId)).toEqual(["safe-editing"]);
+    expect(recommendations[0]?.signals).toEqual([{ type: "agents_md", value: "safe-editing" }]);
+  });
+
+  it("does not cross-activate similar AGENTS.md skill ids", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("typescript-core"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(
+      new ActivationEngine(registry)
+        .recommend({ agentsMd: "# Active Skills\n- typescript-core\n" })
+        .map((recommendation) => recommendation.skillId),
+    ).toEqual(["typescript-core"]);
+  });
+
+  it("deduplicates AGENTS.md activation references from context and parsed content", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const [recommendation] = new ActivationEngine(registry).recommend({
+      activeSkillIds: ["safe-editing"],
+      agentsMd: "# Active Skills\n- safe-editing\n",
+    });
+
+    expect(recommendation?.reasons).toEqual(["referenced by AGENTS.md active skills"]);
+    expect(recommendation?.signals).toEqual([{ type: "agents_md", value: "safe-editing" }]);
+  });
+
+  it("sorts equal-score recommendations deterministically by skill id", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("beta-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("alpha-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(
+      new ActivationEngine(registry)
+        .recommend({ activeSkillIds: ["beta-skill", "alpha-skill"] })
+        .map((recommendation) => recommendation.skillId),
+    ).toEqual(["alpha-skill", "beta-skill"]);
+  });
+
   it("marks recommendation capability warnings as activation provenance", () => {
     const registry = new SkillRegistry({
       entries: [
