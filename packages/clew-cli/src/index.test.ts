@@ -287,6 +287,58 @@ describe("@clew/cli", () => {
     );
   });
 
+  it("prints activation overlap warnings inside recommend and explain recommendations", async () => {
+    const projectRoot = createProject();
+    const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
+    mkdirSync(pairedRoot, { recursive: true });
+    writeFileSync(
+      join(pairedRoot, "clew.yaml"),
+      [
+        "id: typescript-refactor",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Refactor",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+      ].join("\n"),
+    );
+    writeFileSync(join(pairedRoot, "skill.md"), "# TypeScript Refactor\n\nRefactor TypeScript safely.\n");
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["recommend", "typescript"]);
+    await main(["explain", "typescript-core", "typescript"]);
+
+    expect(outputAt(log, 0)).toMatchObject({
+      query: "typescript",
+      recommendations: expect.arrayContaining([
+        expect.objectContaining({
+          skillId: "typescript-core",
+          warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+        }),
+        expect.objectContaining({
+          skillId: "typescript-refactor",
+          warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+        }),
+      ]),
+      warnings: [],
+    });
+    expect(outputAt(log, 1)).toMatchObject({
+      skillId: "typescript-core",
+      query: "typescript",
+      recommendation: {
+        skillId: "typescript-core",
+        warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+      },
+      warnings: [],
+    });
+  });
+
   it("prints scriptable import JSON with compatibility warnings", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);

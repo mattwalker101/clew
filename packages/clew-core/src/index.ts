@@ -746,11 +746,13 @@ export class ActivationEngine {
 
   recommend(input: Partial<ActivationContext>): Recommendation[] {
     const context = activationContextSchema.parse(input);
-    return this.registry
+    const scored = this.registry
       .list()
-      .map((bundle) => scoreBundle(bundle, context))
-      .filter((recommendation) => recommendation.score > 0 && recommendation.reasons.length > 0)
-      .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
+      .map((bundle) => ({ bundle, recommendation: scoreBundle(bundle, context) }))
+      .filter(({ recommendation }) => recommendation.score > 0 && recommendation.reasons.length > 0)
+      .sort((a, b) => b.recommendation.score - a.recommendation.score || a.recommendation.skillId.localeCompare(b.recommendation.skillId));
+
+    return withActivationRelationshipWarnings(scored, this.registry.list()).map(({ recommendation }) => recommendation);
   }
 
   explain(skillId: string, input: Partial<ActivationContext>): Recommendation | undefined {
@@ -809,6 +811,74 @@ function scoreBundle(bundle: SkillBundle, context: ActivationContext): Recommend
     signals: uniqueSignals(signals),
     warnings,
   };
+}
+
+function withActivationRelationshipWarnings(
+  scored: Array<{ bundle: SkillBundle; recommendation: Recommendation }>,
+  activeBundles: SkillBundle[],
+): Array<{ bundle: SkillBundle; recommendation: Recommendation }> {
+  const bySkillId = new Map(scored.map((item) => [item.recommendation.skillId, item]));
+
+  for (const overlap of findOverlaps(scored.map((item) => item.bundle))) {
+    const [leftSkillId, rightSkillId] = overlap.ids;
+    if (!leftSkillId || !rightSkillId) continue;
+    appendActivationWarning(leftSkillId, {
+      code: "activation_overlap",
+      message: overlapMessage(rightSkillId, overlap.triggers, overlap.tags),
+      severity: "warning",
+      origin: "activation",
+      field: overlap.ids.join(":"),
+    }, bySkillId);
+    appendActivationWarning(rightSkillId, {
+      code: "activation_overlap",
+      message: overlapMessage(leftSkillId, overlap.triggers, overlap.tags),
+      severity: "warning",
+      origin: "activation",
+      field: overlap.ids.join(":"),
+    }, bySkillId);
+  }
+
+  for (const conflict of findConflicts(activeBundles)) {
+    for (const skillId of conflict.ids) {
+      const otherSkillIds = conflict.ids.filter((candidate) => candidate !== skillId);
+      if (!otherSkillIds.length) continue;
+      appendActivationWarning(skillId, {
+        code: "activation_conflict",
+        message: `Recommendation conflicts with "${otherSkillIds.join(", ")}": ${conflict.reason}.`,
+        severity: "warning",
+        origin: "activation",
+        field: conflict.ids.join(":"),
+      }, bySkillId);
+    }
+  }
+
+  return scored.map((item) => ({
+    ...item,
+    recommendation: {
+      ...item.recommendation,
+      warnings: uniqueWarnings(item.recommendation.warnings),
+    },
+  }));
+}
+
+function appendActivationWarning(
+  skillId: string,
+  warning: CompatibilityWarning,
+  bySkillId: Map<string, { bundle: SkillBundle; recommendation: Recommendation }>,
+): void {
+  const item = bySkillId.get(skillId);
+  if (!item) return;
+  item.recommendation = {
+    ...item.recommendation,
+    warnings: [...item.recommendation.warnings, warning],
+  };
+}
+
+function overlapMessage(otherSkillId: string, triggers: string[], tags: string[]): string {
+  const parts: string[] = [];
+  if (triggers.length) parts.push(`triggers: ${triggers.join(", ")}`);
+  if (tags.length) parts.push(`tags: ${tags.join(", ")}`);
+  return `Recommendation overlaps with "${otherSkillId}" on ${parts.join("; ")}.`;
 }
 
 function toEntry(bundle: SkillBundle, layer: RegistryLayer, root: string, telemetry: TelemetryState): RegistryEntry {
@@ -876,6 +946,19 @@ function uniqueSignals(values: RecommendationSignal[]): RecommendationSignal[] {
   const result: RecommendationSignal[] = [];
   for (const value of values) {
     const key = `${value.type}:${value.value}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(value);
+    }
+  }
+  return result;
+}
+
+function uniqueWarnings(values: CompatibilityWarning[]): CompatibilityWarning[] {
+  const seen = new Set<string>();
+  const result: CompatibilityWarning[] = [];
+  for (const value of values) {
+    const key = [value.code, value.origin ?? "", value.field ?? "", value.message].join(":");
     if (!seen.has(key)) {
       seen.add(key);
       result.push(value);

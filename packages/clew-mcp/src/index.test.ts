@@ -153,6 +153,40 @@ describe("@clew/mcp", () => {
     });
   });
 
+  it("exposes overlap and conflict warnings on recommend and explain recommendations", () => {
+    const bridge = createClewMcpBridge(
+      registryWith(
+        entry("safe-refactor", { triggers: ["refactor"], tags: ["refactor"] }),
+        entry("incremental-refactor", { triggers: ["refactor"], tags: ["refactor"] }),
+        entry("typescript-core", { triggers: ["typescript"], extends: ["missing-parent"] }),
+      ),
+    );
+
+    expect(bridge.recommend("refactor")).toMatchObject({
+      query: "refactor",
+      warnings: [],
+      recommendations: [
+        {
+          skillId: "incremental-refactor",
+          warnings: [{ code: "activation_overlap", origin: "activation" }],
+        },
+        {
+          skillId: "safe-refactor",
+          warnings: [{ code: "activation_overlap", origin: "activation" }],
+        },
+      ],
+    });
+    expect(bridge.explain("typescript-core", "typescript")).toMatchObject({
+      skillId: "typescript-core",
+      query: "typescript",
+      recommendation: {
+        skillId: "typescript-core",
+        warnings: [{ code: "activation_conflict", origin: "activation" }],
+      },
+      warnings: [],
+    });
+  });
+
   it("returns null plus explicit warnings for missing, disabled, or unrecommended skills", () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
@@ -256,6 +290,7 @@ function entry(
     triggers?: string[];
     weight?: number;
     requiredCapabilities?: Array<"filesystem" | "terminal" | "internet" | "git" | "mcp">;
+    extends?: string[];
   } = {},
 ): RegistryEntry {
   return {
@@ -271,7 +306,7 @@ function entry(
         compatibility: { providers: [], warnings: [] },
         preferences: {},
         activation: { triggers: options.triggers ?? ["build"], tags: [], weight: options.weight ?? 1 },
-        extends: [],
+        extends: options.extends ?? [],
         policies: [],
         provenance: {},
         extensions: {},

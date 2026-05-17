@@ -707,6 +707,129 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("adds overlap warnings only for overlapping recommended skills", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("safe-refactor", {
+            tags: ["refactor"],
+            activation: { triggers: ["refactor"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("incremental-refactor", {
+            tags: ["refactor"],
+            activation: { triggers: ["refactor"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("unrecommended-refactor", {
+            tags: ["workflow"],
+            activation: { triggers: ["unrelated"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const recommendations = new ActivationEngine(registry).recommend({ query: "refactor" });
+
+    expect(recommendations.map((recommendation) => recommendation.skillId)).toEqual([
+      "incremental-refactor",
+      "safe-refactor",
+    ]);
+    expect(recommendations).toEqual([
+      expect.objectContaining({
+        skillId: "incremental-refactor",
+        warnings: [
+          expect.objectContaining({
+            code: "activation_overlap",
+            origin: "activation",
+            field: "incremental-refactor:safe-refactor",
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        skillId: "safe-refactor",
+        warnings: [
+          expect.objectContaining({
+            code: "activation_overlap",
+            origin: "activation",
+            field: "incremental-refactor:safe-refactor",
+          }),
+        ],
+      }),
+    ]);
+    expect(recommendations.flatMap((recommendation) => recommendation.warnings).map((warning) => warning.message)).toEqual([
+      'Recommendation overlaps with "safe-refactor" on triggers: refactor; tags: refactor.',
+      'Recommendation overlaps with "incremental-refactor" on triggers: refactor; tags: refactor.',
+    ]);
+  });
+
+  it("adds deterministic conflict warnings to affected recommendations", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", {
+            extends: ["missing-parent"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("debugging-core", {
+            activation: { triggers: ["debug"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const recommendations = new ActivationEngine(registry).recommend({
+      query: "typescript",
+      activeSkillIds: ["debugging-core"],
+    });
+
+    expect(recommendations.map((recommendation) => recommendationSchema.parse(recommendation))).toEqual(recommendations);
+    expect(recommendations.map((recommendation) => [recommendation.skillId, recommendation.warnings])).toEqual([
+      [
+        "typescript-core",
+        [
+          {
+            code: "activation_conflict",
+            message: 'Recommendation conflicts with "missing-parent": missing parent skill.',
+            severity: "warning",
+            origin: "activation",
+            field: "typescript-core:missing-parent",
+          },
+        ],
+      ],
+      [
+        "debugging-core",
+        [],
+      ],
+    ]);
+  });
+
   it("returns schema-valid recommendations from activation", () => {
     const registry = new SkillRegistry({
       entries: [
