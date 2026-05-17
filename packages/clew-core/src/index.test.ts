@@ -219,7 +219,7 @@ describe("@clew/core", () => {
     expect(recommendation?.warnings[0]?.code).toBe("capability_missing");
   });
 
-  it("reports overlap and missing-parent conflicts", () => {
+  it("reports enriched overlap and missing-parent conflict rows", () => {
     const first = bundle("a", { tags: ["typescript"], activation: { triggers: ["refactor"], tags: [], weight: 1 } });
     const second = bundle("b", {
       tags: ["typescript"],
@@ -227,9 +227,79 @@ describe("@clew/core", () => {
       extends: ["missing"],
     });
     expect(findOverlaps([first, second])).toEqual([
-      { ids: ["a", "b"], triggers: ["refactor"], tags: ["typescript"] },
+      {
+        ids: ["a", "b"],
+        triggers: ["refactor"],
+        tags: ["typescript"],
+        classification: "complementary",
+        evidence: [
+          { kind: "shared_trigger", values: ["refactor"] },
+          { kind: "shared_tag", values: ["typescript"] },
+        ],
+      },
     ]);
-    expect(findConflicts([first, second])).toEqual([{ ids: ["b", "missing"], reason: "missing parent skill" }]);
+    expect(findConflicts([first, second])).toEqual([
+      {
+        ids: ["b", "missing"],
+        reason: "missing parent skill",
+        classification: "conflicting",
+        evidence: [{ kind: "missing_parent", values: ["missing"] }],
+      },
+    ]);
+  });
+
+  it("classifies redundant overlaps with deterministic evidence and row ordering", () => {
+    const alpha = bundle("alpha", {
+      tags: ["typescript", "refactor"],
+      policies: ["preserve public APIs", "prefer small patches"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["claude"], warnings: [] },
+      activation: { triggers: ["build"], tags: [], weight: 1 },
+      extends: ["base"],
+    });
+    const beta = bundle("beta", {
+      tags: ["typescript", "debugging"],
+      policies: ["preserve public APIs"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["claude"], warnings: [] },
+      activation: { triggers: ["build"], tags: [], weight: 1 },
+      extends: ["base"],
+    });
+    const gamma = bundle("gamma", {
+      policies: ["preserve public APIs"],
+    });
+
+    expect(findOverlaps([beta, gamma, alpha])).toEqual([
+      {
+        ids: ["alpha", "beta"],
+        triggers: ["build"],
+        tags: ["typescript"],
+        classification: "redundant",
+        evidence: [
+          { kind: "shared_trigger", values: ["build"] },
+          { kind: "shared_tag", values: ["typescript"] },
+          { kind: "shared_policy", values: ["preserve public APIs"] },
+          { kind: "shared_required_capability", values: ["filesystem"] },
+          { kind: "shared_optional_capability", values: ["git"] },
+          { kind: "common_parent", values: ["base"] },
+          { kind: "shared_provider", values: ["claude"] },
+        ],
+      },
+      {
+        ids: ["alpha", "gamma"],
+        triggers: [],
+        tags: [],
+        classification: "complementary",
+        evidence: [{ kind: "shared_policy", values: ["preserve public APIs"] }],
+      },
+      {
+        ids: ["beta", "gamma"],
+        triggers: [],
+        tags: [],
+        classification: "complementary",
+        evidence: [{ kind: "shared_policy", values: ["preserve public APIs"] }],
+      },
+    ]);
   });
 
   it("rebuilds SQLite derived index tables from registry snapshots", async () => {
@@ -773,8 +843,8 @@ describe("@clew/core", () => {
       }),
     ]);
     expect(recommendations.flatMap((recommendation) => recommendation.warnings).map((warning) => warning.message)).toEqual([
-      'Recommendation overlaps with "safe-refactor" on triggers: refactor; tags: refactor.',
-      'Recommendation overlaps with "incremental-refactor" on triggers: refactor; tags: refactor.',
+      'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor.',
+      'Recommendation has complementary overlap with "incremental-refactor" using shared_trigger: refactor; shared_tag: refactor.',
     ]);
   });
 
@@ -816,7 +886,7 @@ describe("@clew/core", () => {
         [
           {
             code: "activation_conflict",
-            message: 'Recommendation conflicts with "missing-parent": missing parent skill.',
+            message: 'Recommendation has conflicting relationship with "missing-parent": missing parent skill. Evidence: missing_parent: missing-parent.',
             severity: "warning",
             origin: "activation",
             field: "typescript-core:missing-parent",

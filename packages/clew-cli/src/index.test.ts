@@ -107,6 +107,63 @@ describe("@clew/cli", () => {
     });
   });
 
+  it("prints enriched overlap and conflict rows inside stable envelopes", async () => {
+    const projectRoot = createProject();
+    const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
+    mkdirSync(pairedRoot, { recursive: true });
+    writeFileSync(
+      join(pairedRoot, "clew.yaml"),
+      [
+        "id: typescript-refactor",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Refactor",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+        "extends:",
+        "  - missing-parent",
+      ].join("\n"),
+    );
+    writeFileSync(join(pairedRoot, "skill.md"), "# TypeScript Refactor\n\nRefactor TypeScript safely.\n");
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["overlaps"]);
+    await main(["conflicts"]);
+
+    expect(outputAt(log, 0)).toEqual({
+      overlaps: [
+        {
+          ids: ["typescript-core", "typescript-refactor"],
+          triggers: ["typescript"],
+          tags: ["typescript"],
+          classification: "complementary",
+          evidence: [
+            { kind: "shared_trigger", values: ["typescript"] },
+            { kind: "shared_tag", values: ["typescript"] },
+          ],
+        },
+      ],
+      warnings: [],
+    });
+    expect(outputAt(log, 1)).toEqual({
+      conflicts: [
+        {
+          ids: ["typescript-refactor", "missing-parent"],
+          reason: "missing parent skill",
+          classification: "conflicting",
+          evidence: [{ kind: "missing_parent", values: ["missing-parent"] }],
+        },
+      ],
+      warnings: [],
+    });
+  });
+
   it("returns null and explicit warnings for unavailable lookup skills", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
@@ -319,7 +376,14 @@ describe("@clew/cli", () => {
       recommendations: expect.arrayContaining([
         expect.objectContaining({
           skillId: "typescript-core",
-          warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+          warnings: [
+            expect.objectContaining({
+              code: "activation_overlap",
+              origin: "activation",
+              message:
+                'Recommendation has complementary overlap with "typescript-refactor" using shared_trigger: typescript; shared_tag: typescript.',
+            }),
+          ],
         }),
         expect.objectContaining({
           skillId: "typescript-refactor",
