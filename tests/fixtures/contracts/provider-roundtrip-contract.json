@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "description": "Combined provider interop contract. This fixture pins warnings, provenance, and artifacts without introducing provider-specific wrapper envelopes.",
+  "imports": {
+    "claudeDegraded": {
+      "provenance": {
+        "source": {
+          "type": "claude",
+          "location": "claude",
+          "original_id": "db-migration"
+        },
+        "imported_via": {
+          "importer": "claude"
+        }
+      },
+      "warnings": [
+        {
+          "code": "tool_semantics_degraded",
+          "provider": "claude",
+          "field": "allowed_tools",
+          "origin": "provider_import",
+          "message": "Provider tool allow-list preserved as metadata; clew v0.1 does not execute tools.",
+          "severity": "warning"
+        },
+        {
+          "code": "provider_metadata_preserved",
+          "provider": "claude",
+          "origin": "provider_import",
+          "message": "Unknown claude fields preserved under extensions.claude: risk_level",
+          "severity": "warning"
+        }
+      ]
+    }
+  },
+  "exports": {
+    "claudeCanonical": {
+      "artifacts": [
+        {
+          "path": "interop-core/SKILL.md",
+          "contents": "# Interop Core\n\nPreserve operational meaning across providers.\nSlash command: /interop-core\n\nPreserve intent and report degradation."
+        }
+      ],
+      "warnings": [
+        {
+          "code": "composition_degraded",
+          "provider": "claude",
+          "field": "extends",
+          "origin": "provider_export",
+          "message": "Provider export does not encode clew inheritance; compose first if parent policies must be inlined.",
+          "severity": "warning"
+        },
+        {
+          "code": "capability_semantics_degraded",
+          "provider": "claude",
+          "field": "capabilities.required",
+          "origin": "provider_export",
+          "message": "Required runtime capabilities are preserved by clew but are advisory in provider exports.",
+          "severity": "warning"
+        }
+      ]
+    }
+  }
+}

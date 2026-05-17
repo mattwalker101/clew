@@ -22,6 +22,15 @@ type ProviderProvenanceContract = {
   };
 };
 
+type ProviderRoundTripContract = {
+  imports: {
+    claudeDegraded: {
+      provenance: ImportResult["provenance"];
+      warnings: CompatibilityWarning[];
+    };
+  };
+};
+
 function fixture(name: string): ProviderSkillInput {
   return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
 }
@@ -36,6 +45,12 @@ function providerProvenanceContract(): ProviderProvenanceContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-provenance-contract.json"), "utf8"),
   ) as ProviderProvenanceContract;
+}
+
+function providerRoundTripContract(): ProviderRoundTripContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-roundtrip-contract.json"), "utf8"),
+  ) as ProviderRoundTripContract;
 }
 
 describe("@clew/importers", () => {
@@ -85,6 +100,19 @@ describe("@clew/importers", () => {
     expect(result.bundles[0]?.manifest.extensions.claude).toMatchObject({ risk_level: "high" });
     expect(result.warnings).toEqual(warningContract.imports.claudeDegraded.warnings);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
+  });
+
+  it("matches the combined provider round-trip contract on import", () => {
+    const result = importClaudeSkill(fixture("claude-degraded.json"));
+    const contract = providerRoundTripContract();
+
+    expect(result).toMatchObject({
+      provider: "claude",
+      provenance: contract.imports.claudeDegraded.provenance,
+      warnings: contract.imports.claudeDegraded.warnings,
+    });
+    expect(result.bundles[0]?.manifest.provenance).toEqual(contract.imports.claudeDegraded.provenance);
+    expect(result.bundles[0]?.manifest.extensions.claude).toBeDefined();
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {
