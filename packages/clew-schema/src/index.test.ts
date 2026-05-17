@@ -6,6 +6,7 @@ import {
   compatibilityWarningSchema,
   formatValidationIssue,
   parseSkillBundle,
+  provenanceSchema,
   SkillBundleValidationError,
   skillManifestSchema,
   validateSkillBundle,
@@ -199,5 +200,77 @@ describe("@clew/schema", () => {
     expect(() =>
       compatibilityWarningSchema.parse({ code: "compat", message: "Degraded.", origin: "workflow_runtime" }),
     ).toThrow();
+  });
+
+  it("requires imported provenance to include a source", () => {
+    const result = validateSkillBundle(fixture("invalid-provenance-imported-via.json"));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: "manifest.provenance.source",
+          code: "custom",
+          message: "Imported provenance must include source metadata.",
+        }),
+      );
+    }
+  });
+
+  it("keeps provider metadata under the explicit provider extension namespace", () => {
+    const result = validateSkillBundle(fixture("invalid-provenance-provider-extension.json"));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: "manifest.extensions.claude",
+          code: "custom",
+          message: "Provider source metadata for claude must be preserved under extensions.claude.",
+        }),
+      );
+    }
+  });
+
+  it("accepts complete provider provenance with matching extension namespace", () => {
+    expect(
+      provenanceSchema.parse({
+        source: {
+          type: "claude",
+          location: "claude:safe-refactor",
+          original_id: "safe-refactor",
+        },
+        imported_via: {
+          importer: "claude",
+          imported_at: "2026-05-16T00:00:00.000Z",
+        },
+      }),
+    ).toMatchObject({
+      source: { type: "claude" },
+      imported_via: { importer: "claude" },
+    });
+
+    const result = validateSkillBundle({
+      manifest: {
+        ...manifest,
+        provenance: {
+          source: {
+            type: "claude",
+            location: "claude:safe-refactor",
+            original_id: "safe-refactor",
+          },
+          imported_via: {
+            importer: "claude",
+            imported_at: "2026-05-16T00:00:00.000Z",
+          },
+        },
+        extensions: {
+          claude: { slash_command: "/safe-refactor" },
+        },
+      },
+      instructions: "Refactor safely.",
+    });
+
+    expect(result.ok).toBe(true);
   });
 });

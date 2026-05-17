@@ -92,6 +92,12 @@ export const activationSchema = z
   .passthrough()
   .default({ triggers: [], tags: [], weight: 1 });
 
+const providerSourceTypes = ["claude", "opencode", "local"] as const;
+
+function isProviderSourceType(type: string): type is (typeof providerSourceTypes)[number] {
+  return providerSourceTypes.includes(type as (typeof providerSourceTypes)[number]);
+}
+
 export const provenanceSchema = z
   .object({
     source: z
@@ -111,6 +117,15 @@ export const provenanceSchema = z
       .optional(),
   })
   .passthrough()
+  .superRefine((value, ctx) => {
+    if (value.imported_via && !value.source) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Imported provenance must include source metadata.",
+        path: ["source"],
+      });
+    }
+  })
   .default({});
 
 export const extensionNamespacesSchema = z
@@ -128,23 +143,34 @@ export const extensionNamespacesSchema = z
   })
   .default({});
 
-export const skillManifestSchema = z.object({
-  id: z.string().min(1),
-  version: z.string().min(1),
-  kind: skillKindSchema,
-  name: z.string().min(1),
-  description: z.string().optional(),
-  instructions: instructionsSchema,
-  tags: stringArraySchema,
-  capabilities: capabilitySetSchema,
-  compatibility: compatibilitySchema,
-  preferences: preferencesSchema,
-  activation: activationSchema,
-  extends: stringArraySchema,
-  policies: stringArraySchema,
-  provenance: provenanceSchema,
-  extensions: extensionNamespacesSchema,
-});
+export const skillManifestSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    kind: skillKindSchema,
+    name: z.string().min(1),
+    description: z.string().optional(),
+    instructions: instructionsSchema,
+    tags: stringArraySchema,
+    capabilities: capabilitySetSchema,
+    compatibility: compatibilitySchema,
+    preferences: preferencesSchema,
+    activation: activationSchema,
+    extends: stringArraySchema,
+    policies: stringArraySchema,
+    provenance: provenanceSchema,
+    extensions: extensionNamespacesSchema,
+  })
+  .superRefine((value, ctx) => {
+    const sourceType = value.provenance.source?.type;
+    if (sourceType && isProviderSourceType(sourceType) && value.extensions[sourceType] === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Provider source metadata for ${sourceType} must be preserved under extensions.${sourceType}.`,
+        path: ["extensions", sourceType],
+      });
+    }
+  });
 
 export const skillBundleSchema = z.object({
   manifest: skillManifestSchema,

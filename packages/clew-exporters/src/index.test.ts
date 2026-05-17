@@ -45,6 +45,15 @@ type ProviderArtifactContract = {
   };
 };
 
+type ProviderRoundTripContract = {
+  exports: {
+    claudeCanonical: {
+      artifacts: ExportResult["artifacts"];
+      warnings: CompatibilityWarning[];
+    };
+  };
+};
+
 function canonicalFixture(): SkillBundle {
   return JSON.parse(readFileSync(join(fixtureRoot, "canonical-roundtrip.json"), "utf8")) as SkillBundle;
 }
@@ -59,6 +68,12 @@ function providerArtifactContract(): ProviderArtifactContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-artifact-contract.json"), "utf8"),
   ) as ProviderArtifactContract;
+}
+
+function providerRoundTripContract(): ProviderRoundTripContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-roundtrip-contract.json"), "utf8"),
+  ) as ProviderRoundTripContract;
 }
 
 describe("@clew/exporters", () => {
@@ -86,6 +101,19 @@ describe("@clew/exporters", () => {
     expect(first.artifacts).toEqual(artifactContract.exports.claudeCanonical.artifacts);
     expect(first.warnings).toEqual(warningContract.exports.claudeCanonical.warnings);
     expect(first.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(first.warnings);
+  });
+
+  it("matches the combined provider round-trip contract on export", () => {
+    const result = exportClaudeSkill(canonicalFixture());
+    const contract = providerRoundTripContract();
+
+    expect(result).toEqual({
+      provider: "claude",
+      artifacts: contract.exports.claudeCanonical.artifacts,
+      warnings: contract.exports.claudeCanonical.warnings,
+    });
+    expect(result.artifacts).toEqual(contract.exports.claudeCanonical.artifacts);
+    expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("exports OpenCode fixtures with provider mode and stable warnings", () => {

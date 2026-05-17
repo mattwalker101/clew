@@ -45,3 +45,15 @@ The provider interop fixture at `tests/fixtures/contracts/provider-warning-contr
 The provider provenance fixture at `tests/fixtures/contracts/provider-provenance-contract.json` pins importer provenance on both import results and imported bundle manifests. Provenance contracts stay separate from provider metadata so `manifest.extensions.<provider>` remains provider-specific.
 
 The provider artifact fixture at `tests/fixtures/contracts/provider-artifact-contract.json` pins exported Claude and OpenCode artifact paths and contents. Artifact contracts stay separate from warning contracts so provider export results can preserve plain `artifacts` and `warnings` arrays without wrapping either surface in provider-specific envelopes.
+
+## Combined Provider Round-Trip Contract
+
+The combined provider round-trip fixture at `tests/fixtures/contracts/provider-roundtrip-contract.json` pins the interop surface across import and export in one executable contract:
+
+- importer `warnings`
+- importer `provenance`
+- imported bundle `manifest.provenance`
+- exporter `artifacts`
+- exporter `warnings`
+
+This fixture does not introduce a new runtime envelope. Import results must remain plain `ImportResult` objects, and export results must remain plain `ExportResult` objects. Provider-specific metadata belongs under `manifest.extensions.<provider>`, while cross-provider provenance belongs under `manifest.provenance` and import result `provenance`.
