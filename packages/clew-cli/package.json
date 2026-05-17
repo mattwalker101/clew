@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "cd ../.. && vitest run packages/clew-cli/src/index.test.ts"
   },
   "dependencies": {
     "@clew/core": "workspace:*",

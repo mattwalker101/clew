@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "description": "Public provider warning contract fixture for importer and exporter result warnings. Warning arrays remain plain arrays of CompatibilityWarning objects.",
+  "imports": {
+    "claudeDegraded": {
+      "warnings": [
+        {
+          "code": "tool_semantics_degraded",
+          "provider": "claude",
+          "field": "allowed_tools",
+          "origin": "provider_import",
+          "message": "Provider tool allow-list preserved as metadata; clew v0.1 does not execute tools.",
+          "severity": "warning"
+        },
+        {
+          "code": "provider_metadata_preserved",
+          "provider": "claude",
+          "origin": "provider_import",
+          "message": "Unknown claude fields preserved under extensions.claude: risk_level",
+          "severity": "warning"
+        }
+      ]
+    },
+    "opencodeNormalized": {
+      "warnings": [
+        {
+          "code": "provider_field_normalized",
+          "provider": "opencode",
+          "field": "mode",
+          "origin": "provider_import",
+          "message": "OpenCode mode normalized to extensions.opencode.agent_mode.",
+          "severity": "warning"
+        }
+      ]
+    }
+  },
+  "exports": {
+    "claudeCanonical": {
+      "warnings": [
+        {
+          "code": "composition_degraded",
+          "provider": "claude",
+          "field": "extends",
+          "origin": "provider_export",
+          "message": "Provider export does not encode clew inheritance; compose first if parent policies must be inlined.",
+          "severity": "warning"
+        },
+        {
+          "code": "capability_semantics_degraded",
+          "provider": "claude",
+          "field": "capabilities.required",
+          "origin": "provider_export",
+          "message": "Required runtime capabilities are preserved by clew but are advisory in provider exports.",
+          "severity": "warning"
+        }
+      ]
+    },
+    "opencodeFromClaudeOnly": {
+      "warnings": [
+        {
+          "code": "target_provider_not_declared",
+          "provider": "opencode",
+          "origin": "provider_export",
+          "message": "Skill does not declare opencode compatibility; exporting best-effort instructions only.",
+          "severity": "warning"
+        },
+        {
+          "code": "composition_degraded",
+          "provider": "opencode",
+          "field": "extends",
+          "origin": "provider_export",
+          "message": "Provider export does not encode clew inheritance; compose first if parent policies must be inlined.",
+          "severity": "warning"
+        },
+        {
+          "code": "capability_semantics_degraded",
+          "provider": "opencode",
+          "field": "capabilities.required",
+          "origin": "provider_export",
+          "message": "Required runtime capabilities are preserved by clew but are advisory in provider exports.",
+          "severity": "warning"
+        }
+      ]
+    }
+  }
+}

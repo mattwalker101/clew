@@ -3,12 +3,26 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { importClaudeSkill, importOpenCodeSkill } from "./index.js";
 import type { ProviderSkillInput } from "./index.js";
-import { compatibilityWarningSchema } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning } from "@clew/schema";
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
+const contractRoot = join(process.cwd(), "tests", "fixtures", "contracts");
+
+type ProviderWarningContract = {
+  imports: {
+    claudeDegraded: { warnings: CompatibilityWarning[] };
+    opencodeNormalized: { warnings: CompatibilityWarning[] };
+  };
+};
 
 function fixture(name: string): ProviderSkillInput {
   return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
+}
+
+function providerWarningContract(): ProviderWarningContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-warning-contract.json"), "utf8"),
+  ) as ProviderWarningContract;
 }
 
 describe("@clew/importers", () => {
@@ -50,23 +64,21 @@ describe("@clew/importers", () => {
 
   it("preserves degraded Claude provider metadata with stable warnings", () => {
     const result = importClaudeSkill(fixture("claude-degraded.json"));
+    const contract = providerWarningContract();
 
     expect(result.bundles[0]?.manifest.extensions.claude).toMatchObject({ risk_level: "high" });
-    expect(result.warnings.map((warning) => warning.code)).toEqual([
-      "tool_semantics_degraded",
-      "provider_metadata_preserved",
-    ]);
-    expect(result.warnings.map((warning) => warning.origin)).toEqual(["provider_import", "provider_import"]);
+    expect(result.warnings).toEqual(contract.imports.claudeDegraded.warnings);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {
     const result = importOpenCodeSkill(fixture("opencode-normalized.json"));
+    const contract = providerWarningContract();
 
     expect(result.bundles[0]?.manifest.id).toBe("opencode-migration");
     expect(result.bundles[0]?.manifest.extensions.opencode).toMatchObject({ mode: "review", agent_mode: "review" });
-    expect(result.warnings.map((warning) => warning.code)).toEqual(["provider_field_normalized"]);
-    expect(result.warnings.map((warning) => warning.origin)).toEqual(["provider_import"]);
+    expect(result.warnings).toEqual(contract.imports.opencodeNormalized.warnings);
+    expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
   });
 
   it("rejects malformed provider fixtures with clear errors", () => {
