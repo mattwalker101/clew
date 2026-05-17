@@ -241,11 +241,11 @@ function warningContractFixture(): {
 }
 
 function registryWith(...entries: RegistryEntry[]): SkillRegistry {
-  return new SkillRegistry({ entries, warnings: [], resolutionDiagnostics: [] });
+  return new SkillRegistry({ entries, warnings: [] });
 }
 
 function registryWithWarnings(entries: RegistryEntry[], warnings: CompatibilityWarning[]): SkillRegistry {
-  return new SkillRegistry({ entries, warnings, resolutionDiagnostics: [] });
+  return new SkillRegistry({ entries, warnings });
 }
 
 function entry(
