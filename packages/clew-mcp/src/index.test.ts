@@ -325,7 +325,18 @@ describe("@clew/mcp", () => {
       ),
     );
 
-    expect(bridge.recommend("refactor")).toMatchObject({
+    const recommendEnvelope = bridge.recommend("refactor");
+    const explainEnvelope = bridge.explain("typescript-core", "typescript");
+
+    expect(Object.keys(recommendEnvelope)).toEqual(["query", "recommendations", "warnings"]);
+    expect(Object.keys(explainEnvelope)).toEqual(["skillId", "query", "recommendation", "warnings"]);
+    expect(recommendEnvelope.warnings).toEqual([]);
+    expect(explainEnvelope.warnings).toEqual([]);
+    expect(recommendEnvelope).not.toHaveProperty("overlaps");
+    expect(recommendEnvelope).not.toHaveProperty("conflicts");
+    expect(explainEnvelope).not.toHaveProperty("overlaps");
+    expect(explainEnvelope).not.toHaveProperty("conflicts");
+    expect(recommendEnvelope).toMatchObject({
       query: "refactor",
       warnings: [],
       recommendations: [
@@ -346,7 +357,7 @@ describe("@clew/mcp", () => {
         },
       ],
     });
-    expect(bridge.explain("typescript-core", "typescript")).toMatchObject({
+    expect(explainEnvelope).toMatchObject({
       skillId: "typescript-core",
       query: "typescript",
       recommendation: {

@@ -622,6 +622,43 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("matches the documented overlap/conflict analysis contract fixture", () => {
+    const typescriptCore = bundle("typescript-core", {
+      tags: ["typescript", "refactor"],
+      policies: ["preserve public APIs"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "typescript-core" },
+        imported_via: { importer: "claude" },
+      },
+      activation: { triggers: ["typescript"], tags: [], weight: 1 },
+      extends: ["engineering-core"],
+    });
+    const typescriptRefactor = bundle("typescript-refactor", {
+      tags: ["typescript"],
+      policies: ["preserve public APIs"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "typescript-refactor" },
+        imported_via: { importer: "claude" },
+      },
+      activation: { triggers: ["typescript"], tags: [], weight: 1 },
+      extends: ["engineering-core", "missing-parent"],
+    });
+    const safetyReview = bundle("safety-review", {
+      policies: ["preserve public APIs"],
+    });
+    const engineeringCore = bundle("engineering-core");
+    const bundles = [typescriptRefactor, safetyReview, engineeringCore, typescriptCore];
+
+    expect({
+      overlaps: findOverlaps(bundles),
+      conflicts: findConflicts(bundles),
+    }).toEqual(contractFixture("overlap-conflict-analysis-contract.json"));
+  });
+
   it("rebuilds SQLite derived index tables from registry snapshots", async () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
     const result = await rebuildSqliteIndex(dbPath, {
