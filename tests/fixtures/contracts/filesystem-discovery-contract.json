@@ -1,0 +1,76 @@
+{
+  "missingRootDiscovery": {
+    "bundles": [],
+    "warnings": []
+  },
+  "discovery": {
+    "bundleIds": [
+      "alpha-skill",
+      "zeta-skill"
+    ],
+    "schemaDefaults": {
+      "activationWeight": 1,
+      "tags": [],
+      "requiredCapabilities": [],
+      "compatibilityProviders": []
+    },
+    "warnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ]
+  },
+  "registryRebuild": {
+    "entries": [
+      {
+        "skillId": "alpha-skill",
+        "layer": "project",
+        "root": "skills",
+        "disabled": false,
+        "favorite": false,
+        "usageCount": 0
+      },
+      {
+        "skillId": "zeta-skill",
+        "layer": "project",
+        "root": "skills",
+        "disabled": false,
+        "favorite": false,
+        "usageCount": 0
+      }
+    ],
+    "warnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ]
+  },
+  "sqliteRebuild": {
+    "snapshotWarnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ],
+    "persistedWarnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ]
+  }
+}
