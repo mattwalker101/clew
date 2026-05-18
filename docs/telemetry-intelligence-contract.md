@@ -17,3 +17,5 @@ Recommendation telemetry is conservative and additive. Favorite and usage eviden
 `clew telemetry` remains the compatibility surface for raw persisted telemetry rows and top-level registry rebuild warnings. `clew telemetry --explain` and MCP `analyzeTelemetry()` expose the analysis result explicitly. Registry rebuild warnings stay in top-level `warnings`; recommendation warnings stay on affected recommendation objects.
 
 The executable fixture at `tests/fixtures/contracts/telemetry-analysis-contract.json` pins the public result shape and representative evidence ordering. The executable fixture at `tests/fixtures/contracts/activation-telemetry-boundary-contract.json` pins telemetry's boundary with activation and public read surfaces.
+
+Telemetry mutation boundaries are pinned separately in `docs/telemetry-mutation-boundary-contract.md`: read and analysis surfaces report telemetry state without recording usage, enable/disable mutate only derived SQLite state, and request-time warnings are not persisted.

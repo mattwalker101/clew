@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "description": "Telemetry mutation boundaries keep filesystem bundles canonical and restrict writes to explicit derived SQLite state.",
+  "cli": {
+    "usageRecording": {
+      "plainRecommendUsageCount": 1,
+      "recommendExplainUsageCount": 0,
+      "nonMutatingCommandsUsageCount": 0,
+      "recordedRecommendationIds": [
+        "typescript-core"
+      ],
+      "excludedRecommendationIds": [
+        "unmatched-skill"
+      ]
+    },
+    "disableEnable": {
+      "disabledTelemetryRow": {
+        "skillId": "typescript-core",
+        "disabled": true,
+        "usageCount": 0
+      },
+      "disabledListSkillIds": [],
+      "reenabledListSkillIds": [
+        "typescript-core"
+      ],
+      "filesystemManifestUnchanged": true
+    },
+    "requestWarnings": {
+      "lookupMissingWarningCodes": [
+        "skill_unknown"
+      ],
+      "lookupDisabledWarningCodes": [
+        "skill_disabled"
+      ],
+      "explainUnrecommendedWarningCodes": [
+        "skill_not_recommended"
+      ],
+      "persistedRegistryWarningCodes": []
+    }
+  },
+  "core": {
+    "sqliteDerivedState": {
+      "disabledAffectsRegistryWhileDbExists": true,
+      "deleteDbClearsDisabledState": true,
+      "filesystemManifestUnchanged": true
+    },
+    "registryRebuildWarnings": {
+      "requestWarningCodesPersisted": [],
+      "registryWarningCodesPersisted": [
+        "skill_bundle_invalid"
+      ]
+    }
+  },
+  "mcp": {
+    "methodSurface": {
+      "readOnlyMethodNames": [
+        "analyzeIndex",
+        "analyzeRecommendations",
+        "analyzeSearch",
+        "analyzeTelemetry",
+        "explain",
+        "lookup",
+        "recommend",
+        "search"
+      ],
+      "forbiddenMutationMethodNames": [
+        "recordRecommendation",
+        "enable",
+        "disable",
+        "execute",
+        "activate",
+        "run"
+      ],
+      "exposedForbiddenMutationMethodNames": []
+    },
+    "usageRecording": {
+      "initialUsageCounts": [
+        {
+          "skillId": "typescript-core",
+          "usageCount": 3
+        },
+        {
+          "skillId": "disabled-skill",
+          "usageCount": 7
+        }
+      ],
+      "afterReadAnalysisUsageCounts": [
+        {
+          "skillId": "typescript-core",
+          "usageCount": 3
+        },
+        {
+          "skillId": "disabled-skill",
+          "usageCount": 7
+        }
+      ]
+    },
+    "requestWarnings": {
+      "lookupMissingWarningCodes": [
+        "skill_bundle_invalid",
+        "skill_unknown"
+      ],
+      "lookupMissingWarningOrigins": [
+        "registry_rebuild",
+        "request"
+      ],
+      "lookupDisabledWarningCodes": [
+        "skill_bundle_invalid",
+        "skill_disabled"
+      ],
+      "lookupDisabledWarningOrigins": [
+        "registry_rebuild",
+        "request"
+      ],
+      "explainUnrecommendedWarningCodes": [
+        "skill_bundle_invalid",
+        "skill_not_recommended"
+      ],
+      "explainUnrecommendedWarningOrigins": [
+        "registry_rebuild",
+        "request"
+      ],
+      "telemetryAnalysisRequestWarningCodes": []
+    }
+  }
+}

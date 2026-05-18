@@ -537,6 +537,74 @@ describe("@clew/mcp", () => {
       },
     }).toEqual(publicEnvelopeContractFixture().mcp);
   });
+
+  it("matches the documented MCP telemetry mutation boundary contract fixture", () => {
+    const fixture = telemetryMutationBoundaryFixture().mcp;
+    const registryWarning: CompatibilityWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error",
+      origin: "registry_rebuild",
+      field: "skills/future-kind",
+      message: "Unsupported skill kind.",
+    };
+    const registry = registryWithWarnings(
+      [
+        entry("typescript-core", { triggers: ["typescript"], tags: ["typescript"], usageCount: 3 }),
+        entry("disabled-skill", { disabled: true, triggers: ["typescript"], tags: ["typescript"], usageCount: 7 }),
+      ],
+      [registryWarning],
+    );
+    const bridge = createClewMcpBridge(registry);
+    const forbiddenMutationMethodNames = [
+      "recordRecommendation",
+      "enable",
+      "disable",
+      "execute",
+      "activate",
+      "run",
+    ];
+    const usageCounts = () =>
+      registry.entries.map((item) => ({
+        skillId: item.bundle.manifest.id,
+        usageCount: item.usageCount ?? 0,
+      }));
+    const initialUsageCounts = usageCounts();
+
+    bridge.recommend("typescript");
+    bridge.analyzeRecommendations("typescript");
+    bridge.search("typescript");
+    bridge.analyzeSearch("typescript");
+    const missingLookup = bridge.lookup("missing-skill");
+    const disabledLookup = bridge.lookup("disabled-skill");
+    const unrecommendedExplain = bridge.explain("typescript-core", "unrelated");
+    const telemetryAnalysis = bridge.analyzeTelemetry();
+    bridge.analyzeIndex();
+
+    expect({
+      methodSurface: {
+        readOnlyMethodNames: Object.keys(bridge).sort(),
+        forbiddenMutationMethodNames,
+        exposedForbiddenMutationMethodNames: forbiddenMutationMethodNames.filter((name) => name in bridge),
+      },
+      usageRecording: {
+        initialUsageCounts,
+        afterReadAnalysisUsageCounts: usageCounts(),
+      },
+      requestWarnings: {
+        lookupMissingWarningCodes: missingLookup.warnings.map((warning) => warning.code),
+        lookupMissingWarningOrigins: missingLookup.warnings.map((warning) => warning.origin),
+        lookupDisabledWarningCodes: disabledLookup.warnings.map((warning) => warning.code),
+        lookupDisabledWarningOrigins: disabledLookup.warnings.map((warning) => warning.origin),
+        explainUnrecommendedWarningCodes: unrecommendedExplain.warnings.map((warning) => warning.code),
+        explainUnrecommendedWarningOrigins: unrecommendedExplain.warnings.map((warning) => warning.origin),
+        telemetryAnalysisRequestWarningCodes: telemetryAnalysis.analysis.records.flatMap((record) =>
+          record.evidence
+            .flatMap((evidence) => evidence.values)
+            .filter((value) => ["skill_unknown", "skill_disabled", "skill_not_recommended"].includes(value)),
+        ),
+      },
+    }).toEqual(fixture);
+  });
 });
 
 function warningContractFixture(): {
@@ -566,6 +634,12 @@ function warningContractFixture(): {
 function publicEnvelopeContractFixture(): { mcp: unknown } {
   return JSON.parse(
     readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", "public-envelope-contract.json"), "utf8"),
+  ) as { mcp: unknown };
+}
+
+function telemetryMutationBoundaryFixture(): { mcp: unknown } {
+  return JSON.parse(
+    readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", "telemetry-mutation-boundary-contract.json"), "utf8"),
   ) as { mcp: unknown };
 }
 

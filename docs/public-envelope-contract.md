@@ -23,3 +23,5 @@ Warning placement follows the warning contract. Registry rebuild warnings stay i
 Disabled telemetry and orphan telemetry remain excluded from public read and recommendation payloads. Disabled known skills may appear in explicit analysis with excluded status, and disabled or orphan telemetry may appear in explicit telemetry analysis, but they must not leak into default `list`, `search`, `lookup`, `recommend`, or `explain` payloads.
 
 The executable fixture at `tests/fixtures/contracts/public-envelope-contract.json` pins representative CLI and MCP envelope keys, opt-in analysis placement, disabled read exclusions, telemetry analysis visibility, top-level registry warning placement, request warning placement, and recommendation-scoped activation warning placement.
+
+Envelope shape is independent from telemetry mutation, which is pinned separately in `docs/telemetry-mutation-boundary-contract.md`. Default and opt-in read envelopes may include warnings and analysis, but only plain `clew recommend <query>` records included recommendation usage; request-time warnings remain envelope-local.
