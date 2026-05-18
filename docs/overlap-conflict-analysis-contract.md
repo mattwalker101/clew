@@ -28,10 +28,15 @@ Overlap evidence is ordered by evidence scope:
 7. `shared_provider`
 8. `shared_provenance`
 
-Conflict evidence currently contains only `missing_parent`. Future conflict intelligence must stay advisory and recommendation-scoped until a separate contract expands the public surface.
+Conflict evidence is ordered by evidence scope:
+
+1. `missing_parent`
+2. `declared_incompatibility`
+
+`missing_parent` evidence reports unresolved inheritance references from `manifest.extends`. `declared_incompatibility` evidence reports advisory skill incompatibilities from `manifest.compatibility.incompatible_with` only when both skill bundles are present in the analyzed bundle set. One-sided and reciprocal declarations both produce a single bidirectional conflict row. Missing incompatible targets are ignored because incompatibility is advisory metadata, not a dependency contract.
 
 Relationship rows are sorted by `ids.join(":")`. Evidence values are sorted inside each row so bundle discovery order cannot change public output.
 
 CLI `clew overlaps` must keep returning `{ overlaps, warnings }`. CLI `clew conflicts` must keep returning `{ conflicts, warnings }`. MCP recommendation and explanation surfaces must keep top-level registry/request warnings separate from relationship warnings; overlap and conflict warnings belong on affected recommendations as activation warnings.
 
-The executable fixture at `tests/fixtures/contracts/overlap-conflict-analysis-contract.json` pins overlap evidence ordering, conflict evidence ordering, row ordering, relationship shape, advisory classifications, and missing-parent conflict output.
+The executable fixture at `tests/fixtures/contracts/overlap-conflict-analysis-contract.json` pins overlap evidence ordering, conflict evidence ordering, row ordering, relationship shape, advisory classifications, declared incompatibility output, and missing-parent conflict output.

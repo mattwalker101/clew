@@ -26,6 +26,9 @@
         "claude",
         "opencode"
       ],
+      "incompatible_with": [
+        "legacy-workflow-runtime"
+      ],
       "warnings": [
         {
           "code": "tool_semantics_degraded",

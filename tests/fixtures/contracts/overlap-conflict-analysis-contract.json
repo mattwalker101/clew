@@ -103,6 +103,23 @@
   "conflicts": [
     {
       "ids": [
+        "safety-review",
+        "typescript-core"
+      ],
+      "reason": "declared incompatible skill",
+      "classification": "conflicting",
+      "evidence": [
+        {
+          "kind": "declared_incompatibility",
+          "values": [
+            "safety-review",
+            "typescript-core"
+          ]
+        }
+      ]
+    },
+    {
+      "ids": [
         "typescript-refactor",
         "missing-parent"
       ],

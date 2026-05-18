@@ -532,6 +532,10 @@ export function composeSkillWithReport(bundle: SkillBundle, parents: SkillBundle
         ...orderedParents.flatMap((parent) => parent.manifest.compatibility.providers),
         ...input.bundle.manifest.compatibility.providers,
       ]),
+      incompatible_with: unique([
+        ...orderedParents.flatMap((parent) => parent.manifest.compatibility.incompatible_with ?? []),
+        ...(input.bundle.manifest.compatibility.incompatible_with ?? []),
+      ]),
       warnings: [
         ...orderedParents.flatMap((parent) => parent.manifest.compatibility.warnings),
         ...input.bundle.manifest.compatibility.warnings,
@@ -572,7 +576,7 @@ const overlapEvidenceKindOrder = [
   "shared_provenance",
 ] as const;
 
-const conflictEvidenceKindOrder = ["missing_parent"] as const;
+const conflictEvidenceKindOrder = ["missing_parent", "declared_incompatibility"] as const;
 
 export function findOverlaps(bundles: SkillBundle[]): OverlapRelationship[] {
   const overlaps: OverlapRelationship[] = [];
@@ -624,6 +628,7 @@ export function findOverlaps(bundles: SkillBundle[]): OverlapRelationship[] {
 export function findConflicts(bundles: SkillBundle[]): ConflictRelationship[] {
   const conflicts: ConflictRelationship[] = [];
   const byId = new Map(bundles.map((bundle) => [bundle.manifest.id, bundle]));
+  const declaredConflictIds = new Set<string>();
   for (const bundle of bundles) {
     for (const parentId of bundle.manifest.extends) {
       if (!byId.has(parentId)) {
@@ -634,6 +639,19 @@ export function findConflicts(bundles: SkillBundle[]): ConflictRelationship[] {
           evidence: sortEvidence([relationshipEvidence("missing_parent", [parentId])], conflictEvidenceKindOrder),
         });
       }
+    }
+    for (const incompatibleSkillId of bundle.manifest.compatibility.incompatible_with ?? []) {
+      if (!byId.has(incompatibleSkillId)) continue;
+      const ids = [bundle.manifest.id, incompatibleSkillId].sort();
+      const conflictId = ids.join(":");
+      if (declaredConflictIds.has(conflictId)) continue;
+      declaredConflictIds.add(conflictId);
+      conflicts.push({
+        ids,
+        reason: "declared incompatible skill",
+        classification: "conflicting",
+        evidence: sortEvidence([relationshipEvidence("declared_incompatibility", ids)], conflictEvidenceKindOrder),
+      });
     }
   }
   return sortRelationships(conflicts);

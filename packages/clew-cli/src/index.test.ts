@@ -161,6 +161,9 @@ describe("@clew/cli", () => {
         "  file: skill.md",
         "tags:",
         "  - typescript",
+        "compatibility:",
+        "  incompatible_with:",
+        "    - typescript-refactor",
         "provenance:",
         "  source:",
         "    type: github",
@@ -230,6 +233,12 @@ describe("@clew/cli", () => {
     });
     expect(conflictEnvelope).toEqual({
       conflicts: [
+        {
+          ids: ["typescript-core", "typescript-refactor"],
+          reason: "declared incompatible skill",
+          classification: "conflicting",
+          evidence: [{ kind: "declared_incompatibility", values: ["typescript-core", "typescript-refactor"] }],
+        },
         {
           ids: ["typescript-refactor", "missing-parent"],
           reason: "missing parent skill",

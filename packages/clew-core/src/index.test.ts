@@ -35,7 +35,7 @@ function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): S
       description: undefined,
       tags: [],
       capabilities: { required: [], optional: [] },
-      compatibility: { providers: [], warnings: [] },
+      compatibility: { providers: [], warnings: [], incompatible_with: [] },
       preferences: {},
       activation: { triggers: [], tags: [], weight: 1 },
       extends: [],
@@ -86,7 +86,7 @@ describe("@clew/core", () => {
       policies: ["prefer deterministic behavior"],
       activation: { triggers: ["build"], tags: [], weight: 1 },
       capabilities: { required: ["filesystem"], optional: [] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
     });
     const child = bundle("typescript-core", {
       extends: ["engineering-core"],
@@ -94,7 +94,7 @@ describe("@clew/core", () => {
       policies: ["validate runtime inputs"],
       activation: { triggers: ["typescript"], tags: [], weight: 1 },
       capabilities: { required: ["terminal"], optional: [] },
-      compatibility: { providers: ["opencode"], warnings: [] },
+      compatibility: { providers: ["opencode"], incompatible_with: [], warnings: [] },
     });
 
     const composed = composeSkill(child, [parent]);
@@ -233,7 +233,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -275,7 +275,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -412,7 +412,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -540,7 +540,7 @@ describe("@clew/core", () => {
       tags: ["typescript", "refactor"],
       policies: ["preserve public APIs", "prefer small patches"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
       provenance: {
         source: { type: "github", location: "mattpocock/skills", original_id: "refactor" },
         imported_via: { importer: "claude" },
@@ -552,7 +552,7 @@ describe("@clew/core", () => {
       tags: ["typescript", "debugging"],
       policies: ["preserve public APIs"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
       provenance: {
         source: { type: "github", location: "mattpocock/skills", original_id: "debugging" },
         imported_via: { importer: "claude" },
@@ -622,12 +622,31 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("reports declared incompatible skills as deduplicated advisory conflicts", () => {
+    const first = bundle("first", {
+      compatibility: { providers: [], warnings: [], incompatible_with: ["second", "missing"] },
+    });
+    const second = bundle("second", {
+      compatibility: { providers: [], warnings: [], incompatible_with: ["first"] },
+    });
+    const unrelated = bundle("unrelated");
+
+    expect(findConflicts([unrelated, second, first])).toEqual([
+      {
+        ids: ["first", "second"],
+        reason: "declared incompatible skill",
+        classification: "conflicting",
+        evidence: [{ kind: "declared_incompatibility", values: ["first", "second"] }],
+      },
+    ]);
+  });
+
   it("matches the documented overlap/conflict analysis contract fixture", () => {
     const typescriptCore = bundle("typescript-core", {
       tags: ["typescript", "refactor"],
       policies: ["preserve public APIs"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["codex"], warnings: [] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
       provenance: {
         source: { type: "github", location: "mattpocock/skills", original_id: "typescript-core" },
         imported_via: { importer: "claude" },
@@ -639,7 +658,7 @@ describe("@clew/core", () => {
       tags: ["typescript"],
       policies: ["preserve public APIs"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["codex"], warnings: [] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
       provenance: {
         source: { type: "github", location: "mattpocock/skills", original_id: "typescript-refactor" },
         imported_via: { importer: "claude" },
@@ -649,6 +668,7 @@ describe("@clew/core", () => {
     });
     const safetyReview = bundle("safety-review", {
       policies: ["preserve public APIs"],
+      compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-core"] },
     });
     const engineeringCore = bundle("engineering-core");
     const bundles = [typescriptRefactor, safetyReview, engineeringCore, typescriptCore];
@@ -1440,6 +1460,7 @@ describe("@clew/core", () => {
         {
           bundle: bundle("typescript-core", {
             extends: ["missing-parent"],
+            compatibility: { providers: [], warnings: [], incompatible_with: ["debugging-core"] },
             activation: { triggers: ["typescript"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1449,6 +1470,7 @@ describe("@clew/core", () => {
         },
         {
           bundle: bundle("debugging-core", {
+            compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-core"] },
             activation: { triggers: ["debug"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1472,6 +1494,13 @@ describe("@clew/core", () => {
         [
           {
             code: "activation_conflict",
+            message: 'Recommendation has conflicting relationship with "debugging-core": declared incompatible skill. Evidence: declared_incompatibility: debugging-core, typescript-core.',
+            severity: "warning",
+            origin: "activation",
+            field: "debugging-core:typescript-core",
+          },
+          {
+            code: "activation_conflict",
             message: 'Recommendation has conflicting relationship with "missing-parent": missing parent skill. Evidence: missing_parent: missing-parent.',
             severity: "warning",
             origin: "activation",
@@ -1481,7 +1510,15 @@ describe("@clew/core", () => {
       ],
       [
         "debugging-core",
-        [],
+        [
+          {
+            code: "activation_conflict",
+            message: 'Recommendation has conflicting relationship with "typescript-core": declared incompatible skill. Evidence: declared_incompatibility: debugging-core, typescript-core.',
+            severity: "warning",
+            origin: "activation",
+            field: "debugging-core:typescript-core",
+          },
+        ],
       ],
     ]);
   });

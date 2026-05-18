@@ -13,7 +13,7 @@ const bundle: SkillBundle = {
     instructions: { file: "skill.md" },
     tags: [],
     capabilities: { required: ["filesystem"], optional: [] },
-    compatibility: { providers: ["claude"], warnings: [] },
+    compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
     preferences: {},
     activation: { triggers: ["refactor"], tags: [], weight: 1 },
     extends: ["engineering-core"],
