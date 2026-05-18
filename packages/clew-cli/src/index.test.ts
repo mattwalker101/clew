@@ -64,6 +64,12 @@ function publicEnvelopeContractFixture(): { cli: unknown } {
   ) as { cli: unknown };
 }
 
+function telemetryMutationBoundaryFixture(): { cli: unknown } {
+  return JSON.parse(
+    readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "telemetry-mutation-boundary-contract.json"), "utf8"),
+  ) as { cli: unknown };
+}
+
 describe("@clew/cli", () => {
   it("prints read command JSON envelopes with warnings arrays", async () => {
     const projectRoot = createProject();
@@ -785,5 +791,119 @@ describe("@clew/cli", () => {
         disabledRecommend: disabledRecommend.warnings,
       },
     }).toEqual(publicEnvelopeContractFixture().cli);
+  });
+
+  it("matches the documented CLI telemetry mutation boundary contract fixture", async () => {
+    const usageProjectRoot = createProject();
+    const unmatchedRoot = join(usageProjectRoot, "skills", "unmatched-skill");
+    mkdirSync(unmatchedRoot, { recursive: true });
+    writeFileSync(
+      join(unmatchedRoot, "clew.yaml"),
+      [
+        "id: unmatched-skill",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Unmatched Skill",
+        "instructions:",
+        "  file: skill.md",
+        "activation:",
+        "  triggers:",
+        "    - python",
+      ].join("\n"),
+    );
+    writeFileSync(join(unmatchedRoot, "skill.md"), "# Unmatched Skill\n\nUse Python carefully.\n");
+    process.chdir(usageProjectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["recommend", "typescript"]);
+    await main(["telemetry"]);
+
+    const plainRecommend = outputAt(log, 0) as { recommendations: Array<{ skillId: string }> };
+    const usageTelemetry = outputAt(log, 1) as {
+      telemetry: Array<{ skillId: string; usageCount: number }>;
+    };
+    const recordedRecommendationIds = plainRecommend.recommendations.map((recommendation) => recommendation.skillId);
+    const excludedRecommendationIds = usageTelemetry.telemetry
+      .filter((record) => record.usageCount === 0)
+      .map((record) => record.skillId);
+
+    process.chdir(createProject());
+    log.mockClear();
+    await main(["recommend", "--explain", "typescript"]);
+    await main(["explain", "typescript-core", "typescript"]);
+    await main(["search", "typescript"]);
+    await main(["search", "--explain", "typescript"]);
+    await main(["lookup", "typescript-core"]);
+    await main(["telemetry"]);
+    await main(["telemetry", "--explain"]);
+
+    const recommendExplainTelemetry = outputAt(log, 5) as {
+      telemetry: Array<{ skillId: string; usageCount: number }>;
+    };
+
+    const disableProjectRoot = createProject();
+    const manifestPath = join(disableProjectRoot, "skills", "typescript-core", "clew.yaml");
+    const originalManifest = readFileSync(manifestPath, "utf8");
+    process.chdir(disableProjectRoot);
+    log.mockClear();
+    await main(["disable", "typescript-core"]);
+    await main(["telemetry"]);
+    await main(["list"]);
+    await main(["enable", "typescript-core"]);
+    await main(["list"]);
+
+    const disabledTelemetry = outputAt(log, 1) as {
+      telemetry: Array<{ skillId: string; disabled: boolean; usageCount: number }>;
+    };
+    const disabledTelemetryRow = disabledTelemetry.telemetry.find((record) => record.skillId === "typescript-core");
+    const disabledList = outputAt(log, 2) as { skills: Array<{ id: string }> };
+    const reenabledList = outputAt(log, 4) as { skills: Array<{ id: string }> };
+
+    const warningProjectRoot = createProject();
+    process.chdir(warningProjectRoot);
+    writeFileSync(join(warningProjectRoot, "AGENTS.md"), "# Active Skills\n");
+    writeFileSync(join(warningProjectRoot, "package.json"), JSON.stringify({}));
+    log.mockClear();
+    await main(["lookup", "missing-skill"]);
+    await main(["explain", "typescript-core", "unrelated"]);
+    await main(["disable", "typescript-core"]);
+    await main(["lookup", "typescript-core"]);
+    await main(["telemetry"]);
+
+    const lookupMissing = outputAt(log, 0) as { warnings: Array<{ code: string }> };
+    const explainUnrecommended = outputAt(log, 1) as { warnings: Array<{ code: string }> };
+    const lookupDisabled = outputAt(log, 3) as { warnings: Array<{ code: string }> };
+    const warningTelemetry = outputAt(log, 4) as { warnings: Array<{ code: string }> };
+
+    expect({
+      usageRecording: {
+        plainRecommendUsageCount:
+          usageTelemetry.telemetry.find((record) => record.skillId === "typescript-core")?.usageCount ?? 0,
+        recommendExplainUsageCount:
+          recommendExplainTelemetry.telemetry.find((record) => record.skillId === "typescript-core")?.usageCount ?? 0,
+        nonMutatingCommandsUsageCount:
+          recommendExplainTelemetry.telemetry.find((record) => record.skillId === "typescript-core")?.usageCount ?? 0,
+        recordedRecommendationIds,
+        excludedRecommendationIds,
+      },
+      disableEnable: {
+        disabledTelemetryRow: disabledTelemetryRow
+          ? {
+              skillId: disabledTelemetryRow.skillId,
+              disabled: disabledTelemetryRow.disabled,
+              usageCount: disabledTelemetryRow.usageCount,
+            }
+          : undefined,
+        disabledListSkillIds: disabledList.skills.map((skill) => skill.id),
+        reenabledListSkillIds: reenabledList.skills.map((skill) => skill.id),
+        filesystemManifestUnchanged: readFileSync(manifestPath, "utf8") === originalManifest,
+      },
+      requestWarnings: {
+        lookupMissingWarningCodes: lookupMissing.warnings.map((warning) => warning.code),
+        lookupDisabledWarningCodes: lookupDisabled.warnings.map((warning) => warning.code),
+        explainUnrecommendedWarningCodes: explainUnrecommended.warnings.map((warning) => warning.code),
+        persistedRegistryWarningCodes: warningTelemetry.warnings.map((warning) => warning.code),
+      },
+    }).toEqual(telemetryMutationBoundaryFixture().cli);
   });
 });
