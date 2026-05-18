@@ -319,7 +319,7 @@ describe("@clew/mcp", () => {
   it("exposes overlap and conflict warnings on recommend and explain recommendations", () => {
     const bridge = createClewMcpBridge(
       registryWith(
-        entry("safe-refactor", { triggers: ["refactor"], tags: ["refactor"] }),
+        entry("safe-refactor", { triggers: ["refactor"], tags: ["refactor"], incompatibleWith: ["incremental-refactor"] }),
         entry("incremental-refactor", { triggers: ["refactor"], tags: ["refactor"] }),
         entry("typescript-core", { triggers: ["typescript"], extends: ["missing-parent"] }),
       ),
@@ -349,11 +349,20 @@ describe("@clew/mcp", () => {
               message:
                 'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor.',
             },
+            {
+              code: "activation_conflict",
+              origin: "activation",
+              message:
+                'Recommendation has conflicting relationship with "safe-refactor": declared incompatible skill. Evidence: declared_incompatibility: incremental-refactor, safe-refactor.',
+            },
           ],
         },
         {
           skillId: "safe-refactor",
-          warnings: [{ code: "activation_overlap", origin: "activation" }],
+          warnings: [
+            { code: "activation_overlap", origin: "activation" },
+            { code: "activation_conflict", origin: "activation" },
+          ],
         },
       ],
     });
@@ -481,6 +490,7 @@ function entry(
     weight?: number;
     requiredCapabilities?: Array<"filesystem" | "terminal" | "internet" | "git" | "mcp">;
     extends?: string[];
+    incompatibleWith?: string[];
   } = {},
 ): RegistryEntry {
   return {
@@ -493,7 +503,7 @@ function entry(
         instructions: { file: "skill.md" },
         tags: options.tags ?? [id],
         capabilities: { required: options.requiredCapabilities ?? [], optional: [] },
-        compatibility: { providers: [], warnings: [] },
+        compatibility: { providers: [], warnings: [], incompatible_with: options.incompatibleWith ?? [] },
         preferences: {},
         activation: { triggers: options.triggers ?? ["build"], tags: [], weight: options.weight ?? 1 },
         extends: options.extends ?? [],
