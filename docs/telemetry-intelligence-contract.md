@@ -10,10 +10,10 @@ The analysis result contains:
 - `disabled`, `favorite`, `usageCount`, and optional `lastUsed`.
 - `evidence`: explicit telemetry evidence rows for orphan state, disabled state, favorite state, usage count, and last-used timestamp.
 
-Disabled known skills and orphan telemetry rows are visible in telemetry analysis. They remain excluded from `list`, `lookup`, `search`, `analyzeSearch`, and `recommend` eligibility.
+Disabled known skills and orphan telemetry rows are visible in telemetry analysis. They remain excluded from `list`, `lookup`, `search`, `analyzeSearch`, `recommend`, and `explain` public read surfaces.
 
-Recommendation telemetry is conservative and additive. Favorite and usage evidence may add small deterministic boosts only after normal activation evidence has already produced a recommendation. Telemetry alone must not recommend a skill. Telemetry recommendation signals use `telemetry_favorite` and `telemetry_usage`, with matching human-readable reasons.
+Recommendation telemetry is conservative and additive. Favorite and usage evidence may add small deterministic boosts only after normal activation evidence has already produced an enabled recommendation candidate. Telemetry alone must not recommend a skill. Disabled skill telemetry and orphan telemetry remain telemetry-analysis evidence only; they must not create activation boost components, registry entries, or public recommendation/read-surface results. Telemetry recommendation signals use `telemetry_favorite` and `telemetry_usage`, with matching human-readable reasons.
 
 `clew telemetry` remains the compatibility surface for raw persisted telemetry rows and top-level registry rebuild warnings. `clew telemetry --explain` and MCP `analyzeTelemetry()` expose the analysis result explicitly. Registry rebuild warnings stay in top-level `warnings`; recommendation warnings stay on affected recommendation objects.
 
-The executable fixture at `tests/fixtures/contracts/telemetry-analysis-contract.json` pins the public result shape and representative evidence ordering.
+The executable fixture at `tests/fixtures/contracts/telemetry-analysis-contract.json` pins the public result shape and representative evidence ordering. The executable fixture at `tests/fixtures/contracts/activation-telemetry-boundary-contract.json` pins telemetry's boundary with activation and public read surfaces.

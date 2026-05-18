@@ -1053,6 +1053,7 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
   const components: SkillActivationScoreComponent[] = [];
   const queryTerms = normalizeTerms(context.query);
   const agentsActiveSkillIds = unique([...context.activeSkillIds, ...parseAgentsMd(context.agentsMd).activeSkillIds]);
+  const enabled = !entry.disabled;
 
   for (const trigger of bundle.manifest.activation.triggers) {
     if (queryTerms.includes(normalize(trigger))) {
@@ -1087,7 +1088,7 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
       });
     }
   }
-  if (components.length) {
+  if (enabled && components.length) {
     if (entry.favorite) {
       components.push({ kind: "telemetry_favorite", value: "true", points: 1, reason: "favorite skill" });
     }
@@ -1103,7 +1104,6 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
   }
   const score = components.reduce((sum, component) => sum + component.points, 0);
   const reasons = unique(components.map((component) => component.reason));
-  const enabled = !entry.disabled;
   const status: SkillActivationCandidateStatus = enabled && score > 0 && reasons.length > 0 ? "included" : "excluded";
   const exclusions: SkillActivationExclusion[] = [];
   const warnings: CompatibilityWarning[] = status === "included" ? [...bundle.manifest.compatibility.warnings] : [];

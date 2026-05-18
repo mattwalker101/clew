@@ -1383,6 +1383,76 @@ describe("@clew/core", () => {
     ).toEqual(contractFixture("activation-analysis-contract.json"));
   });
 
+  it("matches the documented activation and telemetry boundary contract fixture", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("matched-boosted-skill", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 4,
+        },
+        {
+          bundle: bundle("telemetry-only-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: true,
+          usageCount: 9,
+        },
+        {
+          bundle: bundle("disabled-matched-skill", {
+            tags: ["typescript"],
+            activation: { triggers: ["typescript"], tags: [], weight: 1 },
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: true,
+          usageCount: 6,
+        },
+      ],
+      warnings: [],
+    });
+    const engine = new ActivationEngine(registry);
+    const context = { query: "typescript", tags: ["typescript"], capabilities: [] };
+    const orphanTelemetry = [
+      {
+        skillId: "orphan-telemetry-skill",
+        usageCount: 3,
+        lastUsed: "2026-05-18T12:00:00.000Z",
+        disabled: false,
+        favorite: true,
+      },
+    ];
+
+    expect(
+      JSON.parse(
+        JSON.stringify({
+          activation: engine.analyzeRecommendations(context),
+          recommend: engine.recommend(context),
+          explainMatched: engine.explain("matched-boosted-skill", context),
+          explainTelemetryOnly: engine.explain("telemetry-only-skill", context),
+          explainDisabledMatched: engine.explain("disabled-matched-skill", context),
+          telemetry: registry.analyzeTelemetry(orphanTelemetry),
+          publicReadSurfaces: {
+            list: registry.list().map((skill) => skill.manifest.id),
+            lookupDisabledMatched: registry.lookup("disabled-matched-skill")?.manifest.id,
+            lookupOrphanTelemetry: registry.lookup("orphan-telemetry-skill")?.manifest.id,
+            searchTypescript: registry.search("typescript").map((skill) => skill.manifest.id),
+            analyzeSearchTypescript: registry.analyzeSearch("typescript").matches.map((match) => match.skillId),
+          },
+          registryWarnings: registry.warnings,
+        }),
+      ),
+    ).toEqual(contractFixture("activation-telemetry-boundary-contract.json"));
+  });
+
   it("detects repository signals and explains repo heuristic matches", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ devDependencies: { typescript: "latest" } }));
