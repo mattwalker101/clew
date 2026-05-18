@@ -1,0 +1,121 @@
+{
+  "overlaps": [
+    {
+      "ids": [
+        "safety-review",
+        "typescript-core"
+      ],
+      "triggers": [],
+      "tags": [],
+      "classification": "complementary",
+      "evidence": [
+        {
+          "kind": "shared_policy",
+          "values": [
+            "preserve public APIs"
+          ]
+        }
+      ]
+    },
+    {
+      "ids": [
+        "safety-review",
+        "typescript-refactor"
+      ],
+      "triggers": [],
+      "tags": [],
+      "classification": "complementary",
+      "evidence": [
+        {
+          "kind": "shared_policy",
+          "values": [
+            "preserve public APIs"
+          ]
+        }
+      ]
+    },
+    {
+      "ids": [
+        "typescript-core",
+        "typescript-refactor"
+      ],
+      "triggers": [
+        "typescript"
+      ],
+      "tags": [
+        "typescript"
+      ],
+      "classification": "redundant",
+      "evidence": [
+        {
+          "kind": "shared_trigger",
+          "values": [
+            "typescript"
+          ]
+        },
+        {
+          "kind": "shared_tag",
+          "values": [
+            "typescript"
+          ]
+        },
+        {
+          "kind": "shared_policy",
+          "values": [
+            "preserve public APIs"
+          ]
+        },
+        {
+          "kind": "shared_required_capability",
+          "values": [
+            "filesystem"
+          ]
+        },
+        {
+          "kind": "shared_optional_capability",
+          "values": [
+            "git"
+          ]
+        },
+        {
+          "kind": "common_parent",
+          "values": [
+            "engineering-core"
+          ]
+        },
+        {
+          "kind": "shared_provider",
+          "values": [
+            "codex"
+          ]
+        },
+        {
+          "kind": "shared_provenance",
+          "values": [
+            "claude",
+            "github",
+            "mattpocock/skills"
+          ]
+        }
+      ]
+    }
+  ],
+  "conflicts": [
+    {
+      "ids": [
+        "typescript-refactor",
+        "missing-parent"
+      ],
+      "reason": "missing parent skill",
+      "classification": "conflicting",
+      "evidence": [
+        {
+          "kind": "missing_parent",
+          "values": [
+            "missing-parent"
+          ]
+        }
+      ]
+    }
+  ]
+}

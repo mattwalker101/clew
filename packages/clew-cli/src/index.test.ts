@@ -207,7 +207,12 @@ describe("@clew/cli", () => {
     await main(["overlaps"]);
     await main(["conflicts"]);
 
-    expect(outputAt(log, 0)).toEqual({
+    const overlapEnvelope = outputAt(log, 0);
+    const conflictEnvelope = outputAt(log, 1);
+
+    expect(Object.keys(overlapEnvelope as Record<string, unknown>)).toEqual(["overlaps", "warnings"]);
+    expect(Object.keys(conflictEnvelope as Record<string, unknown>)).toEqual(["conflicts", "warnings"]);
+    expect(overlapEnvelope).toEqual({
       overlaps: [
         {
           ids: ["typescript-core", "typescript-refactor"],
@@ -223,7 +228,7 @@ describe("@clew/cli", () => {
       ],
       warnings: [],
     });
-    expect(outputAt(log, 1)).toEqual({
+    expect(conflictEnvelope).toEqual({
       conflicts: [
         {
           ids: ["typescript-refactor", "missing-parent"],
