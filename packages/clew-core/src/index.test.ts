@@ -167,6 +167,70 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("matches the documented additive composition contract fixture", () => {
+    const engineering = bundle("engineering-core", {
+      tags: ["engineering"],
+      policies: ["prefer deterministic behavior"],
+      activation: { triggers: ["build"], tags: ["core"], weight: 1 },
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
+    });
+    const safeEditing = bundle("safe-editing", {
+      tags: ["safety"],
+      policies: ["preserve public interfaces"],
+      activation: { triggers: ["review"], tags: ["safety"], weight: 1 },
+      capabilities: { required: ["terminal"], optional: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
+    });
+    const unrelated = bundle("debugging-core", {
+      tags: ["debugging"],
+      policies: ["explain failures"],
+    });
+    const child = bundle("typescript-core", {
+      extends: ["safe-editing", "engineering-core", "missing-parent"],
+      tags: ["typescript", "engineering"],
+      policies: ["validate runtime inputs", "preserve public interfaces"],
+      activation: { triggers: ["typescript", "build"], tags: ["ts"], weight: 2 },
+      capabilities: { required: ["terminal"], optional: ["git"] },
+      compatibility: { providers: ["opencode"], incompatible_with: [], warnings: [] },
+    });
+
+    const directReport = composeSkillWithReport(child, [engineering, unrelated, safeEditing]);
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: child, layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("safe-editing", { tags: ["session-safety"] }), layer: "session", root: "session", disabled: false, favorite: false },
+        { bundle: safeEditing, layer: "global", root: "global", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["session-engineering"] }), layer: "session", root: "session", disabled: false, favorite: false },
+        { bundle: engineering, layer: "global", root: "global", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+    const registryReport = composeRegistrySkillWithReport(registry, "typescript-core");
+    const disabledRegistry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("disabled-child", { extends: ["disabled-parent"], tags: ["child"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("disabled-parent", { tags: ["parent"] }), layer: "session", root: "session", disabled: true, favorite: false },
+      ],
+      warnings: [],
+    });
+    const disabledParentReport = composeRegistrySkillWithReport(disabledRegistry, "disabled-child");
+
+    expect(compositionResultSchema.parse(directReport)).toEqual(directReport);
+    expect(compositionResultSchema.parse(registryReport)).toEqual(registryReport);
+    expect(compositionResultSchema.parse(disabledParentReport)).toEqual(disabledParentReport);
+    expect(
+      JSON.parse(
+        JSON.stringify({
+          direct: directReport,
+          registryHighestPrecedence: registryReport,
+          disabledParent: disabledParentReport,
+          registryWarnings: disabledRegistry.warnings,
+        }),
+      ),
+    ).toEqual(contractFixture("composition-resolution-contract.json"));
+  });
+
   it("composes registry skills with the highest-precedence resolved parent", () => {
     const registry = new SkillRegistry({
       entries: [
