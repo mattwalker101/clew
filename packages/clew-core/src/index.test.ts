@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1898,6 +1898,140 @@ describe("@clew/core", () => {
     }
   });
 
+  it("matches the documented SQLite registry rebuildability contract fixture", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillsRoot = join(projectRoot, "skills");
+    const dbPath = join(projectRoot, ".clew-registry.db");
+    writeFilesystemBundle(join(skillsRoot, "alpha-skill"), {
+      id: "alpha-skill",
+      kind: "instruction_skill",
+      name: "Alpha Skill",
+      instructions: "Use the shared refactor skill.",
+    });
+    writeFilesystemBundle(join(skillsRoot, "beta-skill"), {
+      id: "beta-skill",
+      kind: "instruction_skill",
+      name: "Beta Skill",
+      instructions: "Use the shared refactor skill.",
+    });
+    writeFilesystemBundle(join(skillsRoot, "missing-parent-child"), {
+      id: "missing-parent-child",
+      kind: "instruction_skill",
+      name: "Missing Parent Child",
+      instructions: "Declares a missing parent for conflict analysis.",
+    });
+    writeFilesystemBundle(join(skillsRoot, "future-kind"), {
+      id: "future-kind",
+      kind: "workflow_skill",
+      name: "Future Kind",
+      instructions: "Reserved for a later runtime contract.",
+    });
+    writeFileSync(
+      join(skillsRoot, "alpha-skill", "clew.yaml"),
+      [
+        "id: alpha-skill",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Alpha Skill",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - shared",
+        "activation:",
+        "  triggers:",
+        "    - refactor",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(skillsRoot, "beta-skill", "clew.yaml"),
+      [
+        "id: beta-skill",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Beta Skill",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - shared",
+        "activation:",
+        "  triggers:",
+        "    - refactor",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(skillsRoot, "missing-parent-child", "clew.yaml"),
+      [
+        "id: missing-parent-child",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Missing Parent Child",
+        "instructions:",
+        "  file: skill.md",
+        "extends:",
+        "  - missing-parent",
+      ].join("\n"),
+    );
+
+    const firstSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const firstDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
+    const db = openRegistryDb(dbPath);
+    try {
+      db.setSkillDisabled("alpha-skill", true);
+      db.setSkillFavorite("beta-skill", true);
+    } finally {
+      db.close();
+    }
+    const telemetryDb = openNodeSqliteDatabase(dbPath);
+    telemetryDb.exec(`
+      UPDATE telemetry
+      SET usage_count = 3, last_used = '2026-05-18T12:00:00.000Z'
+      WHERE skill_id = 'alpha-skill';
+      UPDATE telemetry
+      SET usage_count = 2
+      WHERE skill_id = 'beta-skill';
+    `);
+    telemetryDb.close();
+
+    const secondSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const secondDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
+    const preservedDb = openRegistryDb(dbPath);
+    const preservedTelemetry = preservedDb.listTelemetry();
+    const preservedWarnings = preservedDb.listRegistryWarnings();
+    preservedDb.close();
+
+    unlinkIfExists(dbPath);
+    unlinkIfExists(`${dbPath}-wal`);
+    unlinkIfExists(`${dbPath}-shm`);
+
+    const deletedDbSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const deletedDbDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
+    const recreatedDb = openRegistryDb(dbPath);
+    const recreatedTelemetry = recreatedDb.listTelemetry();
+    const recreatedWarnings = recreatedDb.listRegistryWarnings();
+    recreatedDb.close();
+
+    const contract = {
+      firstRebuild: {
+        snapshot: summarizeSnapshot(firstSnapshot, projectRoot),
+        derivedRows: firstDerivedRows,
+      },
+      secondRebuildWithTelemetry: {
+        snapshot: summarizeSnapshot(secondSnapshot, projectRoot),
+        derivedRows: secondDerivedRows,
+        persistedWarnings: preservedWarnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        telemetry: preservedTelemetry,
+      },
+      afterDatabaseDeletion: {
+        snapshot: summarizeSnapshot(deletedDbSnapshot, projectRoot),
+        derivedRows: deletedDbDerivedRows,
+        persistedWarnings: recreatedWarnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        telemetry: recreatedTelemetry,
+      },
+    };
+
+    expect(contract).toEqual(contractFixture("registry-rebuildability-contract.json"));
+  });
+
   it("rebuilds registry indexes with valid bundles and invalid bundle warnings", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const validRoot = join(projectRoot, "skills", "valid-skill");
@@ -1952,10 +2086,121 @@ describe("@clew/core", () => {
   });
 });
 
-function openNodeSqliteDatabase(dbPath: string): { exec(sql: string): void; close(): void } {
+function summarizeSnapshot(snapshot: ReturnType<typeof rebuildRegistryIndex>, projectRoot: string): unknown {
+  return {
+    entries: snapshot.entries.map((entry) => ({
+      skillId: entry.bundle.manifest.id,
+      layer: entry.layer,
+      root: entry.root.slice(projectRoot.length + 1),
+      disabled: entry.disabled,
+      favorite: entry.favorite,
+      usageCount: entry.usageCount,
+      ...(entry.lastUsed ? { lastUsed: entry.lastUsed } : {}),
+    })),
+    warnings: snapshot.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+  };
+}
+
+function readSqliteRegistryRows(dbPath: string, projectRoot: string): unknown {
+  const db = openNodeSqliteDatabase(dbPath);
+  try {
+    const skills = db
+      .prepare("SELECT id, layer, root, version, name, disabled, favorite FROM skills ORDER BY id")
+      .all()
+      .map((row) => {
+        const skill = row as {
+          id: string;
+          layer: string;
+          root: string;
+          version: string;
+          name: string;
+          disabled: number;
+          favorite: number;
+        };
+        return {
+          id: skill.id,
+          layer: skill.layer,
+          root: skill.root.slice(projectRoot.length + 1),
+          version: skill.version,
+          name: skill.name,
+          disabled: skill.disabled === 1,
+          favorite: skill.favorite === 1,
+        };
+      });
+    const overlaps = db
+      .prepare("SELECT id, left_skill_id, right_skill_id, triggers_json, tags_json FROM overlaps ORDER BY id")
+      .all()
+      .map((row) => {
+        const overlap = row as {
+          id: string;
+          left_skill_id: string;
+          right_skill_id: string;
+          triggers_json: string;
+          tags_json: string;
+        };
+        return {
+          id: overlap.id,
+          leftSkillId: overlap.left_skill_id,
+          rightSkillId: overlap.right_skill_id,
+          triggers: JSON.parse(overlap.triggers_json) as unknown,
+          tags: JSON.parse(overlap.tags_json) as unknown,
+        };
+      });
+    const conflicts = db
+      .prepare("SELECT id, left_skill_id, right_skill_id, reason FROM conflicts ORDER BY id")
+      .all()
+      .map((row) => {
+        const conflict = row as { id: string; left_skill_id: string; right_skill_id: string; reason: string };
+        return {
+          id: conflict.id,
+          leftSkillId: conflict.left_skill_id,
+          rightSkillId: conflict.right_skill_id,
+          reason: conflict.reason,
+        };
+      });
+    const warnings = db
+      .prepare("SELECT position, code, severity, field, message, provider FROM registry_warnings ORDER BY position")
+      .all()
+      .map((row) => {
+        const warning = row as {
+          position: number;
+          code: string;
+          severity: string;
+          field: string | null;
+          message: string;
+          provider: string | null;
+        };
+        return {
+          position: warning.position,
+          code: warning.code,
+          severity: warning.severity,
+          ...(warning.field ? { field: warning.field.slice(projectRoot.length + 1) } : {}),
+          message: warning.message,
+          ...(warning.provider ? { provider: warning.provider } : {}),
+        };
+      });
+    return { skills, overlaps, conflicts, warnings };
+  } finally {
+    db.close();
+  }
+}
+
+function unlinkIfExists(path: string): void {
+  if (existsSync(path)) unlinkSync(path);
+}
+
+function openNodeSqliteDatabase(dbPath: string): {
+  exec(sql: string): void;
+  prepare(sql: string): { all(): unknown[] };
+  close(): void;
+} {
   const require = createRequire(import.meta.url);
   const sqlite = require("node:sqlite") as {
-    DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void };
+    DatabaseSync: new (path: string) => {
+      exec(sql: string): void;
+      prepare(sql: string): { all(): unknown[] };
+      close(): void;
+    };
   };
   return new sqlite.DatabaseSync(dbPath);
 }

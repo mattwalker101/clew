@@ -1,0 +1,362 @@
+{
+  "firstRebuild": {
+    "snapshot": {
+      "entries": [
+        {
+          "skillId": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        },
+        {
+          "skillId": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        },
+        {
+          "skillId": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        }
+      ],
+      "warnings": [
+        {
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "origin": "registry_rebuild",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    },
+    "derivedRows": {
+      "skills": [
+        {
+          "id": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Alpha Skill",
+          "disabled": false,
+          "favorite": false
+        },
+        {
+          "id": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Beta Skill",
+          "disabled": false,
+          "favorite": false
+        },
+        {
+          "id": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Missing Parent Child",
+          "disabled": false,
+          "favorite": false
+        }
+      ],
+      "overlaps": [
+        {
+          "id": "alpha-skill:beta-skill",
+          "leftSkillId": "alpha-skill",
+          "rightSkillId": "beta-skill",
+          "triggers": [
+            "refactor"
+          ],
+          "tags": [
+            "shared"
+          ]
+        }
+      ],
+      "conflicts": [
+        {
+          "id": "missing-parent-child:missing-parent",
+          "leftSkillId": "missing-parent-child",
+          "rightSkillId": "missing-parent",
+          "reason": "missing parent skill"
+        }
+      ],
+      "warnings": [
+        {
+          "position": 0,
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    }
+  },
+  "secondRebuildWithTelemetry": {
+    "snapshot": {
+      "entries": [
+        {
+          "skillId": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": true,
+          "favorite": false,
+          "usageCount": 3,
+          "lastUsed": "2026-05-18T12:00:00.000Z"
+        },
+        {
+          "skillId": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": true,
+          "usageCount": 2
+        },
+        {
+          "skillId": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        }
+      ],
+      "warnings": [
+        {
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "origin": "registry_rebuild",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    },
+    "derivedRows": {
+      "skills": [
+        {
+          "id": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Alpha Skill",
+          "disabled": true,
+          "favorite": false
+        },
+        {
+          "id": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Beta Skill",
+          "disabled": false,
+          "favorite": true
+        },
+        {
+          "id": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Missing Parent Child",
+          "disabled": false,
+          "favorite": false
+        }
+      ],
+      "overlaps": [
+        {
+          "id": "alpha-skill:beta-skill",
+          "leftSkillId": "alpha-skill",
+          "rightSkillId": "beta-skill",
+          "triggers": [
+            "refactor"
+          ],
+          "tags": [
+            "shared"
+          ]
+        }
+      ],
+      "conflicts": [
+        {
+          "id": "missing-parent-child:missing-parent",
+          "leftSkillId": "missing-parent-child",
+          "rightSkillId": "missing-parent",
+          "reason": "missing parent skill"
+        }
+      ],
+      "warnings": [
+        {
+          "position": 0,
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    },
+    "persistedWarnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ],
+    "telemetry": [
+      {
+        "skillId": "alpha-skill",
+        "usageCount": 3,
+        "lastUsed": "2026-05-18T12:00:00.000Z",
+        "disabled": true,
+        "favorite": false
+      },
+      {
+        "skillId": "beta-skill",
+        "usageCount": 2,
+        "disabled": false,
+        "favorite": true
+      },
+      {
+        "skillId": "missing-parent-child",
+        "usageCount": 0,
+        "disabled": false,
+        "favorite": false
+      }
+    ]
+  },
+  "afterDatabaseDeletion": {
+    "snapshot": {
+      "entries": [
+        {
+          "skillId": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        },
+        {
+          "skillId": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        },
+        {
+          "skillId": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "disabled": false,
+          "favorite": false,
+          "usageCount": 0
+        }
+      ],
+      "warnings": [
+        {
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "origin": "registry_rebuild",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    },
+    "derivedRows": {
+      "skills": [
+        {
+          "id": "alpha-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Alpha Skill",
+          "disabled": false,
+          "favorite": false
+        },
+        {
+          "id": "beta-skill",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Beta Skill",
+          "disabled": false,
+          "favorite": false
+        },
+        {
+          "id": "missing-parent-child",
+          "layer": "project",
+          "root": "skills",
+          "version": "1.0.0",
+          "name": "Missing Parent Child",
+          "disabled": false,
+          "favorite": false
+        }
+      ],
+      "overlaps": [
+        {
+          "id": "alpha-skill:beta-skill",
+          "leftSkillId": "alpha-skill",
+          "rightSkillId": "beta-skill",
+          "triggers": [
+            "refactor"
+          ],
+          "tags": [
+            "shared"
+          ]
+        }
+      ],
+      "conflicts": [
+        {
+          "id": "missing-parent-child:missing-parent",
+          "leftSkillId": "missing-parent-child",
+          "rightSkillId": "missing-parent",
+          "reason": "missing parent skill"
+        }
+      ],
+      "warnings": [
+        {
+          "position": 0,
+          "code": "skill_bundle_invalid",
+          "severity": "error",
+          "field": "skills/future-kind",
+          "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+        }
+      ]
+    },
+    "persistedWarnings": [
+      {
+        "code": "skill_bundle_invalid",
+        "severity": "error",
+        "origin": "registry_rebuild",
+        "field": "skills/future-kind",
+        "message": "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'"
+      }
+    ],
+    "telemetry": [
+      {
+        "skillId": "alpha-skill",
+        "usageCount": 0,
+        "disabled": false,
+        "favorite": false
+      },
+      {
+        "skillId": "beta-skill",
+        "usageCount": 0,
+        "disabled": false,
+        "favorite": false
+      },
+      {
+        "skillId": "missing-parent-child",
+        "usageCount": 0,
+        "disabled": false,
+        "favorite": false
+      }
+    ]
+  }
+}
