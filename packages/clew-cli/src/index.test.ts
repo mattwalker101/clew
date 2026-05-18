@@ -149,6 +149,30 @@ describe("@clew/cli", () => {
 
   it("prints enriched overlap and conflict rows inside stable envelopes", async () => {
     const projectRoot = createProject();
+    const baseRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(baseRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "provenance:",
+        "  source:",
+        "    type: github",
+        "    location: mattpocock/skills",
+        "    original_id: typescript-core",
+        "  imported_via:",
+        "    importer: claude",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+      ].join("\n"),
+    );
     const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
     mkdirSync(pairedRoot, { recursive: true });
     writeFileSync(
@@ -162,6 +186,13 @@ describe("@clew/cli", () => {
         "  file: skill.md",
         "tags:",
         "  - typescript",
+        "provenance:",
+        "  source:",
+        "    type: github",
+        "    location: mattpocock/skills",
+        "    original_id: typescript-refactor",
+        "  imported_via:",
+        "    importer: claude",
         "activation:",
         "  triggers:",
         "    - typescript",
@@ -186,6 +217,7 @@ describe("@clew/cli", () => {
           evidence: [
             { kind: "shared_trigger", values: ["typescript"] },
             { kind: "shared_tag", values: ["typescript"] },
+            { kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] },
           ],
         },
       ],
