@@ -252,7 +252,7 @@ export function parseAgentsMd(content: string): { activeSkillIds: string[]; pref
       const match = line.match(/^-\s+`?([a-z0-9._-]+)`?/i);
       if (match?.[1]) active.push(match[1]);
     }
-    if (/prefer|avoid|must|should|local-first|deterministic|explainable/i.test(line)) {
+    if (!/^#+\s+/.test(line) && /prefer|avoid|must|should|local-first|deterministic|explainable/i.test(line)) {
       preferences.push(line);
     }
   }
