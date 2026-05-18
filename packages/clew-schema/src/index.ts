@@ -373,11 +373,7 @@ export function validateSkillBundle(input: unknown): ValidationResult {
 
   return {
     ok: false,
-    errors: parsed.error.issues.map((issue) => ({
-      path: issue.path.join(".") || "bundle",
-      code: issue.code,
-      message: issue.message,
-    })),
+    errors: parsed.error.issues.map((issue) => normalizeValidationIssue(issue, input)),
     warnings: [],
   };
 }
@@ -390,4 +386,50 @@ export function parseSkillBundle(input: unknown): SkillBundle {
 
 export function formatValidationIssue(issue: ValidationIssue): string {
   return `${issue.path} [${issue.code}]: ${issue.message}`;
+}
+
+function normalizeValidationIssue(issue: z.ZodIssue, input: unknown): ValidationIssue {
+  const path = issue.path.join(".") || "bundle";
+  const value = getPathValue(input, issue.path);
+
+  if (issue.code === "too_small" && issue.minimum === 1 && issue.origin === "string") {
+    return {
+      path,
+      code: issue.code,
+      message: "String must contain at least 1 character(s)",
+    };
+  }
+
+  if (issue.code === "invalid_value") {
+    if (path === "manifest.kind") {
+      return {
+        path,
+        code: "invalid_enum_value",
+        message: `Invalid enum value. Expected 'instruction_skill', received '${String(value)}'`,
+      };
+    }
+
+    if (path.startsWith("manifest.capabilities.")) {
+      return {
+        path,
+        code: "invalid_enum_value",
+        message: `Invalid enum value. Expected ${coreCapabilities.map((capability) => `'${capability}'`).join(" | ")}, received '${String(value)}'`,
+      };
+    }
+  }
+
+  return {
+    path,
+    code: issue.code,
+    message: issue.message,
+  };
+}
+
+function getPathValue(input: unknown, path: PropertyKey[]): unknown {
+  let current = input;
+  for (const segment of path) {
+    if (typeof current !== "object" || current === null) return undefined;
+    current = (current as Record<PropertyKey, unknown>)[segment];
+  }
+  return current;
 }
