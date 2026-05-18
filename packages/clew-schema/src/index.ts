@@ -76,9 +76,10 @@ export const instructionsSchema = z.object({
 export const compatibilitySchema = z
   .object({
     providers: stringArraySchema,
+    incompatible_with: stringArraySchema,
     warnings: z.array(compatibilityWarningSchema).default([]),
   })
-  .default({ providers: [], warnings: [] });
+  .default({ providers: [], incompatible_with: [], warnings: [] });
 
 export const preferencesSchema = z
   .object({

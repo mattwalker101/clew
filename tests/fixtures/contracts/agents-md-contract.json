@@ -1,0 +1,33 @@
+{
+  "content": "# Project Guide\n\nPrefer local-first deterministic behavior.\n\n## Active Skills\n\n- engineering-core\n- `safe-editing`\n- missing-skill\n- safe-editing\n\n## Runtime Preferences\n\n- Avoid hidden activation.\n- Must explain degradation warnings.\n- Should preserve filesystem bundles as canonical truth.\n- Prefer local-first deterministic behavior.\n",
+  "parsed": {
+    "activeSkillIds": [
+      "engineering-core",
+      "safe-editing",
+      "missing-skill"
+    ],
+    "preferences": [
+      "Prefer local-first deterministic behavior.",
+      "- Avoid hidden activation.",
+      "- Must explain degradation warnings.",
+      "- Should preserve filesystem bundles as canonical truth.",
+      "- Prefer local-first deterministic behavior."
+    ]
+  },
+  "diagnostics": [
+    {
+      "code": "agents_skill_disabled",
+      "origin": "agents_diagnostic",
+      "field": "AGENTS.md",
+      "message": "AGENTS.md references disabled skill \"safe-editing\".",
+      "severity": "warning"
+    },
+    {
+      "code": "agents_skill_unknown",
+      "origin": "agents_diagnostic",
+      "field": "AGENTS.md",
+      "message": "AGENTS.md references unknown skill \"missing-skill\".",
+      "severity": "warning"
+    }
+  ]
+}

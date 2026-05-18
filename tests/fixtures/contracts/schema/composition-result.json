@@ -21,6 +21,7 @@
       },
       "compatibility": {
         "providers": [],
+        "incompatible_with": [],
         "warnings": []
       },
       "preferences": {},

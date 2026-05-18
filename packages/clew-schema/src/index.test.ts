@@ -54,7 +54,7 @@ describe("@clew/schema", () => {
       manifest: {
         tags: [],
         capabilities: { required: [], optional: [] },
-        compatibility: { providers: [], warnings: [] },
+        compatibility: { providers: [], warnings: [], incompatible_with: [] },
         preferences: {},
         activation: { triggers: [], tags: [], weight: 1 },
         extends: [],
@@ -82,6 +82,7 @@ describe("@clew/schema", () => {
         severity: "warning",
       },
     ]);
+    expect(bundle.manifest.compatibility.incompatible_with).toEqual(["legacy-workflow-runtime"]);
     expect(bundle.manifest.extensions).toMatchObject({
       claude: { slash_command: "/interop-core" },
       opencode: { agent_mode: "safe" },
@@ -140,6 +141,26 @@ describe("@clew/schema", () => {
     if (!result.ok) {
       expect(result.errors).toContainEqual(
         expect.objectContaining({ path: "manifest.capabilities.required.1", code: "invalid_enum_value" }),
+      );
+    }
+  });
+
+  it("rejects empty incompatible skill ids", () => {
+    const result = validateSkillBundle({
+      manifest: {
+        ...manifest,
+        compatibility: { incompatible_with: [""] },
+      },
+      instructions: "Refactor safely.",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: "manifest.compatibility.incompatible_with.0",
+          code: "too_small",
+        }),
       );
     }
   });

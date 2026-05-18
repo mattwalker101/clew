@@ -8,7 +8,7 @@
     "instructions": { "file": "skill.md" },
     "tags": ["interop"],
     "capabilities": { "required": ["filesystem"], "optional": ["git"] },
-    "compatibility": { "providers": ["claude", "opencode"], "warnings": [] },
+    "compatibility": { "providers": ["claude", "opencode"], "incompatible_with": [], "warnings": [] },
     "preferences": {},
     "activation": { "triggers": ["import", "export"], "tags": [], "weight": 1 },
     "extends": ["engineering-core"],

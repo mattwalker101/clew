@@ -149,6 +149,33 @@ describe("@clew/cli", () => {
 
   it("prints enriched overlap and conflict rows inside stable envelopes", async () => {
     const projectRoot = createProject();
+    const baseRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(baseRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "compatibility:",
+        "  incompatible_with:",
+        "    - typescript-refactor",
+        "provenance:",
+        "  source:",
+        "    type: github",
+        "    location: mattpocock/skills",
+        "    original_id: typescript-core",
+        "  imported_via:",
+        "    importer: claude",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+      ].join("\n"),
+    );
     const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
     mkdirSync(pairedRoot, { recursive: true });
     writeFileSync(
@@ -162,6 +189,13 @@ describe("@clew/cli", () => {
         "  file: skill.md",
         "tags:",
         "  - typescript",
+        "provenance:",
+        "  source:",
+        "    type: github",
+        "    location: mattpocock/skills",
+        "    original_id: typescript-refactor",
+        "  imported_via:",
+        "    importer: claude",
         "activation:",
         "  triggers:",
         "    - typescript",
@@ -176,7 +210,12 @@ describe("@clew/cli", () => {
     await main(["overlaps"]);
     await main(["conflicts"]);
 
-    expect(outputAt(log, 0)).toEqual({
+    const overlapEnvelope = outputAt(log, 0);
+    const conflictEnvelope = outputAt(log, 1);
+
+    expect(Object.keys(overlapEnvelope as Record<string, unknown>)).toEqual(["overlaps", "warnings"]);
+    expect(Object.keys(conflictEnvelope as Record<string, unknown>)).toEqual(["conflicts", "warnings"]);
+    expect(overlapEnvelope).toEqual({
       overlaps: [
         {
           ids: ["typescript-core", "typescript-refactor"],
@@ -186,13 +225,20 @@ describe("@clew/cli", () => {
           evidence: [
             { kind: "shared_trigger", values: ["typescript"] },
             { kind: "shared_tag", values: ["typescript"] },
+            { kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] },
           ],
         },
       ],
       warnings: [],
     });
-    expect(outputAt(log, 1)).toEqual({
+    expect(conflictEnvelope).toEqual({
       conflicts: [
+        {
+          ids: ["typescript-core", "typescript-refactor"],
+          reason: "declared incompatible skill",
+          classification: "conflicting",
+          evidence: [{ kind: "declared_incompatibility", values: ["typescript-core", "typescript-refactor"] }],
+        },
         {
           ids: ["typescript-refactor", "missing-parent"],
           reason: "missing parent skill",
@@ -370,7 +416,17 @@ describe("@clew/cli", () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
     writeInvalidFutureKindBundle(projectRoot);
-    writeFileSync(join(projectRoot, "AGENTS.md"), "# Active Skills\n- missing-skill\n");
+    writeFileSync(
+      join(projectRoot, "AGENTS.md"),
+      [
+        "# Active Skills",
+        "- missing-skill",
+        "",
+        "## Runtime Preferences",
+        "- Prefer local-first deterministic behavior.",
+        "- Avoid hidden activation.",
+      ].join("\n"),
+    );
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await main(["telemetry"]);
@@ -385,6 +441,7 @@ describe("@clew/cli", () => {
     expect(outputAt(log, 1)).toMatchObject({
       registryWarnings: [expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" })],
       agentsDiagnostics: [expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" })],
+      agentsPreferences: ["- Prefer local-first deterministic behavior.", "- Avoid hidden activation."],
       warnings: expect.arrayContaining([
         expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" }),
         expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" }),
@@ -449,8 +506,28 @@ describe("@clew/cli", () => {
     );
   });
 
-  it("prints activation overlap warnings inside recommend and explain recommendations", async () => {
+  it("prints activation relationship warnings inside recommend analysis and explain recommendations", async () => {
     const projectRoot = createProject();
+    const baseRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(baseRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "compatibility:",
+        "  incompatible_with:",
+        "    - typescript-refactor",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+      ].join("\n"),
+    );
     const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
     mkdirSync(pairedRoot, { recursive: true });
     writeFileSync(
@@ -475,6 +552,7 @@ describe("@clew/cli", () => {
 
     await main(["recommend", "typescript"]);
     await main(["explain", "typescript-core", "typescript"]);
+    await main(["recommend", "--explain", "typescript"]);
 
     expect(outputAt(log, 0)).toMatchObject({
       query: "typescript",
@@ -488,11 +566,20 @@ describe("@clew/cli", () => {
               message:
                 'Recommendation has complementary overlap with "typescript-refactor" using shared_trigger: typescript; shared_tag: typescript.',
             }),
+            expect.objectContaining({
+              code: "activation_conflict",
+              origin: "activation",
+              message:
+                'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+            }),
           ],
         }),
         expect.objectContaining({
           skillId: "typescript-refactor",
-          warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+          warnings: [
+            expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+            expect.objectContaining({ code: "activation_conflict", origin: "activation" }),
+          ],
         }),
       ]),
       warnings: [],
@@ -502,10 +589,39 @@ describe("@clew/cli", () => {
       query: "typescript",
       recommendation: {
         skillId: "typescript-core",
-        warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+        warnings: [
+          expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+          expect.objectContaining({
+            code: "activation_conflict",
+            origin: "activation",
+            message:
+              'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+          }),
+        ],
       },
       warnings: [],
     });
+    expect(outputAt(log, 2)).toMatchObject({
+      query: "typescript",
+      analysis: {
+        recommendations: expect.arrayContaining([
+          expect.objectContaining({
+            skillId: "typescript-core",
+            warnings: expect.arrayContaining([
+              expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+              expect.objectContaining({
+                code: "activation_conflict",
+                origin: "activation",
+                message:
+                  'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+              }),
+            ]),
+          }),
+        ]),
+      },
+      warnings: [],
+    });
+    expect(outputAt(log, 2)).not.toHaveProperty("recommendations");
   });
 
   it("prints scriptable import JSON with compatibility warnings", async () => {
