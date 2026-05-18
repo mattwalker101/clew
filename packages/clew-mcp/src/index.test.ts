@@ -445,6 +445,98 @@ describe("@clew/mcp", () => {
       })),
     }).toEqual(contract.envelopes.recommendCapabilityWarning);
   });
+
+  it("matches the documented MCP public envelope contract fixture", () => {
+    const registryWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error" as const,
+      origin: "registry_rebuild" as const,
+      field: "skills/future-kind",
+      message: "Unsupported skill kind.",
+    };
+    const bridge = createClewMcpBridge(
+      registryWithWarnings(
+        [
+          entry("typescript-core", {
+            triggers: ["typescript"],
+            tags: ["typescript"],
+            requiredCapabilities: ["terminal"],
+          }),
+          entry("disabled-skill", {
+            disabled: true,
+            triggers: ["typescript"],
+            tags: ["typescript"],
+            usageCount: 3,
+          }),
+        ],
+        [registryWarning],
+      ),
+    );
+
+    const search = bridge.search("typescript");
+    const searchAnalysis = bridge.analyzeSearch("typescript");
+    const recommendation = bridge.recommend({ query: "typescript", context: { capabilities: [] } });
+    const recommendationAnalysis = bridge.analyzeRecommendations({
+      query: "typescript",
+      context: { capabilities: [] },
+    });
+    const disabledLookup = bridge.lookup("disabled-skill");
+    const disabledExplain = bridge.explain("disabled-skill", "typescript");
+    const telemetryAnalysis = bridge.analyzeTelemetry([
+      {
+        skillId: "orphan-telemetry-skill",
+        usageCount: 2,
+        disabled: false,
+        favorite: true,
+      },
+    ]);
+
+    expect({
+      defaultSurfaces: {
+        searchKeys: Object.keys(search),
+        recommendKeys: Object.keys(recommendation),
+        lookupKeys: Object.keys(disabledLookup),
+        explainKeys: Object.keys(disabledExplain),
+      },
+      analysisSurfaces: {
+        searchAnalysisKeys: Object.keys(searchAnalysis),
+        recommendationAnalysisKeys: Object.keys(recommendationAnalysis),
+        telemetryAnalysisKeys: Object.keys(telemetryAnalysis),
+      },
+      enabledReads: {
+        searchSkillIds: search.skills.map((skill) => skill.id),
+        searchAnalysisMatchIds: searchAnalysis.analysis.matches.map((match) => match.skillId),
+        recommendationIds: recommendation.recommendations.map((item) => item.skillId),
+        recommendationWarningCodes: recommendation.recommendations.flatMap((item) =>
+          item.warnings.map((warning) => warning.code),
+        ),
+        recommendationAnalysisStatuses: recommendationAnalysis.analysis.candidates.map((candidate) => ({
+          skillId: candidate.skillId,
+          status: candidate.status,
+        })),
+      },
+      disabledReads: {
+        lookupBundle: disabledLookup.bundle,
+        lookupWarningCodes: disabledLookup.warnings.map((warning) => warning.code),
+        lookupWarningOrigins: disabledLookup.warnings.map((warning) => warning.origin),
+        explainRecommendation: disabledExplain.recommendation,
+        explainWarningCodes: disabledExplain.warnings.map((warning) => warning.code),
+        explainWarningOrigins: disabledExplain.warnings.map((warning) => warning.origin),
+      },
+      telemetryAnalysisRows: telemetryAnalysis.analysis.records.map((record) => ({
+        skillId: record.skillId,
+        known: record.known,
+        enabled: record.enabled,
+      })),
+      topLevelWarningCodes: {
+        search: search.warnings.map((warning) => warning.code),
+        searchAnalysis: searchAnalysis.warnings.map((warning) => warning.code),
+        recommend: recommendation.warnings.map((warning) => warning.code),
+        recommendationAnalysis: recommendationAnalysis.warnings.map((warning) => warning.code),
+        telemetryAnalysis: telemetryAnalysis.warnings.map((warning) => warning.code),
+      },
+    }).toEqual(publicEnvelopeContractFixture().mcp);
+  });
 });
 
 function warningContractFixture(): {
@@ -469,6 +561,12 @@ function warningContractFixture(): {
       };
     };
   };
+}
+
+function publicEnvelopeContractFixture(): { mcp: unknown } {
+  return JSON.parse(
+    readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", "public-envelope-contract.json"), "utf8"),
+  ) as { mcp: unknown };
 }
 
 function registryWith(...entries: RegistryEntry[]): SkillRegistry {

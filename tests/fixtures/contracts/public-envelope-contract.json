@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "description": "CLI and MCP public read envelopes keep compatibility payloads separate from opt-in analysis payloads. Registry warnings stay top-level, activation warnings stay recommendation-scoped, and disabled telemetry does not leak into public read results.",
+  "cli": {
+    "defaultSurfaces": {
+      "searchKeys": [
+        "query",
+        "skills",
+        "warnings"
+      ],
+      "recommendKeys": [
+        "query",
+        "recommendations",
+        "warnings"
+      ],
+      "telemetryKeys": [
+        "dbPath",
+        "skills",
+        "warnings",
+        "telemetry"
+      ]
+    },
+    "analysisSurfaces": {
+      "searchExplainKeys": [
+        "query",
+        "analysis",
+        "warnings"
+      ],
+      "recommendExplainKeys": [
+        "query",
+        "analysis",
+        "warnings"
+      ],
+      "telemetryExplainKeys": [
+        "dbPath",
+        "skills",
+        "warnings",
+        "analysis"
+      ]
+    },
+    "enabledReads": {
+      "searchSkillIds": [
+        "typescript-core"
+      ],
+      "searchAnalysisMatchIds": [
+        "typescript-core"
+      ],
+      "recommendationIds": [
+        "typescript-core"
+      ],
+      "recommendationAnalysisIds": [
+        "typescript-core"
+      ],
+      "telemetryRows": [
+        {
+          "skillId": "typescript-core",
+          "usageCount": 1
+        }
+      ],
+      "telemetryAnalysisRows": [
+        {
+          "skillId": "typescript-core",
+          "enabled": true
+        }
+      ]
+    },
+    "disabledReads": {
+      "listSkillIds": [],
+      "searchSkillIds": [],
+      "lookupBundle": null,
+      "lookupWarningCodes": [
+        "skill_disabled"
+      ],
+      "lookupWarningOrigins": [
+        "request"
+      ],
+      "recommendationIds": [],
+      "explainRecommendation": null,
+      "explainWarningCodes": [
+        "skill_disabled"
+      ],
+      "explainWarningOrigins": [
+        "request"
+      ]
+    },
+    "warnings": {
+      "search": [],
+      "searchExplain": [],
+      "recommend": [],
+      "recommendExplain": [],
+      "telemetry": [],
+      "telemetryExplain": [],
+      "disabledList": [],
+      "disabledSearch": [],
+      "disabledRecommend": []
+    }
+  },
+  "mcp": {
+    "defaultSurfaces": {
+      "searchKeys": [
+        "query",
+        "skills",
+        "warnings"
+      ],
+      "recommendKeys": [
+        "query",
+        "recommendations",
+        "warnings"
+      ],
+      "lookupKeys": [
+        "skillId",
+        "bundle",
+        "warnings"
+      ],
+      "explainKeys": [
+        "skillId",
+        "query",
+        "recommendation",
+        "warnings"
+      ]
+    },
+    "analysisSurfaces": {
+      "searchAnalysisKeys": [
+        "query",
+        "analysis",
+        "warnings"
+      ],
+      "recommendationAnalysisKeys": [
+        "query",
+        "analysis",
+        "warnings"
+      ],
+      "telemetryAnalysisKeys": [
+        "analysis",
+        "warnings"
+      ]
+    },
+    "enabledReads": {
+      "searchSkillIds": [
+        "typescript-core"
+      ],
+      "searchAnalysisMatchIds": [
+        "typescript-core"
+      ],
+      "recommendationIds": [
+        "typescript-core"
+      ],
+      "recommendationWarningCodes": [
+        "capability_missing"
+      ],
+      "recommendationAnalysisStatuses": [
+        {
+          "skillId": "typescript-core",
+          "status": "included"
+        },
+        {
+          "skillId": "disabled-skill",
+          "status": "excluded"
+        }
+      ]
+    },
+    "disabledReads": {
+      "lookupBundle": null,
+      "lookupWarningCodes": [
+        "skill_bundle_invalid",
+        "skill_disabled"
+      ],
+      "lookupWarningOrigins": [
+        "registry_rebuild",
+        "request"
+      ],
+      "explainRecommendation": null,
+      "explainWarningCodes": [
+        "skill_bundle_invalid",
+        "skill_disabled"
+      ],
+      "explainWarningOrigins": [
+        "registry_rebuild",
+        "request"
+      ]
+    },
+    "telemetryAnalysisRows": [
+      {
+        "skillId": "disabled-skill",
+        "known": true,
+        "enabled": false
+      },
+      {
+        "skillId": "typescript-core",
+        "known": true,
+        "enabled": true
+      },
+      {
+        "skillId": "orphan-telemetry-skill",
+        "known": false,
+        "enabled": false
+      }
+    ],
+    "topLevelWarningCodes": {
+      "search": [
+        "skill_bundle_invalid"
+      ],
+      "searchAnalysis": [
+        "skill_bundle_invalid"
+      ],
+      "recommend": [
+        "skill_bundle_invalid"
+      ],
+      "recommendationAnalysis": [
+        "skill_bundle_invalid"
+      ],
+      "telemetryAnalysis": [
+        "skill_bundle_invalid"
+      ]
+    }
+  }
+}

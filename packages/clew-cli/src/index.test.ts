@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +56,12 @@ function writeInvalidFutureKindBundle(projectRoot: string): void {
 
 function outputAt(log: { mock: { calls: unknown[][] } }, index: number): unknown {
   return JSON.parse(log.mock.calls[index]?.[0] as string);
+}
+
+function publicEnvelopeContractFixture(): { cli: unknown } {
+  return JSON.parse(
+    readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "public-envelope-contract.json"), "utf8"),
+  ) as { cli: unknown };
 }
 
 describe("@clew/cli", () => {
@@ -699,5 +705,85 @@ describe("@clew/cli", () => {
       ],
     });
     expect(outputAt(log, 0)).not.toHaveProperty("ok");
+  });
+
+  it("matches the documented CLI public envelope contract fixture", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["search", "typescript"]);
+    await main(["search", "--explain", "typescript"]);
+    await main(["recommend", "typescript"]);
+    await main(["recommend", "--explain", "typescript"]);
+    await main(["telemetry"]);
+    await main(["telemetry", "--explain"]);
+    await main(["disable", "typescript-core"]);
+    await main(["list"]);
+    await main(["search", "typescript"]);
+    await main(["lookup", "typescript-core"]);
+    await main(["recommend", "typescript"]);
+    await main(["explain", "typescript-core", "typescript"]);
+
+    const search = outputAt(log, 0) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const searchExplain = outputAt(log, 1) as { analysis: { matches: Array<{ skillId: string }> }; warnings: unknown[] };
+    const recommend = outputAt(log, 2) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
+    const recommendExplain = outputAt(log, 3) as { analysis: { recommendations: Array<{ skillId: string }> }; warnings: unknown[] };
+    const telemetry = outputAt(log, 4) as { telemetry: Array<{ skillId: string; usageCount: number }>; warnings: unknown[] };
+    const telemetryExplain = outputAt(log, 5) as { analysis: { records: Array<{ skillId: string; enabled: boolean }> }; warnings: unknown[] };
+    const disabledList = outputAt(log, 7) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledSearch = outputAt(log, 8) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledLookup = outputAt(log, 9) as { bundle: unknown; warnings: Array<{ code: string; origin?: string }> };
+    const disabledRecommend = outputAt(log, 10) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
+    const disabledExplain = outputAt(log, 11) as { recommendation: unknown; warnings: Array<{ code: string; origin?: string }> };
+
+    expect({
+      defaultSurfaces: {
+        searchKeys: Object.keys(search),
+        recommendKeys: Object.keys(recommend),
+        telemetryKeys: Object.keys(telemetry),
+      },
+      analysisSurfaces: {
+        searchExplainKeys: Object.keys(searchExplain),
+        recommendExplainKeys: Object.keys(recommendExplain),
+        telemetryExplainKeys: Object.keys(telemetryExplain),
+      },
+      enabledReads: {
+        searchSkillIds: search.skills.map((skill) => skill.id),
+        searchAnalysisMatchIds: searchExplain.analysis.matches.map((match) => match.skillId),
+        recommendationIds: recommend.recommendations.map((item) => item.skillId),
+        recommendationAnalysisIds: recommendExplain.analysis.recommendations.map((item) => item.skillId),
+        telemetryRows: telemetry.telemetry.map((record) => ({
+          skillId: record.skillId,
+          usageCount: record.usageCount,
+        })),
+        telemetryAnalysisRows: telemetryExplain.analysis.records.map((record) => ({
+          skillId: record.skillId,
+          enabled: record.enabled,
+        })),
+      },
+      disabledReads: {
+        listSkillIds: disabledList.skills.map((skill) => skill.id),
+        searchSkillIds: disabledSearch.skills.map((skill) => skill.id),
+        lookupBundle: disabledLookup.bundle,
+        lookupWarningCodes: disabledLookup.warnings.map((warning) => warning.code),
+        lookupWarningOrigins: disabledLookup.warnings.map((warning) => warning.origin),
+        recommendationIds: disabledRecommend.recommendations.map((item) => item.skillId),
+        explainRecommendation: disabledExplain.recommendation,
+        explainWarningCodes: disabledExplain.warnings.map((warning) => warning.code),
+        explainWarningOrigins: disabledExplain.warnings.map((warning) => warning.origin),
+      },
+      warnings: {
+        search: search.warnings,
+        searchExplain: searchExplain.warnings,
+        recommend: recommend.warnings,
+        recommendExplain: recommendExplain.warnings,
+        telemetry: telemetry.warnings,
+        telemetryExplain: telemetryExplain.warnings,
+        disabledList: disabledList.warnings,
+        disabledSearch: disabledSearch.warnings,
+        disabledRecommend: disabledRecommend.warnings,
+      },
+    }).toEqual(publicEnvelopeContractFixture().cli);
   });
 });
