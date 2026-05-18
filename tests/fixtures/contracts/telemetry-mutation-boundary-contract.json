@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "description": "Telemetry mutation boundaries keep filesystem bundles canonical and restrict writes to explicit derived SQLite state.",
+  "cli": {
+    "usageRecording": {
+      "plainRecommendUsageCount": 1,
+      "recommendExplainUsageCount": 0,
+      "nonMutatingCommandsUsageCount": 0,
+      "recordedRecommendationIds": [
+        "typescript-core"
+      ],
+      "excludedRecommendationIds": [
+        "unmatched-skill"
+      ]
+    },
+    "disableEnable": {
+      "disabledTelemetryRow": {
+        "skillId": "typescript-core",
+        "disabled": true,
+        "usageCount": 0
+      },
+      "disabledListSkillIds": [],
+      "reenabledListSkillIds": [
+        "typescript-core"
+      ],
+      "filesystemManifestUnchanged": true
+    },
+    "requestWarnings": {
+      "lookupMissingWarningCodes": [
+        "skill_unknown"
+      ],
+      "lookupDisabledWarningCodes": [
+        "skill_disabled"
+      ],
+      "explainUnrecommendedWarningCodes": [
+        "skill_not_recommended"
+      ],
+      "persistedRegistryWarningCodes": []
+    }
+  },
+  "core": {
+    "sqliteDerivedState": {
+      "disabledAffectsRegistryWhileDbExists": true,
+      "deleteDbClearsDisabledState": true,
+      "filesystemManifestUnchanged": true
+    },
+    "registryRebuildWarnings": {
+      "requestWarningCodesPersisted": [],
+      "registryWarningCodesPersisted": [
+        "skill_bundle_invalid"
+      ]
+    }
+  }
+}

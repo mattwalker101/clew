@@ -2102,6 +2102,82 @@ describe("@clew/core", () => {
     expect(contract).toEqual(contractFixture("registry-rebuildability-contract.json"));
   });
 
+  it("matches the documented core telemetry mutation boundary contract fixture", () => {
+    const fixture = contractFixture("telemetry-mutation-boundary-contract.json") as {
+      core: {
+        sqliteDerivedState: unknown;
+        registryRebuildWarnings: unknown;
+      };
+    };
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    const dbPath = join(projectRoot, ".clew-registry.db");
+    writeFilesystemBundle(skillRoot, {
+      id: "typescript-core",
+      kind: "instruction_skill",
+      name: "TypeScript Core",
+      instructions: "Use TypeScript carefully.",
+    });
+    const manifestPath = join(skillRoot, "clew.yaml");
+    const originalManifest = readFileSync(manifestPath, "utf8");
+
+    rebuildRegistryIndex({ projectRoot, dbPath });
+    const db = openRegistryDb(dbPath);
+    try {
+      db.setSkillDisabled("typescript-core", true);
+    } finally {
+      db.close();
+    }
+
+    const disabledSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const disabledRegistry = new SkillRegistry(disabledSnapshot);
+    const disabledAffectsRegistryWhileDbExists = disabledRegistry.list().map((skill) => skill.manifest.id).length === 0;
+    const filesystemManifestUnchanged = readFileSync(manifestPath, "utf8") === originalManifest;
+
+    unlinkIfExists(dbPath);
+    unlinkIfExists(`${dbPath}-wal`);
+    unlinkIfExists(`${dbPath}-shm`);
+
+    const resetSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const resetRegistry = new SkillRegistry(resetSnapshot);
+    const deleteDbClearsDisabledState = resetRegistry.list().map((skill) => skill.manifest.id).includes("typescript-core");
+
+    const warningProjectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const validRoot = join(warningProjectRoot, "skills", "valid-skill");
+    const invalidRoot = join(warningProjectRoot, "skills", "future-kind");
+    const warningDbPath = join(warningProjectRoot, ".clew-registry.db");
+    writeFilesystemBundle(validRoot, {
+      id: "valid-skill",
+      kind: "instruction_skill",
+      name: "Valid Skill",
+      instructions: "Use the valid skill.",
+    });
+    writeFilesystemBundle(invalidRoot, {
+      id: "future-kind",
+      kind: "workflow_skill",
+      name: "Future Kind",
+      instructions: "Reserved for later.",
+    });
+    rebuildRegistryIndex({ projectRoot: warningProjectRoot, dbPath: warningDbPath });
+    const warningDb = openRegistryDb(warningDbPath);
+    const persistedWarningCodes = warningDb.listRegistryWarnings().map((warning) => warning.code);
+    warningDb.close();
+
+    expect({
+      sqliteDerivedState: {
+        disabledAffectsRegistryWhileDbExists,
+        deleteDbClearsDisabledState,
+        filesystemManifestUnchanged,
+      },
+      registryRebuildWarnings: {
+        requestWarningCodesPersisted: persistedWarningCodes.filter((code) =>
+          ["skill_unknown", "skill_disabled", "skill_not_recommended"].includes(code),
+        ),
+        registryWarningCodesPersisted: persistedWarningCodes,
+      },
+    }).toEqual(fixture.core);
+  });
+
   it("rebuilds registry indexes with valid bundles and invalid bundle warnings", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const validRoot = join(projectRoot, "skills", "valid-skill");
