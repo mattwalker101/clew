@@ -23,7 +23,12 @@ import {
   registryPrecedence,
   SkillRegistry,
 } from "./index.js";
-import { compositionResultSchema, recommendationSchema, type SkillBundle } from "@clew/schema";
+import {
+  compositionResultSchema,
+  recommendationSchema,
+  type CompatibilityWarning,
+  type SkillBundle,
+} from "@clew/schema";
 
 function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): SkillBundle {
   return {
@@ -71,6 +76,11 @@ function writeFilesystemBundle(root: string, options: { id: string; kind: string
 
 function contractFixture(name: string): unknown {
   return JSON.parse(readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", name), "utf8")) as unknown;
+}
+
+function normalizeProjectWarning(warning: CompatibilityWarning, projectRoot: string): CompatibilityWarning {
+  if (!warning.field?.startsWith(projectRoot)) return warning;
+  return { ...warning, field: warning.field.slice(projectRoot.length + 1) };
 }
 
 describe("@clew/core", () => {
@@ -1818,6 +1828,74 @@ describe("@clew/core", () => {
         message: "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
       },
     ]);
+  });
+
+  it("matches the documented filesystem discovery warning contract fixture", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillsRoot = join(projectRoot, "skills");
+    const alphaRoot = join(skillsRoot, "alpha-skill");
+    const futureKindRoot = join(skillsRoot, "future-kind");
+    const zetaRoot = join(skillsRoot, "zeta-skill");
+    writeFilesystemBundle(zetaRoot, {
+      id: "zeta-skill",
+      kind: "instruction_skill",
+      name: "Zeta Skill",
+      instructions: "Use the zeta skill.",
+    });
+    writeFilesystemBundle(futureKindRoot, {
+      id: "future-kind",
+      kind: "workflow_skill",
+      name: "Future Kind",
+      instructions: "Reserved for a later runtime contract.",
+    });
+    writeFilesystemBundle(alphaRoot, {
+      id: "alpha-skill",
+      kind: "instruction_skill",
+      name: "Alpha Skill",
+      instructions: "Use the alpha skill.",
+    });
+
+    const missingRootDiscovery = discoverSkillBundles(join(projectRoot, "missing-skills"));
+    const discovery = discoverSkillBundles(skillsRoot);
+    const loadedAlpha = loadSkillBundle(alphaRoot);
+    const snapshot = rebuildRegistry({ projectRoot, includeReferenceSkills: true });
+    const dbPath = join(projectRoot, ".clew-registry.db");
+    const indexedSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const db = openRegistryDb(dbPath);
+    try {
+      const contract = {
+        missingRootDiscovery,
+        discovery: {
+          bundleIds: discovery.bundles.map((candidate) => candidate.manifest.id),
+          schemaDefaults: {
+            activationWeight: loadedAlpha.manifest.activation.weight,
+            tags: loadedAlpha.manifest.tags,
+            requiredCapabilities: loadedAlpha.manifest.capabilities.required,
+            compatibilityProviders: loadedAlpha.manifest.compatibility.providers,
+          },
+          warnings: discovery.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+        registryRebuild: {
+          entries: snapshot.entries.map((entry) => ({
+            skillId: entry.bundle.manifest.id,
+            layer: entry.layer,
+            root: entry.root.slice(projectRoot.length + 1),
+            disabled: entry.disabled,
+            favorite: entry.favorite,
+            usageCount: entry.usageCount,
+          })),
+          warnings: snapshot.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+        sqliteRebuild: {
+          snapshotWarnings: indexedSnapshot.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+          persistedWarnings: db.listRegistryWarnings().map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+      };
+
+      expect(contract).toEqual(contractFixture("filesystem-discovery-contract.json"));
+    } finally {
+      db.close();
+    }
   });
 
   it("rebuilds registry indexes with valid bundles and invalid bundle warnings", () => {
