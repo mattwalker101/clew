@@ -20,6 +20,7 @@ import {
   rebuildRegistry,
   rebuildRegistryIndex,
   rebuildSqliteIndex,
+  registryPrecedence,
   SkillRegistry,
 } from "./index.js";
 import { compositionResultSchema, recommendationSchema, type SkillBundle } from "@clew/schema";
@@ -915,6 +916,95 @@ describe("@clew/core", () => {
       }),
     ]);
     expect(snapshot).not.toHaveProperty("resolutionDiagnostics");
+  });
+
+  it("matches the documented registry resolution contract fixture", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const fakeHome = mkdtempSync(join(tmpdir(), "clew-home-"));
+    writeFilesystemBundle(join(projectRoot, ".clew", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Project Skill",
+      instructions: "Use the project layer.",
+    });
+    writeFilesystemBundle(join(fakeHome, ".clew", "orgs", "acme", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Org Skill",
+      instructions: "Use the org layer.",
+    });
+    writeFilesystemBundle(join(fakeHome, ".clew", "global", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Global Skill",
+      instructions: "Use the global layer.",
+    });
+    writeFilesystemBundle(join(projectRoot, ".clew", "disabled-public"), {
+      id: "disabled-public",
+      kind: "instruction_skill",
+      name: "Disabled Public Skill",
+      instructions: "Use the disabled project skill.",
+    });
+    writeFilesystemBundle(join(projectRoot, ".clew", "alpha-skill"), {
+      id: "alpha-skill",
+      kind: "instruction_skill",
+      name: "Alpha Skill",
+      instructions: "Use the alpha project skill.",
+    });
+
+    const oldHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    try {
+      const snapshot = rebuildRegistry({
+        projectRoot,
+        org: "acme",
+        includeReferenceSkills: false,
+        sessionBundles: [
+          bundle("layered-skill", {
+            name: "Session Skill",
+            tags: ["session"],
+            activation: { triggers: ["session"], tags: [], weight: 1 },
+          }),
+        ],
+        telemetry: {
+          disabled: ["disabled-public"],
+          favorites: ["layered-skill"],
+          usage: { "layered-skill": 2 },
+          lastUsed: { "layered-skill": "2026-05-18T12:00:00.000Z" },
+        },
+      });
+      const registry = new SkillRegistry(snapshot);
+      const contract = {
+        precedence: registryPrecedence,
+        snapshot: {
+          entries: snapshot.entries.map((entry) => ({
+            skillId: entry.bundle.manifest.id,
+            layer: entry.layer,
+            name: entry.bundle.manifest.name,
+            disabled: entry.disabled,
+            favorite: entry.favorite,
+            usageCount: entry.usageCount,
+            ...(entry.lastUsed ? { lastUsed: entry.lastUsed } : {}),
+          })),
+          warnings: snapshot.warnings,
+        },
+        publicEligibility: {
+          list: registry.list().map((candidate) => candidate.manifest.id),
+          lookupLayeredSkill: registry.lookup("layered-skill")?.manifest.name,
+          lookupDisabledPublic: registry.lookup("disabled-public") ?? null,
+          searchDisabled: registry.search("disabled").map((candidate) => candidate.manifest.id),
+          index: registry.analyzeIndex(),
+        },
+        publicSurfaces: {
+          snapshotHasResolutionDiagnostics: Object.hasOwn(snapshot, "resolutionDiagnostics"),
+          registryHasResolutionDiagnostics: Object.hasOwn(registry, "resolutionDiagnostics"),
+        },
+      };
+
+      expect(contract).toEqual(contractFixture("registry-resolution-contract.json"));
+    } finally {
+      process.env.HOME = oldHome;
+    }
   });
 
   it("opens older SQLite registry databases without registry warning tables", () => {
