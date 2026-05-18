@@ -1,0 +1,185 @@
+{
+  "direct": {
+    "bundle": {
+      "manifest": {
+        "id": "typescript-core",
+        "version": "1.0.0",
+        "kind": "instruction_skill",
+        "name": "typescript-core",
+        "instructions": {
+          "file": "skill.md"
+        },
+        "tags": [
+          "safety",
+          "engineering",
+          "typescript"
+        ],
+        "capabilities": {
+          "required": [
+            "terminal",
+            "filesystem"
+          ],
+          "optional": [
+            "git"
+          ]
+        },
+        "compatibility": {
+          "providers": [
+            "claude",
+            "codex",
+            "opencode"
+          ],
+          "warnings": [],
+          "incompatible_with": []
+        },
+        "preferences": {},
+        "activation": {
+          "triggers": [
+            "review",
+            "build",
+            "typescript"
+          ],
+          "tags": [
+            "safety",
+            "core",
+            "ts"
+          ],
+          "weight": 2
+        },
+        "extends": [
+          "safe-editing",
+          "engineering-core",
+          "missing-parent"
+        ],
+        "policies": [
+          "preserve public interfaces",
+          "prefer deterministic behavior",
+          "validate runtime inputs"
+        ],
+        "provenance": {},
+        "extensions": {}
+      },
+      "instructions": "typescript-core instructions",
+      "assets": [],
+      "examples": [],
+      "templates": [],
+      "tests": []
+    },
+    "appliedParentIds": [
+      "safe-editing",
+      "engineering-core"
+    ],
+    "warnings": []
+  },
+  "registryHighestPrecedence": {
+    "bundle": {
+      "manifest": {
+        "id": "typescript-core",
+        "version": "1.0.0",
+        "kind": "instruction_skill",
+        "name": "typescript-core",
+        "instructions": {
+          "file": "skill.md"
+        },
+        "tags": [
+          "session-safety",
+          "session-engineering",
+          "typescript",
+          "engineering"
+        ],
+        "capabilities": {
+          "required": [
+            "terminal"
+          ],
+          "optional": [
+            "git"
+          ]
+        },
+        "compatibility": {
+          "providers": [
+            "opencode"
+          ],
+          "warnings": [],
+          "incompatible_with": []
+        },
+        "preferences": {},
+        "activation": {
+          "triggers": [
+            "typescript",
+            "build"
+          ],
+          "tags": [
+            "ts"
+          ],
+          "weight": 2
+        },
+        "extends": [
+          "safe-editing",
+          "engineering-core",
+          "missing-parent"
+        ],
+        "policies": [
+          "validate runtime inputs",
+          "preserve public interfaces"
+        ],
+        "provenance": {},
+        "extensions": {}
+      },
+      "instructions": "typescript-core instructions",
+      "assets": [],
+      "examples": [],
+      "templates": [],
+      "tests": []
+    },
+    "appliedParentIds": [
+      "safe-editing",
+      "engineering-core"
+    ],
+    "warnings": []
+  },
+  "disabledParent": {
+    "bundle": {
+      "manifest": {
+        "id": "disabled-child",
+        "version": "1.0.0",
+        "kind": "instruction_skill",
+        "name": "disabled-child",
+        "instructions": {
+          "file": "skill.md"
+        },
+        "tags": [
+          "child"
+        ],
+        "capabilities": {
+          "required": [],
+          "optional": []
+        },
+        "compatibility": {
+          "providers": [],
+          "warnings": [],
+          "incompatible_with": []
+        },
+        "preferences": {},
+        "activation": {
+          "triggers": [],
+          "tags": [],
+          "weight": 1
+        },
+        "extends": [
+          "disabled-parent"
+        ],
+        "policies": [],
+        "provenance": {},
+        "extensions": {}
+      },
+      "instructions": "disabled-child instructions",
+      "assets": [],
+      "examples": [],
+      "templates": [],
+      "tests": []
+    },
+    "appliedParentIds": [],
+    "warnings": []
+  },
+  "registryWarnings": []
+}
