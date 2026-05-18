@@ -387,7 +387,7 @@ interface Exporter {
 
 ## **MCP Read Envelopes**
 
-MCP `search`, `recommend`, `lookup`, and `explain` return named result fields plus top-level `warnings`. Successful reads include the registry warning snapshot retained by `SkillRegistry`. Request-time degradation, such as unknown, disabled, or unrecommended skills, appends a warning to the same envelope and returns a `null` payload where appropriate. Capability warnings remain attached to the affected recommendation object.
+MCP `search`, `analyzeIndex`, `analyzeSearch`, `analyzeTelemetry`, `analyzeRecommendations`, `recommend`, `lookup`, and `explain` return named result fields plus top-level `warnings`. Successful reads include the registry warning snapshot retained by `SkillRegistry`. Request-time degradation, such as unknown, disabled, or unrecommended skills, appends a warning to the same envelope and returns a `null` payload where appropriate. Capability warnings remain attached to the affected recommendation object.
 
 MCP warning objects use the shared compatibility warning shape:
 

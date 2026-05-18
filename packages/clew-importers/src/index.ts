@@ -78,7 +78,7 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
     instructions: { file: "skill.md" },
     tags: input.tags ?? [],
     capabilities: { required: [], optional: mapToolsToCapabilities(input.allowed_tools ?? []) },
-    compatibility: { providers: [provider], warnings },
+    compatibility: { providers: [provider], incompatible_with: [], warnings },
     preferences: {},
     activation: { triggers: input.triggers ?? [], tags: [], weight: 1 },
     extends: [],

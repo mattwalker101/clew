@@ -2,6 +2,7 @@ import {
   ActivationEngine,
   SkillRegistry,
   type SkillActivationAnalysisResult,
+  type SkillIndexAnalysisResult,
   type SkillSearchAnalysisResult,
   type SkillTelemetryAnalysisResult,
   type TelemetryRecord,
@@ -16,6 +17,7 @@ import type {
 } from "@clew/schema";
 
 export type ClewMcpBridge = {
+  analyzeIndex(): ClewMcpIndexAnalysisResult;
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
   analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
   analyzeTelemetry(records?: TelemetryRecord[]): ClewMcpTelemetryAnalysisResult;
@@ -67,6 +69,11 @@ export type ClewMcpSearchResult = {
   warnings: CompatibilityWarning[];
 };
 
+export type ClewMcpIndexAnalysisResult = {
+  analysis: SkillIndexAnalysisResult;
+  warnings: CompatibilityWarning[];
+};
+
 export type ClewMcpSearchAnalysisResult = {
   query: string;
   analysis: SkillSearchAnalysisResult;
@@ -111,6 +118,12 @@ export function createClewMcpBridge(
   const activation = new ActivationEngine(registry);
   const registryWarnings = registry.warnings;
   return {
+    analyzeIndex(): ClewMcpIndexAnalysisResult {
+      return {
+        analysis: registry.analyzeIndex(),
+        warnings: registryWarnings,
+      };
+    },
     search(input: string | ClewMcpSearchInput): ClewMcpSearchResult {
       const request = typeof input === "string" ? { query: input } : input;
       return {

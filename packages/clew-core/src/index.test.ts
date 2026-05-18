@@ -20,9 +20,15 @@ import {
   rebuildRegistry,
   rebuildRegistryIndex,
   rebuildSqliteIndex,
+  registryPrecedence,
   SkillRegistry,
 } from "./index.js";
-import { compositionResultSchema, recommendationSchema, type SkillBundle } from "@clew/schema";
+import {
+  compositionResultSchema,
+  recommendationSchema,
+  type CompatibilityWarning,
+  type SkillBundle,
+} from "@clew/schema";
 
 function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): SkillBundle {
   return {
@@ -35,7 +41,7 @@ function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): S
       description: undefined,
       tags: [],
       capabilities: { required: [], optional: [] },
-      compatibility: { providers: [], warnings: [] },
+      compatibility: { providers: [], warnings: [], incompatible_with: [] },
       preferences: {},
       activation: { triggers: [], tags: [], weight: 1 },
       extends: [],
@@ -72,6 +78,11 @@ function contractFixture(name: string): unknown {
   return JSON.parse(readFileSync(join(process.cwd(), "tests", "fixtures", "contracts", name), "utf8")) as unknown;
 }
 
+function normalizeProjectWarning(warning: CompatibilityWarning, projectRoot: string): CompatibilityWarning {
+  if (!warning.field?.startsWith(projectRoot)) return warning;
+  return { ...warning, field: warning.field.slice(projectRoot.length + 1) };
+}
+
 describe("@clew/core", () => {
   it("parses AGENTS.md active skills", () => {
     expect(parseAgentsMd("# Active Skills\n\n- engineering-core\n- `safe-editing`\n").activeSkillIds).toEqual([
@@ -80,13 +91,43 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("matches the documented AGENTS.md parsing and diagnostic contract fixture", () => {
+    const contract = contractFixture("agents-md-contract.json") as {
+      content: string;
+      parsed: ReturnType<typeof parseAgentsMd>;
+      diagnostics: ReturnType<typeof getAgentsMdDiagnostics>;
+    };
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(parseAgentsMd(contract.content)).toEqual(contract.parsed);
+    expect(getAgentsMdDiagnostics(contract.content, registry)).toEqual(contract.diagnostics);
+  });
+
   it("composes skills additively without parent execution semantics", () => {
     const parent = bundle("engineering-core", {
       tags: ["engineering"],
       policies: ["prefer deterministic behavior"],
       activation: { triggers: ["build"], tags: [], weight: 1 },
       capabilities: { required: ["filesystem"], optional: [] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
     });
     const child = bundle("typescript-core", {
       extends: ["engineering-core"],
@@ -94,7 +135,7 @@ describe("@clew/core", () => {
       policies: ["validate runtime inputs"],
       activation: { triggers: ["typescript"], tags: [], weight: 1 },
       capabilities: { required: ["terminal"], optional: [] },
-      compatibility: { providers: ["opencode"], warnings: [] },
+      compatibility: { providers: ["opencode"], incompatible_with: [], warnings: [] },
     });
 
     const composed = composeSkill(child, [parent]);
@@ -134,6 +175,70 @@ describe("@clew/core", () => {
       "prefer deterministic behavior",
       "validate runtime inputs",
     ]);
+  });
+
+  it("matches the documented additive composition contract fixture", () => {
+    const engineering = bundle("engineering-core", {
+      tags: ["engineering"],
+      policies: ["prefer deterministic behavior"],
+      activation: { triggers: ["build"], tags: ["core"], weight: 1 },
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
+    });
+    const safeEditing = bundle("safe-editing", {
+      tags: ["safety"],
+      policies: ["preserve public interfaces"],
+      activation: { triggers: ["review"], tags: ["safety"], weight: 1 },
+      capabilities: { required: ["terminal"], optional: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
+    });
+    const unrelated = bundle("debugging-core", {
+      tags: ["debugging"],
+      policies: ["explain failures"],
+    });
+    const child = bundle("typescript-core", {
+      extends: ["safe-editing", "engineering-core", "missing-parent"],
+      tags: ["typescript", "engineering"],
+      policies: ["validate runtime inputs", "preserve public interfaces"],
+      activation: { triggers: ["typescript", "build"], tags: ["ts"], weight: 2 },
+      capabilities: { required: ["terminal"], optional: ["git"] },
+      compatibility: { providers: ["opencode"], incompatible_with: [], warnings: [] },
+    });
+
+    const directReport = composeSkillWithReport(child, [engineering, unrelated, safeEditing]);
+    const registry = new SkillRegistry({
+      entries: [
+        { bundle: child, layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("safe-editing", { tags: ["session-safety"] }), layer: "session", root: "session", disabled: false, favorite: false },
+        { bundle: safeEditing, layer: "global", root: "global", disabled: false, favorite: false },
+        { bundle: bundle("engineering-core", { tags: ["session-engineering"] }), layer: "session", root: "session", disabled: false, favorite: false },
+        { bundle: engineering, layer: "global", root: "global", disabled: false, favorite: false },
+      ],
+      warnings: [],
+    });
+    const registryReport = composeRegistrySkillWithReport(registry, "typescript-core");
+    const disabledRegistry = new SkillRegistry({
+      entries: [
+        { bundle: bundle("disabled-child", { extends: ["disabled-parent"], tags: ["child"] }), layer: "project", root: "skills", disabled: false, favorite: false },
+        { bundle: bundle("disabled-parent", { tags: ["parent"] }), layer: "session", root: "session", disabled: true, favorite: false },
+      ],
+      warnings: [],
+    });
+    const disabledParentReport = composeRegistrySkillWithReport(disabledRegistry, "disabled-child");
+
+    expect(compositionResultSchema.parse(directReport)).toEqual(directReport);
+    expect(compositionResultSchema.parse(registryReport)).toEqual(registryReport);
+    expect(compositionResultSchema.parse(disabledParentReport)).toEqual(disabledParentReport);
+    expect(
+      JSON.parse(
+        JSON.stringify({
+          direct: directReport,
+          registryHighestPrecedence: registryReport,
+          disabledParent: disabledParentReport,
+          registryWarnings: disabledRegistry.warnings,
+        }),
+      ),
+    ).toEqual(contractFixture("composition-resolution-contract.json"));
   });
 
   it("composes registry skills with the highest-precedence resolved parent", () => {
@@ -233,7 +338,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -275,7 +380,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -412,7 +517,7 @@ describe("@clew/core", () => {
             tags: ["typescript"],
             policies: ["preserve deterministic behavior"],
             capabilities: { required: ["filesystem"], optional: ["git"] },
-            compatibility: { providers: ["codex"], warnings: [] },
+            compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
             activation: { triggers: ["index"], tags: ["search"], weight: 1 },
             extends: ["engineering-core"],
             provenance: {
@@ -540,7 +645,11 @@ describe("@clew/core", () => {
       tags: ["typescript", "refactor"],
       policies: ["preserve public APIs", "prefer small patches"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "refactor" },
+        imported_via: { importer: "claude" },
+      },
       activation: { triggers: ["build"], tags: [], weight: 1 },
       extends: ["base"],
     });
@@ -548,7 +657,11 @@ describe("@clew/core", () => {
       tags: ["typescript", "debugging"],
       policies: ["preserve public APIs"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
-      compatibility: { providers: ["claude"], warnings: [] },
+      compatibility: { providers: ["claude"], incompatible_with: [], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "debugging" },
+        imported_via: { importer: "claude" },
+      },
       activation: { triggers: ["build"], tags: [], weight: 1 },
       extends: ["base"],
     });
@@ -570,6 +683,7 @@ describe("@clew/core", () => {
           { kind: "shared_optional_capability", values: ["git"] },
           { kind: "common_parent", values: ["base"] },
           { kind: "shared_provider", values: ["claude"] },
+          { kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] },
         ],
       },
       {
@@ -587,6 +701,87 @@ describe("@clew/core", () => {
         evidence: [{ kind: "shared_policy", values: ["preserve public APIs"] }],
       },
     ]);
+  });
+
+  it("reports provenance-only overlaps as complementary evidence", () => {
+    const importedViaClaude = {
+      source: { type: "github" as const, location: "mattpocock/skills", original_id: "typescript-core" },
+      imported_via: { importer: "claude" },
+    };
+    const first = bundle("first", { provenance: importedViaClaude });
+    const second = bundle("second", {
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "safe-editing" },
+        imported_via: { importer: "claude" },
+      },
+    });
+
+    expect(findOverlaps([first, second])).toEqual([
+      {
+        ids: ["first", "second"],
+        triggers: [],
+        tags: [],
+        classification: "complementary",
+        evidence: [{ kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] }],
+      },
+    ]);
+  });
+
+  it("reports declared incompatible skills as deduplicated advisory conflicts", () => {
+    const first = bundle("first", {
+      compatibility: { providers: [], warnings: [], incompatible_with: ["second", "missing"] },
+    });
+    const second = bundle("second", {
+      compatibility: { providers: [], warnings: [], incompatible_with: ["first"] },
+    });
+    const unrelated = bundle("unrelated");
+
+    expect(findConflicts([unrelated, second, first])).toEqual([
+      {
+        ids: ["first", "second"],
+        reason: "declared incompatible skill",
+        classification: "conflicting",
+        evidence: [{ kind: "declared_incompatibility", values: ["first", "second"] }],
+      },
+    ]);
+  });
+
+  it("matches the documented overlap/conflict analysis contract fixture", () => {
+    const typescriptCore = bundle("typescript-core", {
+      tags: ["typescript", "refactor"],
+      policies: ["preserve public APIs"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "typescript-core" },
+        imported_via: { importer: "claude" },
+      },
+      activation: { triggers: ["typescript"], tags: [], weight: 1 },
+      extends: ["engineering-core"],
+    });
+    const typescriptRefactor = bundle("typescript-refactor", {
+      tags: ["typescript"],
+      policies: ["preserve public APIs"],
+      capabilities: { required: ["filesystem"], optional: ["git"] },
+      compatibility: { providers: ["codex"], incompatible_with: [], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "typescript-refactor" },
+        imported_via: { importer: "claude" },
+      },
+      activation: { triggers: ["typescript"], tags: [], weight: 1 },
+      extends: ["engineering-core", "missing-parent"],
+    });
+    const safetyReview = bundle("safety-review", {
+      policies: ["preserve public APIs"],
+      compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-core"] },
+    });
+    const engineeringCore = bundle("engineering-core");
+    const bundles = [typescriptRefactor, safetyReview, engineeringCore, typescriptCore];
+
+    expect({
+      overlaps: findOverlaps(bundles),
+      conflicts: findConflicts(bundles),
+    }).toEqual(contractFixture("overlap-conflict-analysis-contract.json"));
   });
 
   it("rebuilds SQLite derived index tables from registry snapshots", async () => {
@@ -795,6 +990,95 @@ describe("@clew/core", () => {
       }),
     ]);
     expect(snapshot).not.toHaveProperty("resolutionDiagnostics");
+  });
+
+  it("matches the documented registry resolution contract fixture", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const fakeHome = mkdtempSync(join(tmpdir(), "clew-home-"));
+    writeFilesystemBundle(join(projectRoot, ".clew", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Project Skill",
+      instructions: "Use the project layer.",
+    });
+    writeFilesystemBundle(join(fakeHome, ".clew", "orgs", "acme", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Org Skill",
+      instructions: "Use the org layer.",
+    });
+    writeFilesystemBundle(join(fakeHome, ".clew", "global", "layered-skill"), {
+      id: "layered-skill",
+      kind: "instruction_skill",
+      name: "Global Skill",
+      instructions: "Use the global layer.",
+    });
+    writeFilesystemBundle(join(projectRoot, ".clew", "disabled-public"), {
+      id: "disabled-public",
+      kind: "instruction_skill",
+      name: "Disabled Public Skill",
+      instructions: "Use the disabled project skill.",
+    });
+    writeFilesystemBundle(join(projectRoot, ".clew", "alpha-skill"), {
+      id: "alpha-skill",
+      kind: "instruction_skill",
+      name: "Alpha Skill",
+      instructions: "Use the alpha project skill.",
+    });
+
+    const oldHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    try {
+      const snapshot = rebuildRegistry({
+        projectRoot,
+        org: "acme",
+        includeReferenceSkills: false,
+        sessionBundles: [
+          bundle("layered-skill", {
+            name: "Session Skill",
+            tags: ["session"],
+            activation: { triggers: ["session"], tags: [], weight: 1 },
+          }),
+        ],
+        telemetry: {
+          disabled: ["disabled-public"],
+          favorites: ["layered-skill"],
+          usage: { "layered-skill": 2 },
+          lastUsed: { "layered-skill": "2026-05-18T12:00:00.000Z" },
+        },
+      });
+      const registry = new SkillRegistry(snapshot);
+      const contract = {
+        precedence: registryPrecedence,
+        snapshot: {
+          entries: snapshot.entries.map((entry) => ({
+            skillId: entry.bundle.manifest.id,
+            layer: entry.layer,
+            name: entry.bundle.manifest.name,
+            disabled: entry.disabled,
+            favorite: entry.favorite,
+            usageCount: entry.usageCount,
+            ...(entry.lastUsed ? { lastUsed: entry.lastUsed } : {}),
+          })),
+          warnings: snapshot.warnings,
+        },
+        publicEligibility: {
+          list: registry.list().map((candidate) => candidate.manifest.id),
+          lookupLayeredSkill: registry.lookup("layered-skill")?.manifest.name,
+          lookupDisabledPublic: registry.lookup("disabled-public") ?? null,
+          searchDisabled: registry.search("disabled").map((candidate) => candidate.manifest.id),
+          index: registry.analyzeIndex(),
+        },
+        publicSurfaces: {
+          snapshotHasResolutionDiagnostics: Object.hasOwn(snapshot, "resolutionDiagnostics"),
+          registryHasResolutionDiagnostics: Object.hasOwn(registry, "resolutionDiagnostics"),
+        },
+      };
+
+      expect(contract).toEqual(contractFixture("registry-resolution-contract.json"));
+    } finally {
+      process.env.HOME = oldHome;
+    }
   });
 
   it("opens older SQLite registry databases without registry warning tables", () => {
@@ -1034,6 +1318,7 @@ describe("@clew/core", () => {
           bundle: bundle("typescript-core", {
             tags: ["typescript"],
             activation: { triggers: ["typescript"], tags: [], weight: 1 },
+            compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-refactor"] },
             capabilities: { required: ["terminal"], optional: [] },
           }),
           layer: "project",
@@ -1291,6 +1576,10 @@ describe("@clew/core", () => {
         {
           bundle: bundle("safe-refactor", {
             tags: ["refactor"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "safe-refactor" },
+              imported_via: { importer: "claude" },
+            },
             activation: { triggers: ["refactor"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1301,6 +1590,10 @@ describe("@clew/core", () => {
         {
           bundle: bundle("incremental-refactor", {
             tags: ["refactor"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "incremental-refactor" },
+              imported_via: { importer: "claude" },
+            },
             activation: { triggers: ["refactor"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1351,8 +1644,8 @@ describe("@clew/core", () => {
       }),
     ]);
     expect(recommendations.flatMap((recommendation) => recommendation.warnings).map((warning) => warning.message)).toEqual([
-      'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor.',
-      'Recommendation has complementary overlap with "incremental-refactor" using shared_trigger: refactor; shared_tag: refactor.',
+      'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor; shared_provenance: claude, github, mattpocock/skills.',
+      'Recommendation has complementary overlap with "incremental-refactor" using shared_trigger: refactor; shared_tag: refactor; shared_provenance: claude, github, mattpocock/skills.',
     ]);
   });
 
@@ -1362,6 +1655,7 @@ describe("@clew/core", () => {
         {
           bundle: bundle("typescript-core", {
             extends: ["missing-parent"],
+            compatibility: { providers: [], warnings: [], incompatible_with: ["debugging-core"] },
             activation: { triggers: ["typescript"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1371,6 +1665,7 @@ describe("@clew/core", () => {
         },
         {
           bundle: bundle("debugging-core", {
+            compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-core"] },
             activation: { triggers: ["debug"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1394,6 +1689,13 @@ describe("@clew/core", () => {
         [
           {
             code: "activation_conflict",
+            message: 'Recommendation has conflicting relationship with "debugging-core": declared incompatible skill. Evidence: declared_incompatibility: debugging-core, typescript-core.',
+            severity: "warning",
+            origin: "activation",
+            field: "debugging-core:typescript-core",
+          },
+          {
+            code: "activation_conflict",
             message: 'Recommendation has conflicting relationship with "missing-parent": missing parent skill. Evidence: missing_parent: missing-parent.',
             severity: "warning",
             origin: "activation",
@@ -1403,7 +1705,15 @@ describe("@clew/core", () => {
       ],
       [
         "debugging-core",
-        [],
+        [
+          {
+            code: "activation_conflict",
+            message: 'Recommendation has conflicting relationship with "typescript-core": declared incompatible skill. Evidence: declared_incompatibility: debugging-core, typescript-core.',
+            severity: "warning",
+            origin: "activation",
+            field: "debugging-core:typescript-core",
+          },
+        ],
       ],
     ]);
   });
@@ -1518,6 +1828,74 @@ describe("@clew/core", () => {
         message: "manifest.kind [invalid_enum_value]: Invalid enum value. Expected 'instruction_skill', received 'workflow_skill'",
       },
     ]);
+  });
+
+  it("matches the documented filesystem discovery warning contract fixture", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
+    const skillsRoot = join(projectRoot, "skills");
+    const alphaRoot = join(skillsRoot, "alpha-skill");
+    const futureKindRoot = join(skillsRoot, "future-kind");
+    const zetaRoot = join(skillsRoot, "zeta-skill");
+    writeFilesystemBundle(zetaRoot, {
+      id: "zeta-skill",
+      kind: "instruction_skill",
+      name: "Zeta Skill",
+      instructions: "Use the zeta skill.",
+    });
+    writeFilesystemBundle(futureKindRoot, {
+      id: "future-kind",
+      kind: "workflow_skill",
+      name: "Future Kind",
+      instructions: "Reserved for a later runtime contract.",
+    });
+    writeFilesystemBundle(alphaRoot, {
+      id: "alpha-skill",
+      kind: "instruction_skill",
+      name: "Alpha Skill",
+      instructions: "Use the alpha skill.",
+    });
+
+    const missingRootDiscovery = discoverSkillBundles(join(projectRoot, "missing-skills"));
+    const discovery = discoverSkillBundles(skillsRoot);
+    const loadedAlpha = loadSkillBundle(alphaRoot);
+    const snapshot = rebuildRegistry({ projectRoot, includeReferenceSkills: true });
+    const dbPath = join(projectRoot, ".clew-registry.db");
+    const indexedSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const db = openRegistryDb(dbPath);
+    try {
+      const contract = {
+        missingRootDiscovery,
+        discovery: {
+          bundleIds: discovery.bundles.map((candidate) => candidate.manifest.id),
+          schemaDefaults: {
+            activationWeight: loadedAlpha.manifest.activation.weight,
+            tags: loadedAlpha.manifest.tags,
+            requiredCapabilities: loadedAlpha.manifest.capabilities.required,
+            compatibilityProviders: loadedAlpha.manifest.compatibility.providers,
+          },
+          warnings: discovery.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+        registryRebuild: {
+          entries: snapshot.entries.map((entry) => ({
+            skillId: entry.bundle.manifest.id,
+            layer: entry.layer,
+            root: entry.root.slice(projectRoot.length + 1),
+            disabled: entry.disabled,
+            favorite: entry.favorite,
+            usageCount: entry.usageCount,
+          })),
+          warnings: snapshot.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+        sqliteRebuild: {
+          snapshotWarnings: indexedSnapshot.warnings.map((warning) => normalizeProjectWarning(warning, projectRoot)),
+          persistedWarnings: db.listRegistryWarnings().map((warning) => normalizeProjectWarning(warning, projectRoot)),
+        },
+      };
+
+      expect(contract).toEqual(contractFixture("filesystem-discovery-contract.json"));
+    } finally {
+      db.close();
+    }
   });
 
   it("rebuilds registry indexes with valid bundles and invalid bundle warnings", () => {

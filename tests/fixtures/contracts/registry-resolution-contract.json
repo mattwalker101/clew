@@ -1,0 +1,108 @@
+{
+  "precedence": [
+    "session",
+    "project",
+    "org",
+    "global"
+  ],
+  "snapshot": {
+    "entries": [
+      {
+        "skillId": "alpha-skill",
+        "layer": "project",
+        "name": "Alpha Skill",
+        "disabled": false,
+        "favorite": false,
+        "usageCount": 0
+      },
+      {
+        "skillId": "disabled-public",
+        "layer": "project",
+        "name": "Disabled Public Skill",
+        "disabled": true,
+        "favorite": false,
+        "usageCount": 0
+      },
+      {
+        "skillId": "layered-skill",
+        "layer": "session",
+        "name": "Session Skill",
+        "disabled": false,
+        "favorite": true,
+        "usageCount": 2,
+        "lastUsed": "2026-05-18T12:00:00.000Z"
+      }
+    ],
+    "warnings": []
+  },
+  "publicEligibility": {
+    "list": [
+      "alpha-skill",
+      "layered-skill"
+    ],
+    "lookupLayeredSkill": "Session Skill",
+    "lookupDisabledPublic": null,
+    "searchDisabled": [],
+    "index": {
+      "index": [
+        {
+          "skillId": "layered-skill",
+          "evidence": [
+            {
+              "kind": "identity",
+              "values": [
+                "Session Skill",
+                "layered-skill"
+              ]
+            },
+            {
+              "kind": "activation_trigger",
+              "values": [
+                "session"
+              ]
+            },
+            {
+              "kind": "tag",
+              "values": [
+                "session"
+              ]
+            },
+            {
+              "kind": "instructions_text",
+              "values": [
+                "instructions",
+                "layered-skill"
+              ]
+            }
+          ]
+        },
+        {
+          "skillId": "alpha-skill",
+          "evidence": [
+            {
+              "kind": "identity",
+              "values": [
+                "Alpha Skill",
+                "alpha-skill"
+              ]
+            },
+            {
+              "kind": "instructions_text",
+              "values": [
+                "alpha",
+                "project",
+                "skill",
+                "the",
+                "use"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "publicSurfaces": {
+    "snapshotHasResolutionDiagnostics": false,
+    "registryHasResolutionDiagnostics": false
+  }
+}
