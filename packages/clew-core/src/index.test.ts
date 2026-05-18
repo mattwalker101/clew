@@ -541,6 +541,10 @@ describe("@clew/core", () => {
       policies: ["preserve public APIs", "prefer small patches"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
       compatibility: { providers: ["claude"], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "refactor" },
+        imported_via: { importer: "claude" },
+      },
       activation: { triggers: ["build"], tags: [], weight: 1 },
       extends: ["base"],
     });
@@ -549,6 +553,10 @@ describe("@clew/core", () => {
       policies: ["preserve public APIs"],
       capabilities: { required: ["filesystem"], optional: ["git"] },
       compatibility: { providers: ["claude"], warnings: [] },
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "debugging" },
+        imported_via: { importer: "claude" },
+      },
       activation: { triggers: ["build"], tags: [], weight: 1 },
       extends: ["base"],
     });
@@ -570,6 +578,7 @@ describe("@clew/core", () => {
           { kind: "shared_optional_capability", values: ["git"] },
           { kind: "common_parent", values: ["base"] },
           { kind: "shared_provider", values: ["claude"] },
+          { kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] },
         ],
       },
       {
@@ -585,6 +594,30 @@ describe("@clew/core", () => {
         tags: [],
         classification: "complementary",
         evidence: [{ kind: "shared_policy", values: ["preserve public APIs"] }],
+      },
+    ]);
+  });
+
+  it("reports provenance-only overlaps as complementary evidence", () => {
+    const importedViaClaude = {
+      source: { type: "github" as const, location: "mattpocock/skills", original_id: "typescript-core" },
+      imported_via: { importer: "claude" },
+    };
+    const first = bundle("first", { provenance: importedViaClaude });
+    const second = bundle("second", {
+      provenance: {
+        source: { type: "github", location: "mattpocock/skills", original_id: "safe-editing" },
+        imported_via: { importer: "claude" },
+      },
+    });
+
+    expect(findOverlaps([first, second])).toEqual([
+      {
+        ids: ["first", "second"],
+        triggers: [],
+        tags: [],
+        classification: "complementary",
+        evidence: [{ kind: "shared_provenance", values: ["claude", "github", "mattpocock/skills"] }],
       },
     ]);
   });
@@ -1291,6 +1324,10 @@ describe("@clew/core", () => {
         {
           bundle: bundle("safe-refactor", {
             tags: ["refactor"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "safe-refactor" },
+              imported_via: { importer: "claude" },
+            },
             activation: { triggers: ["refactor"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1301,6 +1338,10 @@ describe("@clew/core", () => {
         {
           bundle: bundle("incremental-refactor", {
             tags: ["refactor"],
+            provenance: {
+              source: { type: "github", location: "mattpocock/skills", original_id: "incremental-refactor" },
+              imported_via: { importer: "claude" },
+            },
             activation: { triggers: ["refactor"], tags: [], weight: 1 },
           }),
           layer: "project",
@@ -1351,8 +1392,8 @@ describe("@clew/core", () => {
       }),
     ]);
     expect(recommendations.flatMap((recommendation) => recommendation.warnings).map((warning) => warning.message)).toEqual([
-      'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor.',
-      'Recommendation has complementary overlap with "incremental-refactor" using shared_trigger: refactor; shared_tag: refactor.',
+      'Recommendation has complementary overlap with "safe-refactor" using shared_trigger: refactor; shared_tag: refactor; shared_provenance: claude, github, mattpocock/skills.',
+      'Recommendation has complementary overlap with "incremental-refactor" using shared_trigger: refactor; shared_tag: refactor; shared_provenance: claude, github, mattpocock/skills.',
     ]);
   });
 

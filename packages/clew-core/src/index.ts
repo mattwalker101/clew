@@ -569,6 +569,7 @@ const overlapEvidenceKindOrder = [
   "shared_optional_capability",
   "common_parent",
   "shared_provider",
+  "shared_provenance",
 ] as const;
 
 const conflictEvidenceKindOrder = ["missing_parent"] as const;
@@ -598,6 +599,10 @@ export function findOverlaps(bundles: SkillBundle[]): OverlapRelationship[] {
           relationshipEvidence(
             "shared_provider",
             intersection(a.manifest.compatibility.providers, b.manifest.compatibility.providers),
+          ),
+          relationshipEvidence(
+            "shared_provenance",
+            intersection(provenanceSearchValues(a.manifest.provenance), provenanceSearchValues(b.manifest.provenance)),
           ),
         ],
         overlapEvidenceKindOrder,
