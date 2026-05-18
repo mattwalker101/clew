@@ -10,6 +10,7 @@ describe("@clew/mcp", () => {
     const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
 
     expect(Object.keys(bridge).sort()).toEqual([
+      "analyzeIndex",
       "analyzeRecommendations",
       "analyzeSearch",
       "analyzeTelemetry",
@@ -22,6 +23,52 @@ describe("@clew/mcp", () => {
     expect("activate" in bridge).toBe(false);
     expect("run" in bridge).toBe(false);
     expect("tools" in bridge).toBe(false);
+  });
+
+  it("exposes the deterministic semantic index analysis with registry warnings", () => {
+    const registryWarning: CompatibilityWarning = {
+      code: "skill_bundle_invalid",
+      severity: "error",
+      origin: "registry_rebuild",
+      message: "Unsupported skill kind.",
+    };
+    const registry = registryWithWarnings(
+      [
+        entry("engineering-core", {
+          tags: ["engineering"],
+          triggers: ["build"],
+        }),
+        entry("disabled-skill", {
+          disabled: true,
+          tags: ["disabled"],
+          triggers: ["disabled"],
+        }),
+      ],
+      [registryWarning],
+    );
+    const bridge = createClewMcpBridge(registry);
+
+    expect(bridge.analyzeIndex()).toEqual({
+      analysis: registry.analyzeIndex(),
+      warnings: [registryWarning],
+    });
+    expect(bridge.analyzeIndex()).toMatchObject({
+      analysis: {
+        index: [
+          {
+            skillId: "engineering-core",
+            evidence: expect.arrayContaining([
+              { kind: "identity", values: ["Engineering Core", "engineering-core"] },
+              { kind: "activation_trigger", values: ["build"] },
+              { kind: "tag", values: ["engineering"] },
+              { kind: "instructions_text", values: ["engineering-core", "instructions"] },
+            ]),
+          },
+        ],
+      },
+      warnings: [registryWarning],
+    });
+    expect(bridge.analyzeIndex().analysis.index.map((candidate) => candidate.skillId)).toEqual(["engineering-core"]);
   });
 
   it("returns structured envelopes for legacy positional calls", () => {
@@ -160,6 +207,13 @@ describe("@clew/mcp", () => {
     );
 
     expect(bridge.search({ query: "core", limit: 1 }).skills.map((skill) => skill.id)).toEqual(["engineering-core"]);
+    expect(bridge.analyzeSearch({ query: "typescript", limit: 1 }).analysis.matches.map((item) => item.skillId)).toEqual([
+      "typescript-core",
+    ]);
+    expect(bridge.analyzeIndex().analysis.index.map((item) => item.skillId)).toEqual([
+      "engineering-core",
+      "typescript-core",
+    ]);
     expect(bridge.recommend({ query: "build", limit: 1 }).recommendations.map((item) => item.skillId)).toEqual([
       "typescript-core",
     ]);
