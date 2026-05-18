@@ -416,7 +416,17 @@ describe("@clew/cli", () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
     writeInvalidFutureKindBundle(projectRoot);
-    writeFileSync(join(projectRoot, "AGENTS.md"), "# Active Skills\n- missing-skill\n");
+    writeFileSync(
+      join(projectRoot, "AGENTS.md"),
+      [
+        "# Active Skills",
+        "- missing-skill",
+        "",
+        "## Runtime Preferences",
+        "- Prefer local-first deterministic behavior.",
+        "- Avoid hidden activation.",
+      ].join("\n"),
+    );
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await main(["telemetry"]);
@@ -431,6 +441,7 @@ describe("@clew/cli", () => {
     expect(outputAt(log, 1)).toMatchObject({
       registryWarnings: [expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" })],
       agentsDiagnostics: [expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" })],
+      agentsPreferences: ["- Prefer local-first deterministic behavior.", "- Avoid hidden activation."],
       warnings: expect.arrayContaining([
         expect.objectContaining({ code: "skill_bundle_invalid", origin: "registry_rebuild" }),
         expect.objectContaining({ code: "agents_skill_unknown", origin: "agents_diagnostic" }),

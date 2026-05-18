@@ -80,6 +80,36 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("matches the documented AGENTS.md parsing and diagnostic contract fixture", () => {
+    const contract = contractFixture("agents-md-contract.json") as {
+      content: string;
+      parsed: ReturnType<typeof parseAgentsMd>;
+      diagnostics: ReturnType<typeof getAgentsMdDiagnostics>;
+    };
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("safe-editing"),
+          layer: "project",
+          root: "skills",
+          disabled: true,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(parseAgentsMd(contract.content)).toEqual(contract.parsed);
+    expect(getAgentsMdDiagnostics(contract.content, registry)).toEqual(contract.diagnostics);
+  });
+
   it("composes skills additively without parent execution semantics", () => {
     const parent = bundle("engineering-core", {
       tags: ["engineering"],

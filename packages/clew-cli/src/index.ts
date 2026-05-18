@@ -166,6 +166,7 @@ const commands: Record<string, Command> = {
       conflicts: findConflicts(bundles),
       registryWarnings,
       agentsDiagnostics,
+      agentsPreferences: agentsContext.preferences,
       warnings: [...registryWarnings, ...agentsDiagnostics],
     });
   },
@@ -220,12 +221,12 @@ function readRegistry(): { registry: SkillRegistry; warnings: CompatibilityWarni
   return { registry: new SkillRegistry(snapshot), warnings: snapshot.warnings };
 }
 
-function readAgentsContext(): { raw: string; activeSkillIds: string[] } {
+function readAgentsContext(): { raw: string; activeSkillIds: string[]; preferences: string[] } {
   try {
     const raw = readFileSync("AGENTS.md", "utf8");
-    return { raw, activeSkillIds: parseAgentsMd(raw).activeSkillIds };
+    return { raw, ...parseAgentsMd(raw) };
   } catch {
-    return { raw: "", activeSkillIds: [] };
+    return { raw: "", activeSkillIds: [], preferences: [] };
   }
 }
 
