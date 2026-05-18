@@ -1124,6 +1124,7 @@ describe("@clew/core", () => {
           bundle: bundle("typescript-core", {
             tags: ["typescript"],
             activation: { triggers: ["typescript"], tags: [], weight: 1 },
+            compatibility: { providers: [], warnings: [], incompatible_with: ["typescript-refactor"] },
             capabilities: { required: ["terminal"], optional: [] },
           }),
           layer: "project",

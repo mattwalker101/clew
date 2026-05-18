@@ -495,8 +495,28 @@ describe("@clew/cli", () => {
     );
   });
 
-  it("prints activation overlap warnings inside recommend and explain recommendations", async () => {
+  it("prints activation relationship warnings inside recommend analysis and explain recommendations", async () => {
     const projectRoot = createProject();
+    const baseRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(baseRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - typescript",
+        "compatibility:",
+        "  incompatible_with:",
+        "    - typescript-refactor",
+        "activation:",
+        "  triggers:",
+        "    - typescript",
+      ].join("\n"),
+    );
     const pairedRoot = join(projectRoot, "skills", "typescript-refactor");
     mkdirSync(pairedRoot, { recursive: true });
     writeFileSync(
@@ -521,6 +541,7 @@ describe("@clew/cli", () => {
 
     await main(["recommend", "typescript"]);
     await main(["explain", "typescript-core", "typescript"]);
+    await main(["recommend", "--explain", "typescript"]);
 
     expect(outputAt(log, 0)).toMatchObject({
       query: "typescript",
@@ -534,11 +555,20 @@ describe("@clew/cli", () => {
               message:
                 'Recommendation has complementary overlap with "typescript-refactor" using shared_trigger: typescript; shared_tag: typescript.',
             }),
+            expect.objectContaining({
+              code: "activation_conflict",
+              origin: "activation",
+              message:
+                'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+            }),
           ],
         }),
         expect.objectContaining({
           skillId: "typescript-refactor",
-          warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+          warnings: [
+            expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+            expect.objectContaining({ code: "activation_conflict", origin: "activation" }),
+          ],
         }),
       ]),
       warnings: [],
@@ -548,10 +578,39 @@ describe("@clew/cli", () => {
       query: "typescript",
       recommendation: {
         skillId: "typescript-core",
-        warnings: [expect.objectContaining({ code: "activation_overlap", origin: "activation" })],
+        warnings: [
+          expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+          expect.objectContaining({
+            code: "activation_conflict",
+            origin: "activation",
+            message:
+              'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+          }),
+        ],
       },
       warnings: [],
     });
+    expect(outputAt(log, 2)).toMatchObject({
+      query: "typescript",
+      analysis: {
+        recommendations: expect.arrayContaining([
+          expect.objectContaining({
+            skillId: "typescript-core",
+            warnings: expect.arrayContaining([
+              expect.objectContaining({ code: "activation_overlap", origin: "activation" }),
+              expect.objectContaining({
+                code: "activation_conflict",
+                origin: "activation",
+                message:
+                  'Recommendation has conflicting relationship with "typescript-refactor": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.',
+              }),
+            ]),
+          }),
+        ]),
+      },
+      warnings: [],
+    });
+    expect(outputAt(log, 2)).not.toHaveProperty("recommendations");
   });
 
   it("prints scriptable import JSON with compatibility warnings", async () => {

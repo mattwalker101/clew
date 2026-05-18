@@ -109,6 +109,13 @@
           "severity": "warning",
           "origin": "activation",
           "field": "typescript-core:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"typescript-refactor\": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
         }
       ],
       "exclusions": [],
@@ -169,6 +176,13 @@
         {
           "code": "activation_overlap",
           "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"typescript-core\": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.",
           "severity": "warning",
           "origin": "activation",
           "field": "typescript-core:typescript-refactor"
@@ -374,6 +388,13 @@
           "severity": "warning",
           "origin": "activation",
           "field": "typescript-core:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"typescript-refactor\": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
         }
       ]
     },
@@ -410,6 +431,13 @@
         {
           "code": "activation_overlap",
           "message": "Recommendation has complementary overlap with \"typescript-core\" using shared_trigger: typescript; shared_tag: typescript.",
+          "severity": "warning",
+          "origin": "activation",
+          "field": "typescript-core:typescript-refactor"
+        },
+        {
+          "code": "activation_conflict",
+          "message": "Recommendation has conflicting relationship with \"typescript-core\": declared incompatible skill. Evidence: declared_incompatibility: typescript-core, typescript-refactor.",
           "severity": "warning",
           "origin": "activation",
           "field": "typescript-core:typescript-refactor"

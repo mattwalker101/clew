@@ -16,10 +16,10 @@ Candidate rows contain:
 
 Score components cover query trigger matches, tag matches, AGENTS.md active-skill references, repository signals, and conservative telemetry boosts. Telemetry components are additive only after normal activation evidence has matched. Telemetry alone must not include a recommendation.
 
-Capability degradation warnings remain activation warnings on included candidates and their compatibility recommendations. Overlap and conflict warnings remain recommendation-scoped activation warnings and are added only after the included recommendation set is known.
+Capability degradation warnings remain activation warnings on included candidates and their compatibility recommendations. Overlap and conflict warnings remain recommendation-scoped activation warnings and are added only after the included recommendation set is known. Declared incompatibility evidence from `manifest.compatibility.incompatible_with` is advisory and appears as recommendation-scoped `activation_conflict` warnings; it must not change top-level registry/request warnings or introduce routing behavior.
 
 `ActivationEngine.recommend(context)` remains compatibility sugar over this analysis and returns `analysis.recommendations`.
 
 `clew recommend --explain <query>` and MCP `analyzeRecommendations()` expose the analysis result explicitly. Plain CLI and MCP `recommend()` envelopes stay `{ query, recommendations, warnings }`.
 
-The executable fixture at `tests/fixtures/contracts/activation-analysis-contract.json` pins the public result shape, ordering, warning placement, score components, included/excluded status, capability degradation, overlap/conflict warnings, AGENTS.md evidence, repo signal evidence, and telemetry boost evidence.
+The executable fixture at `tests/fixtures/contracts/activation-analysis-contract.json` pins the public result shape, ordering, warning placement, score components, included/excluded status, capability degradation, overlap/conflict warnings including declared incompatibility evidence, AGENTS.md evidence, repo signal evidence, and telemetry boost evidence.
