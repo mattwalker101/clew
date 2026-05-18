@@ -1,0 +1,347 @@
+{
+  "activation": {
+    "context": {
+      "query": "typescript",
+      "tags": [
+        "typescript"
+      ],
+      "agentsMd": "",
+      "repoSignals": [],
+      "capabilities": [],
+      "activeSkillIds": []
+    },
+    "candidates": [
+      {
+        "skillId": "matched-boosted-skill",
+        "enabled": true,
+        "status": "included",
+        "score": 10,
+        "components": [
+          {
+            "kind": "trigger",
+            "value": "typescript",
+            "points": 5,
+            "reason": "query matched trigger \"typescript\""
+          },
+          {
+            "kind": "tag",
+            "value": "typescript",
+            "points": 3,
+            "reason": "matched tag \"typescript\""
+          },
+          {
+            "kind": "telemetry_favorite",
+            "value": "true",
+            "points": 1,
+            "reason": "favorite skill"
+          },
+          {
+            "kind": "telemetry_usage",
+            "value": "4",
+            "points": 1,
+            "reason": "used 4 times previously"
+          }
+        ],
+        "reasons": [
+          "query matched trigger \"typescript\"",
+          "matched tag \"typescript\"",
+          "favorite skill",
+          "used 4 times previously"
+        ],
+        "signals": [
+          {
+            "type": "trigger",
+            "value": "typescript"
+          },
+          {
+            "type": "tag",
+            "value": "typescript"
+          },
+          {
+            "type": "telemetry_favorite",
+            "value": "true"
+          },
+          {
+            "type": "telemetry_usage",
+            "value": "4"
+          }
+        ],
+        "warnings": [],
+        "exclusions": [],
+        "rank": 1
+      },
+      {
+        "skillId": "disabled-matched-skill",
+        "enabled": false,
+        "status": "excluded",
+        "score": 8,
+        "components": [
+          {
+            "kind": "trigger",
+            "value": "typescript",
+            "points": 5,
+            "reason": "query matched trigger \"typescript\""
+          },
+          {
+            "kind": "tag",
+            "value": "typescript",
+            "points": 3,
+            "reason": "matched tag \"typescript\""
+          }
+        ],
+        "reasons": [
+          "query matched trigger \"typescript\"",
+          "matched tag \"typescript\""
+        ],
+        "signals": [
+          {
+            "type": "trigger",
+            "value": "typescript"
+          },
+          {
+            "type": "tag",
+            "value": "typescript"
+          }
+        ],
+        "warnings": [],
+        "exclusions": [
+          {
+            "kind": "disabled",
+            "reason": "skill is disabled"
+          }
+        ]
+      },
+      {
+        "skillId": "telemetry-only-skill",
+        "enabled": true,
+        "status": "excluded",
+        "score": 0,
+        "components": [],
+        "reasons": [],
+        "signals": [],
+        "warnings": [],
+        "exclusions": [
+          {
+            "kind": "unmatched",
+            "reason": "no activation evidence matched the supplied context"
+          }
+        ]
+      }
+    ],
+    "recommendations": [
+      {
+        "skillId": "matched-boosted-skill",
+        "score": 10,
+        "reasons": [
+          "query matched trigger \"typescript\"",
+          "matched tag \"typescript\"",
+          "favorite skill",
+          "used 4 times previously"
+        ],
+        "signals": [
+          {
+            "type": "trigger",
+            "value": "typescript"
+          },
+          {
+            "type": "tag",
+            "value": "typescript"
+          },
+          {
+            "type": "telemetry_favorite",
+            "value": "true"
+          },
+          {
+            "type": "telemetry_usage",
+            "value": "4"
+          }
+        ],
+        "warnings": []
+      }
+    ]
+  },
+  "recommend": [
+    {
+      "skillId": "matched-boosted-skill",
+      "score": 10,
+      "reasons": [
+        "query matched trigger \"typescript\"",
+        "matched tag \"typescript\"",
+        "favorite skill",
+        "used 4 times previously"
+      ],
+      "signals": [
+        {
+          "type": "trigger",
+          "value": "typescript"
+        },
+        {
+          "type": "tag",
+          "value": "typescript"
+        },
+        {
+          "type": "telemetry_favorite",
+          "value": "true"
+        },
+        {
+          "type": "telemetry_usage",
+          "value": "4"
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "explainMatched": {
+    "skillId": "matched-boosted-skill",
+    "score": 10,
+    "reasons": [
+      "query matched trigger \"typescript\"",
+      "matched tag \"typescript\"",
+      "favorite skill",
+      "used 4 times previously"
+    ],
+    "signals": [
+      {
+        "type": "trigger",
+        "value": "typescript"
+      },
+      {
+        "type": "tag",
+        "value": "typescript"
+      },
+      {
+        "type": "telemetry_favorite",
+        "value": "true"
+      },
+      {
+        "type": "telemetry_usage",
+        "value": "4"
+      }
+    ],
+    "warnings": []
+  },
+  "telemetry": {
+    "records": [
+      {
+        "skillId": "disabled-matched-skill",
+        "known": true,
+        "enabled": false,
+        "disabled": true,
+        "favorite": true,
+        "usageCount": 6,
+        "evidence": [
+          {
+            "kind": "disabled",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "favorite",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "usage_count",
+            "values": [
+              "6"
+            ]
+          }
+        ]
+      },
+      {
+        "skillId": "matched-boosted-skill",
+        "known": true,
+        "enabled": true,
+        "disabled": false,
+        "favorite": true,
+        "usageCount": 4,
+        "evidence": [
+          {
+            "kind": "favorite",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "usage_count",
+            "values": [
+              "4"
+            ]
+          }
+        ]
+      },
+      {
+        "skillId": "telemetry-only-skill",
+        "known": true,
+        "enabled": true,
+        "disabled": false,
+        "favorite": true,
+        "usageCount": 9,
+        "evidence": [
+          {
+            "kind": "favorite",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "usage_count",
+            "values": [
+              "9"
+            ]
+          }
+        ]
+      },
+      {
+        "skillId": "orphan-telemetry-skill",
+        "known": false,
+        "enabled": false,
+        "disabled": false,
+        "favorite": true,
+        "usageCount": 3,
+        "lastUsed": "2026-05-18T12:00:00.000Z",
+        "evidence": [
+          {
+            "kind": "orphan",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "favorite",
+            "values": [
+              "true"
+            ]
+          },
+          {
+            "kind": "usage_count",
+            "values": [
+              "3"
+            ]
+          },
+          {
+            "kind": "last_used",
+            "values": [
+              "2026-05-18T12:00:00.000Z"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "publicReadSurfaces": {
+    "list": [
+      "matched-boosted-skill",
+      "telemetry-only-skill"
+    ],
+    "searchTypescript": [
+      "matched-boosted-skill"
+    ],
+    "analyzeSearchTypescript": [
+      "matched-boosted-skill"
+    ]
+  },
+  "registryWarnings": []
+}
