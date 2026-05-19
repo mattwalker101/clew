@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "description": "Doctor command boundary: empty-registry output, repo signal detection, overlap count exposure, conflict full-object structure, agents_skill_disabled diagnostic path, preference parsing, combined diagnostic codes, and registry-first warning merge order.",
+  "emptyRegistry": {
+    "skills": 0,
+    "repoSignals": [],
+    "overlaps": 0,
+    "conflicts": [],
+    "registryWarnings": [],
+    "agentsDiagnostics": [],
+    "agentsPreferences": [],
+    "warnings": []
+  },
+  "repoSignals": {
+    "signals": ["git", "node", "testing", "zod"]
+  },
+  "overlapsPresent": {
+    "overlaps": 1,
+    "conflicts": []
+  },
+  "missingParentConflict": {
+    "overlaps": 0,
+    "conflicts": [
+      {
+        "ids": ["child-skill", "nonexistent-parent"],
+        "reason": "missing parent skill",
+        "classification": "conflicting",
+        "evidence": [{ "kind": "missing_parent", "values": ["nonexistent-parent"] }]
+      }
+    ]
+  },
+  "agentsSkillDisabled": {
+    "agentsDiagnostics": [
+      {
+        "code": "agents_skill_disabled",
+        "message": "AGENTS.md references disabled skill \"typescript-core\".",
+        "severity": "warning",
+        "origin": "agents_diagnostic",
+        "field": "AGENTS.md"
+      }
+    ],
+    "warningCodes": ["agents_skill_disabled"],
+    "warningOrigins": ["agents_diagnostic"]
+  },
+  "populatedPreferences": {
+    "agentsPreferences": [
+      "- Prefer explicit over implicit.",
+      "- Avoid unnecessary complexity."
+    ]
+  },
+  "multipleDiagnostics": {
+    "agentsDiagnosticCodes": ["agents_skill_unknown", "agents_skill_disabled"],
+    "warningCodes": ["agents_skill_unknown", "agents_skill_disabled"]
+  },
+  "warningMergeOrder": {
+    "warningCodes": ["skill_bundle_invalid", "agents_skill_unknown"],
+    "warningOrigins": ["registry_rebuild", "agents_diagnostic"]
+  }
+}
