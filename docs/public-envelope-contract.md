@@ -4,6 +4,7 @@ CLI and MCP read surfaces expose compatibility envelopes by default. These envel
 
 Default read surfaces remain compatibility-shaped:
 
+- CLI `clew list` returns `{ skills, warnings }`.
 - CLI `clew search <query>` and MCP `search()` return `{ query, skills, warnings }`.
 - CLI `clew recommend <query>` and MCP `recommend()` return `{ query, recommendations, warnings }`.
 - CLI `clew lookup <skill-id>` and MCP `lookup()` return `{ skillId, bundle, warnings }`.
