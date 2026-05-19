@@ -154,6 +154,26 @@
       "disabledRecommend": []
     }
   },
+  "invalidBundleWarnings": {
+    "list":             { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "search":           { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "searchExplain":    { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "recommend":        { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "recommendExplain": { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "lookup":           { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "explain":          { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "overlaps":         { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "conflicts":        { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "telemetry":        { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] },
+    "telemetryExplain": { "codes": ["skill_bundle_invalid"], "origins": ["registry_rebuild"] }
+  },
+  "invalidBundleDoctor": {
+    "registryWarningCodes":   ["skill_bundle_invalid"],
+    "registryWarningOrigins": ["registry_rebuild"],
+    "agentsDiagnosticCodes":  ["agents_skill_unknown"],
+    "warningCodes":           ["skill_bundle_invalid", "agents_skill_unknown"],
+    "warningOrigins":         ["registry_rebuild", "agents_diagnostic"]
+  },
   "mcp": {
     "defaultSurfaces": {
       "searchKeys": [

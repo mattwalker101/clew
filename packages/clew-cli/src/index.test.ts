@@ -1009,6 +1009,77 @@ describe("@clew/cli", () => {
         disabledRecommend: disabledRecommend.warnings,
       },
     }).toEqual(publicEnvelopeContractFixture().cli);
+
+    await main(["enable", "typescript-core"]);
+    writeInvalidFutureKindBundle(projectRoot);
+    log.mockClear();
+
+    await main(["list"]);
+    await main(["search", "typescript"]);
+    await main(["search", "--explain", "typescript"]);
+    await main(["recommend", "typescript"]);
+    await main(["recommend", "--explain", "typescript"]);
+    await main(["lookup", "typescript-core"]);
+    await main(["explain", "typescript-core", "typescript"]);
+    await main(["overlaps"]);
+    await main(["conflicts"]);
+    await main(["doctor"]);
+    await main(["telemetry"]);
+    await main(["telemetry", "--explain"]);
+
+    const invList = outputAt(log, 0) as { warnings: Array<{ code: string; origin?: string }> };
+    const invSearch = outputAt(log, 1) as { warnings: Array<{ code: string; origin?: string }> };
+    const invSearchExplain = outputAt(log, 2) as { warnings: Array<{ code: string; origin?: string }> };
+    const invRecommend = outputAt(log, 3) as { warnings: Array<{ code: string; origin?: string }> };
+    const invRecommendExplain = outputAt(log, 4) as { warnings: Array<{ code: string; origin?: string }> };
+    const invLookup = outputAt(log, 5) as { warnings: Array<{ code: string; origin?: string }> };
+    const invExplain = outputAt(log, 6) as { warnings: Array<{ code: string; origin?: string }> };
+    const invOverlaps = outputAt(log, 7) as { warnings: Array<{ code: string; origin?: string }> };
+    const invConflicts = outputAt(log, 8) as { warnings: Array<{ code: string; origin?: string }> };
+    const invDoctor = outputAt(log, 9) as {
+      registryWarnings: Array<{ code: string; origin?: string }>;
+      agentsDiagnostics: Array<{ code: string; origin?: string }>;
+      warnings: Array<{ code: string; origin?: string }>;
+    };
+    const invTelemetry = outputAt(log, 10) as { warnings: Array<{ code: string; origin?: string }> };
+    const invTelemetryExplain = outputAt(log, 11) as { warnings: Array<{ code: string; origin?: string }> };
+
+    const invFixture = publicEnvelopeContractFixture() as unknown as {
+      invalidBundleWarnings: Record<string, { codes: string[]; origins: string[] }>;
+      invalidBundleDoctor: {
+        registryWarningCodes: string[];
+        registryWarningOrigins: string[];
+        agentsDiagnosticCodes: string[];
+        warningCodes: string[];
+        warningOrigins: string[];
+      };
+    };
+
+    expect({
+      invalidBundleWarnings: {
+        list: { codes: invList.warnings.map((w) => w.code), origins: invList.warnings.map((w) => w.origin) },
+        search: { codes: invSearch.warnings.map((w) => w.code), origins: invSearch.warnings.map((w) => w.origin) },
+        searchExplain: { codes: invSearchExplain.warnings.map((w) => w.code), origins: invSearchExplain.warnings.map((w) => w.origin) },
+        recommend: { codes: invRecommend.warnings.map((w) => w.code), origins: invRecommend.warnings.map((w) => w.origin) },
+        recommendExplain: { codes: invRecommendExplain.warnings.map((w) => w.code), origins: invRecommendExplain.warnings.map((w) => w.origin) },
+        lookup: { codes: invLookup.warnings.map((w) => w.code), origins: invLookup.warnings.map((w) => w.origin) },
+        explain: { codes: invExplain.warnings.map((w) => w.code), origins: invExplain.warnings.map((w) => w.origin) },
+        overlaps: { codes: invOverlaps.warnings.map((w) => w.code), origins: invOverlaps.warnings.map((w) => w.origin) },
+        conflicts: { codes: invConflicts.warnings.map((w) => w.code), origins: invConflicts.warnings.map((w) => w.origin) },
+        telemetry: { codes: invTelemetry.warnings.map((w) => w.code), origins: invTelemetry.warnings.map((w) => w.origin) },
+        telemetryExplain: { codes: invTelemetryExplain.warnings.map((w) => w.code), origins: invTelemetryExplain.warnings.map((w) => w.origin) },
+      },
+      invalidBundleDoctor: {
+        registryWarningCodes: invDoctor.registryWarnings.map((w) => w.code),
+        registryWarningOrigins: invDoctor.registryWarnings.map((w) => w.origin),
+        agentsDiagnosticCodes: invDoctor.agentsDiagnostics.map((w) => w.code),
+        warningCodes: invDoctor.warnings.map((w) => w.code),
+        warningOrigins: invDoctor.warnings.map((w) => w.origin),
+      },
+    }).toEqual({
+      invalidBundleWarnings: invFixture.invalidBundleWarnings,
+      invalidBundleDoctor: invFixture.invalidBundleDoctor,
+    });
   });
 
   it("matches the documented CLI telemetry mutation boundary contract fixture", async () => {
