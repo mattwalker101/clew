@@ -28,6 +28,14 @@
         "recommendation",
         "warnings"
       ],
+      "overlapsKeys": [
+        "overlaps",
+        "warnings"
+      ],
+      "conflictsKeys": [
+        "conflicts",
+        "warnings"
+      ],
       "telemetryKeys": [
         "dbPath",
         "skills",
@@ -84,6 +92,10 @@
         }
       ]
     },
+    "relationshipReads": {
+      "overlapCount": 0,
+      "conflictCount": 0
+    },
     "disabledReads": {
       "listSkillIds": [],
       "searchSkillIds": [],
@@ -111,6 +123,8 @@
       "recommendExplain": [],
       "lookup": [],
       "explain": [],
+      "overlaps": [],
+      "conflicts": [],
       "telemetry": [],
       "telemetryExplain": [],
       "disabledList": [],

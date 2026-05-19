@@ -899,6 +899,8 @@ describe("@clew/cli", () => {
     await main(["recommend", "--explain", "typescript"]);
     await main(["lookup", "typescript-core"]);
     await main(["explain", "typescript-core", "typescript"]);
+    await main(["overlaps"]);
+    await main(["conflicts"]);
     await main(["telemetry"]);
     await main(["telemetry", "--explain"]);
     await main(["disable", "typescript-core"]);
@@ -915,13 +917,15 @@ describe("@clew/cli", () => {
     const recommendExplain = outputAt(log, 4) as { analysis: { recommendations: Array<{ skillId: string }> }; warnings: unknown[] };
     const lookup = outputAt(log, 5) as { bundle: { manifest: { id: string } } | null; warnings: unknown[] };
     const explain = outputAt(log, 6) as { recommendation: { skillId: string } | null; warnings: unknown[] };
-    const telemetry = outputAt(log, 7) as { telemetry: Array<{ skillId: string; usageCount: number }>; warnings: unknown[] };
-    const telemetryExplain = outputAt(log, 8) as { analysis: { records: Array<{ skillId: string; enabled: boolean }> }; warnings: unknown[] };
-    const disabledList = outputAt(log, 10) as { skills: Array<{ id: string }>; warnings: unknown[] };
-    const disabledSearch = outputAt(log, 11) as { skills: Array<{ id: string }>; warnings: unknown[] };
-    const disabledLookup = outputAt(log, 12) as { bundle: unknown; warnings: Array<{ code: string; origin?: string }> };
-    const disabledRecommend = outputAt(log, 13) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
-    const disabledExplain = outputAt(log, 14) as { recommendation: unknown; warnings: Array<{ code: string; origin?: string }> };
+    const overlaps = outputAt(log, 7) as { overlaps: unknown[]; warnings: unknown[] };
+    const conflicts = outputAt(log, 8) as { conflicts: unknown[]; warnings: unknown[] };
+    const telemetry = outputAt(log, 9) as { telemetry: Array<{ skillId: string; usageCount: number }>; warnings: unknown[] };
+    const telemetryExplain = outputAt(log, 10) as { analysis: { records: Array<{ skillId: string; enabled: boolean }> }; warnings: unknown[] };
+    const disabledList = outputAt(log, 12) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledSearch = outputAt(log, 13) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledLookup = outputAt(log, 14) as { bundle: unknown; warnings: Array<{ code: string; origin?: string }> };
+    const disabledRecommend = outputAt(log, 15) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
+    const disabledExplain = outputAt(log, 16) as { recommendation: unknown; warnings: Array<{ code: string; origin?: string }> };
 
     expect({
       defaultSurfaces: {
@@ -930,6 +934,8 @@ describe("@clew/cli", () => {
         recommendKeys: Object.keys(recommend),
         lookupKeys: Object.keys(lookup),
         explainKeys: Object.keys(explain),
+        overlapsKeys: Object.keys(overlaps),
+        conflictsKeys: Object.keys(conflicts),
         telemetryKeys: Object.keys(telemetry),
       },
       analysisSurfaces: {
@@ -954,6 +960,10 @@ describe("@clew/cli", () => {
           enabled: record.enabled,
         })),
       },
+      relationshipReads: {
+        overlapCount: overlaps.overlaps.length,
+        conflictCount: conflicts.conflicts.length,
+      },
       disabledReads: {
         listSkillIds: disabledList.skills.map((skill) => skill.id),
         searchSkillIds: disabledSearch.skills.map((skill) => skill.id),
@@ -973,6 +983,8 @@ describe("@clew/cli", () => {
         recommendExplain: recommendExplain.warnings,
         lookup: lookup.warnings,
         explain: explain.warnings,
+        overlaps: overlaps.warnings,
+        conflicts: conflicts.warnings,
         telemetry: telemetry.warnings,
         telemetryExplain: telemetryExplain.warnings,
         disabledList: disabledList.warnings,
