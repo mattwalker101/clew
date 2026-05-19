@@ -2,6 +2,8 @@ import { type CompatibilityWarning, type ExportResult, type SkillBundle, exportR
 
 type Provider = "claude" | "opencode";
 
+const supportedProviders = ["claude", "opencode"] as const;
+
 export function exportClaudeSkill(bundle: SkillBundle): ExportResult {
   const warnings = exportWarnings(bundle, "claude");
   const command = providerExtension(bundle, "claude").slash_command;
@@ -45,7 +47,14 @@ export function exportOpenCodeSkill(bundle: SkillBundle): ExportResult {
 }
 
 export function exportProviderSkill(provider: Provider, bundle: SkillBundle): ExportResult {
+  assertSupportedProvider(provider);
   return provider === "claude" ? exportClaudeSkill(bundle) : exportOpenCodeSkill(bundle);
+}
+
+function assertSupportedProvider(provider: unknown): asserts provider is Provider {
+  if (!supportedProviders.includes(provider as Provider)) {
+    throw new Error(`Unsupported provider "${String(provider)}"; supported providers: ${supportedProviders.join(", ")}`);
+  }
 }
 
 function exportWarnings(bundle: SkillBundle, provider: Provider): CompatibilityWarning[] {

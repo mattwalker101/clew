@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { importClaudeSkill, importOpenCodeSkill } from "./index.js";
+import { importClaudeSkill, importOpenCodeSkill, importProviderSkill } from "./index.js";
 import type { ProviderSkillInput } from "./index.js";
 import { compatibilityWarningSchema, type CompatibilityWarning, type ImportResult } from "@clew/schema";
 
@@ -58,6 +58,13 @@ type ProviderInteropBoundaryContract = {
   };
 };
 
+type ProviderUnsupportedBoundaryContract = {
+  scope: {
+    supportedProviders: string[];
+    excludedProviders: string[];
+  };
+};
+
 function fixture(name: string): ProviderSkillInput {
   return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
 }
@@ -84,6 +91,12 @@ function providerInteropBoundaryContract(): ProviderInteropBoundaryContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-interop-boundary-contract.json"), "utf8"),
   ) as ProviderInteropBoundaryContract;
+}
+
+function providerUnsupportedBoundaryContract(): ProviderUnsupportedBoundaryContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-unsupported-boundary-contract.json"), "utf8"),
+  ) as ProviderUnsupportedBoundaryContract;
 }
 
 describe("@clew/importers", () => {
@@ -171,6 +184,27 @@ describe("@clew/importers", () => {
     });
     expect(summarizeImport(claude)).toEqual(contract.imports.claudeDegraded);
     expect(summarizeImport(opencode)).toEqual(contract.imports.opencodeNormalized);
+  });
+
+  it("rejects excluded providers at the direct import API boundary", () => {
+    const contract = providerUnsupportedBoundaryContract();
+    const input: ProviderSkillInput = {
+      id: "unsupported-provider",
+      name: "Unsupported Provider",
+      instructions: "This should never become a clew bundle.",
+    };
+
+    expect(contract.scope.supportedProviders).toEqual(["claude", "opencode"]);
+    expect(contract.scope.excludedProviders).toEqual(["cursor", "windsurf", "copilot"]);
+
+    for (const provider of contract.scope.excludedProviders) {
+      let result: ImportResult | undefined;
+
+      expect(() => {
+        result = importProviderSkill(provider as any, input);
+      }).toThrow(`Unsupported provider "${provider}"; supported providers: claude, opencode`);
+      expect(result).toBeUndefined();
+    }
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {

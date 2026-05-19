@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { exportClaudeSkill, exportOpenCodeSkill } from "./index.js";
+import { exportClaudeSkill, exportOpenCodeSkill, exportProviderSkill } from "./index.js";
 import { compatibilityWarningSchema, type CompatibilityWarning, type ExportResult, type SkillBundle } from "@clew/schema";
 
 const bundle: SkillBundle = {
@@ -62,6 +62,13 @@ type ProviderInteropBoundaryContract = {
   };
 };
 
+type ProviderUnsupportedBoundaryContract = {
+  scope: {
+    supportedProviders: string[];
+    excludedProviders: string[];
+  };
+};
+
 type ProviderExportBoundary = {
   provider: string;
   artifactPaths: string[];
@@ -95,6 +102,12 @@ function providerInteropBoundaryContract(): ProviderInteropBoundaryContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-interop-boundary-contract.json"), "utf8"),
   ) as ProviderInteropBoundaryContract;
+}
+
+function providerUnsupportedBoundaryContract(): ProviderUnsupportedBoundaryContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-unsupported-boundary-contract.json"), "utf8"),
+  ) as ProviderUnsupportedBoundaryContract;
 }
 
 describe("@clew/exporters", () => {
@@ -149,6 +162,22 @@ describe("@clew/exporters", () => {
     expect(summarizeExport(exportClaudeSkill(canonicalFixture()))).toEqual(contract.exports.claudeCanonical);
     expect(summarizeExport(exportOpenCodeSkill(canonicalFixture()))).toEqual(contract.exports.opencodeCanonical);
     expect(summarizeExport(exportOpenCodeSkill(bundle))).toEqual(contract.exports.opencodeFromClaudeOnly);
+  });
+
+  it("rejects excluded providers at the direct export API boundary", () => {
+    const contract = providerUnsupportedBoundaryContract();
+
+    expect(contract.scope.supportedProviders).toEqual(["claude", "opencode"]);
+    expect(contract.scope.excludedProviders).toEqual(["cursor", "windsurf", "copilot"]);
+
+    for (const provider of contract.scope.excludedProviders) {
+      let result: ExportResult | undefined;
+
+      expect(() => {
+        result = exportProviderSkill(provider as any, bundle);
+      }).toThrow(`Unsupported provider "${provider}"; supported providers: claude, opencode`);
+      expect(result).toBeUndefined();
+    }
   });
 
   it("exports OpenCode fixtures with provider mode and stable warnings", () => {
