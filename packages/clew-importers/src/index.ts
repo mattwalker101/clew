@@ -9,6 +9,8 @@ import {
 
 export type Provider = "claude" | "opencode";
 
+const supportedProviders = ["claude", "opencode"] as const;
+
 export type ProviderSkillInput = {
   id?: string;
   name?: string;
@@ -34,6 +36,7 @@ export function importOpenCodeSkill(input: ProviderSkillInput): ImportResult {
 }
 
 export function importProviderSkill(provider: Provider, input: ProviderSkillInput): ImportResult {
+  assertSupportedProvider(provider);
   assertProviderInput(provider, input);
   const warnings: CompatibilityWarning[] = [];
   const id = slug(input.id ?? input.name ?? `${provider}-skill`);
@@ -103,6 +106,12 @@ export function importProviderSkill(provider: Provider, input: ProviderSkillInpu
   });
 
   return importResultSchema.parse({ provider, bundles: [bundle], warnings, provenance: manifest.provenance });
+}
+
+function assertSupportedProvider(provider: unknown): asserts provider is Provider {
+  if (!supportedProviders.includes(provider as Provider)) {
+    throw new Error(`Unsupported provider "${String(provider)}"; supported providers: ${supportedProviders.join(", ")}`);
+  }
 }
 
 function assertProviderInput(provider: Provider, input: ProviderSkillInput): void {
