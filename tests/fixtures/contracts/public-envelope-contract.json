@@ -13,6 +13,17 @@
         "recommendations",
         "warnings"
       ],
+      "lookupKeys": [
+        "skillId",
+        "bundle",
+        "warnings"
+      ],
+      "explainKeys": [
+        "skillId",
+        "query",
+        "recommendation",
+        "warnings"
+      ],
       "telemetryKeys": [
         "dbPath",
         "skills",
@@ -51,6 +62,8 @@
       "recommendationAnalysisIds": [
         "typescript-core"
       ],
+      "lookupSkillId": "typescript-core",
+      "explanationSkillId": "typescript-core",
       "telemetryRows": [
         {
           "skillId": "typescript-core",
@@ -88,6 +101,8 @@
       "searchExplain": [],
       "recommend": [],
       "recommendExplain": [],
+      "lookup": [],
+      "explain": [],
       "telemetry": [],
       "telemetryExplain": [],
       "disabledList": [],
