@@ -3,6 +3,10 @@
   "description": "CLI and MCP public read envelopes keep compatibility payloads separate from opt-in analysis payloads. Registry warnings stay top-level, activation warnings stay recommendation-scoped, and disabled telemetry does not leak into public read results.",
   "cli": {
     "defaultSurfaces": {
+      "listKeys": [
+        "skills",
+        "warnings"
+      ],
       "searchKeys": [
         "query",
         "skills",
@@ -50,6 +54,9 @@
       ]
     },
     "enabledReads": {
+      "listSkillIds": [
+        "typescript-core"
+      ],
       "searchSkillIds": [
         "typescript-core"
       ],
@@ -97,6 +104,7 @@
       ]
     },
     "warnings": {
+      "list": [],
       "search": [],
       "searchExplain": [],
       "recommend": [],

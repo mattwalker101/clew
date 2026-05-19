@@ -892,6 +892,7 @@ describe("@clew/cli", () => {
     process.chdir(projectRoot);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
+    await main(["list"]);
     await main(["search", "typescript"]);
     await main(["search", "--explain", "typescript"]);
     await main(["recommend", "typescript"]);
@@ -907,22 +908,24 @@ describe("@clew/cli", () => {
     await main(["recommend", "typescript"]);
     await main(["explain", "typescript-core", "typescript"]);
 
-    const search = outputAt(log, 0) as { skills: Array<{ id: string }>; warnings: unknown[] };
-    const searchExplain = outputAt(log, 1) as { analysis: { matches: Array<{ skillId: string }> }; warnings: unknown[] };
-    const recommend = outputAt(log, 2) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
-    const recommendExplain = outputAt(log, 3) as { analysis: { recommendations: Array<{ skillId: string }> }; warnings: unknown[] };
-    const lookup = outputAt(log, 4) as { bundle: { manifest: { id: string } } | null; warnings: unknown[] };
-    const explain = outputAt(log, 5) as { recommendation: { skillId: string } | null; warnings: unknown[] };
-    const telemetry = outputAt(log, 6) as { telemetry: Array<{ skillId: string; usageCount: number }>; warnings: unknown[] };
-    const telemetryExplain = outputAt(log, 7) as { analysis: { records: Array<{ skillId: string; enabled: boolean }> }; warnings: unknown[] };
-    const disabledList = outputAt(log, 9) as { skills: Array<{ id: string }>; warnings: unknown[] };
-    const disabledSearch = outputAt(log, 10) as { skills: Array<{ id: string }>; warnings: unknown[] };
-    const disabledLookup = outputAt(log, 11) as { bundle: unknown; warnings: Array<{ code: string; origin?: string }> };
-    const disabledRecommend = outputAt(log, 12) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
-    const disabledExplain = outputAt(log, 13) as { recommendation: unknown; warnings: Array<{ code: string; origin?: string }> };
+    const list = outputAt(log, 0) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const search = outputAt(log, 1) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const searchExplain = outputAt(log, 2) as { analysis: { matches: Array<{ skillId: string }> }; warnings: unknown[] };
+    const recommend = outputAt(log, 3) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
+    const recommendExplain = outputAt(log, 4) as { analysis: { recommendations: Array<{ skillId: string }> }; warnings: unknown[] };
+    const lookup = outputAt(log, 5) as { bundle: { manifest: { id: string } } | null; warnings: unknown[] };
+    const explain = outputAt(log, 6) as { recommendation: { skillId: string } | null; warnings: unknown[] };
+    const telemetry = outputAt(log, 7) as { telemetry: Array<{ skillId: string; usageCount: number }>; warnings: unknown[] };
+    const telemetryExplain = outputAt(log, 8) as { analysis: { records: Array<{ skillId: string; enabled: boolean }> }; warnings: unknown[] };
+    const disabledList = outputAt(log, 10) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledSearch = outputAt(log, 11) as { skills: Array<{ id: string }>; warnings: unknown[] };
+    const disabledLookup = outputAt(log, 12) as { bundle: unknown; warnings: Array<{ code: string; origin?: string }> };
+    const disabledRecommend = outputAt(log, 13) as { recommendations: Array<{ skillId: string }>; warnings: unknown[] };
+    const disabledExplain = outputAt(log, 14) as { recommendation: unknown; warnings: Array<{ code: string; origin?: string }> };
 
     expect({
       defaultSurfaces: {
+        listKeys: Object.keys(list),
         searchKeys: Object.keys(search),
         recommendKeys: Object.keys(recommend),
         lookupKeys: Object.keys(lookup),
@@ -935,6 +938,7 @@ describe("@clew/cli", () => {
         telemetryExplainKeys: Object.keys(telemetryExplain),
       },
       enabledReads: {
+        listSkillIds: list.skills.map((skill) => skill.id),
         searchSkillIds: search.skills.map((skill) => skill.id),
         searchAnalysisMatchIds: searchExplain.analysis.matches.map((match) => match.skillId),
         recommendationIds: recommend.recommendations.map((item) => item.skillId),
@@ -962,6 +966,7 @@ describe("@clew/cli", () => {
         explainWarningOrigins: disabledExplain.warnings.map((warning) => warning.origin),
       },
       warnings: {
+        list: list.warnings,
         search: search.warnings,
         searchExplain: searchExplain.warnings,
         recommend: recommend.warnings,
