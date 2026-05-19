@@ -36,6 +36,17 @@
         "conflicts",
         "warnings"
       ],
+      "doctorKeys": [
+        "skills",
+        "dbPath",
+        "repoSignals",
+        "overlaps",
+        "conflicts",
+        "registryWarnings",
+        "agentsDiagnostics",
+        "agentsPreferences",
+        "warnings"
+      ],
       "telemetryKeys": [
         "dbPath",
         "skills",
@@ -95,6 +106,17 @@
     "relationshipReads": {
       "overlapCount": 0,
       "conflictCount": 0
+    },
+    "doctor": {
+      "skills": 1,
+      "registryWarningCodes": [],
+      "agentsDiagnosticCodes": [
+        "agents_skill_unknown"
+      ],
+      "warningCodes": [
+        "agents_skill_unknown"
+      ],
+      "agentsPreferences": []
     },
     "disabledReads": {
       "listSkillIds": [],
