@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "description": "Combined provider interop boundary fixture. Claude and OpenCode import/export preserve provider meaning through provenance, explicit extension namespaces, scriptable artifacts, and compatibility warnings.",
+  "scope": {
+    "supportedProviders": [
+      "claude",
+      "opencode"
+    ],
+    "excludedProviders": [
+      "cursor",
+      "windsurf",
+      "copilot"
+    ]
+  },
+  "imports": {
+    "claudeDegraded": {
+      "provider": "claude",
+      "manifestId": "db-migration",
+      "extensionNamespaceKeys": [
+        "claude"
+      ],
+      "preservedProviderMetadata": {
+        "id": "db-migration",
+        "name": "Database Migration",
+        "instructions": "Plan migrations with rollback steps.",
+        "allowed_tools": [
+          "Bash",
+          "WebFetch",
+          "Git"
+        ],
+        "slash_command": "/db-migration",
+        "risk_level": "high"
+      },
+      "provenance": {
+        "source": {
+          "type": "claude",
+          "location": "claude",
+          "original_id": "db-migration"
+        },
+        "imported_via": {
+          "importer": "claude"
+        }
+      },
+      "warningCodes": [
+        "tool_semantics_degraded",
+        "provider_metadata_preserved"
+      ],
+      "warningOrigins": [
+        "provider_import",
+        "provider_import"
+      ]
+    },
+    "opencodeNormalized": {
+      "provider": "opencode",
+      "manifestId": "opencode-migration",
+      "extensionNamespaceKeys": [
+        "opencode"
+      ],
+      "preservedProviderMetadata": {
+        "name": "OpenCode Migration",
+        "content": "Preserve provider behavior while normalizing to clew.",
+        "mode": "review",
+        "agent_mode": "review"
+      },
+      "provenance": {
+        "source": {
+          "type": "opencode",
+          "location": "opencode"
+        },
+        "imported_via": {
+          "importer": "opencode"
+        }
+      },
+      "warningCodes": [
+        "provider_field_normalized"
+      ],
+      "warningOrigins": [
+        "provider_import"
+      ]
+    }
+  },
+  "exports": {
+    "claudeCanonical": {
+      "provider": "claude",
+      "artifactPaths": [
+        "interop-core/SKILL.md"
+      ],
+      "warningCodes": [
+        "composition_degraded",
+        "capability_semantics_degraded"
+      ],
+      "warningOrigins": [
+        "provider_export",
+        "provider_export"
+      ]
+    },
+    "opencodeCanonical": {
+      "provider": "opencode",
+      "artifactPaths": [
+        "interop-core.md"
+      ],
+      "warningCodes": [
+        "composition_degraded",
+        "capability_semantics_degraded"
+      ],
+      "warningOrigins": [
+        "provider_export",
+        "provider_export"
+      ]
+    },
+    "opencodeFromClaudeOnly": {
+      "provider": "opencode",
+      "artifactPaths": [
+        "refactor-safely.md"
+      ],
+      "warningCodes": [
+        "target_provider_not_declared",
+        "composition_degraded",
+        "capability_semantics_degraded"
+      ],
+      "warningOrigins": [
+        "provider_export",
+        "provider_export",
+        "provider_export"
+      ]
+    }
+  },
+  "cli": {
+    "importClaudeDegraded": {
+      "provider": "claude",
+      "bundleIds": [
+        "db-migration"
+      ],
+      "extensionNamespaceKeys": [
+        "claude"
+      ],
+      "warningCodes": [
+        "tool_semantics_degraded",
+        "provider_metadata_preserved"
+      ],
+      "warningOrigins": [
+        "provider_import",
+        "provider_import"
+      ]
+    },
+    "exportOpenCodeUndeclared": {
+      "provider": "opencode",
+      "artifactPaths": [
+        "typescript-core.md"
+      ],
+      "warningCodes": [
+        "target_provider_not_declared"
+      ],
+      "warningOrigins": [
+        "provider_export"
+      ]
+    }
+  }
+}

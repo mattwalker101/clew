@@ -54,6 +54,21 @@ type ProviderRoundTripContract = {
   };
 };
 
+type ProviderInteropBoundaryContract = {
+  exports: {
+    claudeCanonical: ProviderExportBoundary;
+    opencodeCanonical: ProviderExportBoundary;
+    opencodeFromClaudeOnly: ProviderExportBoundary;
+  };
+};
+
+type ProviderExportBoundary = {
+  provider: string;
+  artifactPaths: string[];
+  warningCodes: string[];
+  warningOrigins: string[];
+};
+
 function canonicalFixture(): SkillBundle {
   return JSON.parse(readFileSync(join(fixtureRoot, "canonical-roundtrip.json"), "utf8")) as SkillBundle;
 }
@@ -74,6 +89,12 @@ function providerRoundTripContract(): ProviderRoundTripContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-roundtrip-contract.json"), "utf8"),
   ) as ProviderRoundTripContract;
+}
+
+function providerInteropBoundaryContract(): ProviderInteropBoundaryContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-interop-boundary-contract.json"), "utf8"),
+  ) as ProviderInteropBoundaryContract;
 }
 
 describe("@clew/exporters", () => {
@@ -114,6 +135,20 @@ describe("@clew/exporters", () => {
     });
     expect(result.artifacts).toEqual(contract.exports.claudeCanonical.artifacts);
     expect(result.warnings.map((warning) => compatibilityWarningSchema.parse(warning))).toEqual(result.warnings);
+  });
+
+  it("matches the provider interop fidelity boundary on export", () => {
+    const contract = providerInteropBoundaryContract();
+    const summarizeExport = (result: ExportResult) => ({
+      provider: result.provider,
+      artifactPaths: result.artifacts.map((artifact) => artifact.path),
+      warningCodes: result.warnings.map((warning) => warning.code),
+      warningOrigins: result.warnings.map((warning) => warning.origin),
+    });
+
+    expect(summarizeExport(exportClaudeSkill(canonicalFixture()))).toEqual(contract.exports.claudeCanonical);
+    expect(summarizeExport(exportOpenCodeSkill(canonicalFixture()))).toEqual(contract.exports.opencodeCanonical);
+    expect(summarizeExport(exportOpenCodeSkill(bundle))).toEqual(contract.exports.opencodeFromClaudeOnly);
   });
 
   it("exports OpenCode fixtures with provider mode and stable warnings", () => {

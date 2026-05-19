@@ -31,6 +31,33 @@ type ProviderRoundTripContract = {
   };
 };
 
+type ProviderInteropBoundaryContract = {
+  scope: {
+    supportedProviders: string[];
+    excludedProviders: string[];
+  };
+  imports: {
+    claudeDegraded: {
+      provider: string;
+      manifestId: string;
+      extensionNamespaceKeys: string[];
+      preservedProviderMetadata: Record<string, unknown>;
+      provenance: ImportResult["provenance"];
+      warningCodes: string[];
+      warningOrigins: string[];
+    };
+    opencodeNormalized: {
+      provider: string;
+      manifestId: string;
+      extensionNamespaceKeys: string[];
+      preservedProviderMetadata: Record<string, unknown>;
+      provenance: ImportResult["provenance"];
+      warningCodes: string[];
+      warningOrigins: string[];
+    };
+  };
+};
+
 function fixture(name: string): ProviderSkillInput {
   return JSON.parse(readFileSync(join(fixtureRoot, name), "utf8")) as ProviderSkillInput;
 }
@@ -51,6 +78,12 @@ function providerRoundTripContract(): ProviderRoundTripContract {
   return JSON.parse(
     readFileSync(join(contractRoot, "provider-roundtrip-contract.json"), "utf8"),
   ) as ProviderRoundTripContract;
+}
+
+function providerInteropBoundaryContract(): ProviderInteropBoundaryContract {
+  return JSON.parse(
+    readFileSync(join(contractRoot, "provider-interop-boundary-contract.json"), "utf8"),
+  ) as ProviderInteropBoundaryContract;
 }
 
 describe("@clew/importers", () => {
@@ -113,6 +146,31 @@ describe("@clew/importers", () => {
     });
     expect(result.bundles[0]?.manifest.provenance).toEqual(contract.imports.claudeDegraded.provenance);
     expect(result.bundles[0]?.manifest.extensions.claude).toBeDefined();
+  });
+
+  it("matches the provider interop fidelity boundary on import", () => {
+    const contract = providerInteropBoundaryContract();
+    const claude = importClaudeSkill(fixture("claude-degraded.json"));
+    const opencode = importOpenCodeSkill(fixture("opencode-normalized.json"));
+    const summarizeImport = (result: ImportResult) => {
+      const manifest = result.bundles[0]?.manifest;
+      return {
+        provider: result.provider,
+        manifestId: manifest?.id,
+        extensionNamespaceKeys: Object.keys(manifest?.extensions ?? {}).sort(),
+        preservedProviderMetadata: manifest?.extensions[result.provider] ?? {},
+        provenance: result.provenance,
+        warningCodes: result.warnings.map((warning) => warning.code),
+        warningOrigins: result.warnings.map((warning) => warning.origin),
+      };
+    };
+
+    expect(contract.scope).toEqual({
+      supportedProviders: ["claude", "opencode"],
+      excludedProviders: ["cursor", "windsurf", "copilot"],
+    });
+    expect(summarizeImport(claude)).toEqual(contract.imports.claudeDegraded);
+    expect(summarizeImport(opencode)).toEqual(contract.imports.opencodeNormalized);
   });
 
   it("normalizes OpenCode mode metadata and reports the transform", () => {
