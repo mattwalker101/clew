@@ -70,6 +70,12 @@ function telemetryMutationBoundaryFixture(): { cli: unknown } {
   ) as { cli: unknown };
 }
 
+function providerInteropBoundaryFixture(): { cli: unknown } {
+  return JSON.parse(
+    readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "provider-interop-boundary-contract.json"), "utf8"),
+  ) as { cli: unknown };
+}
+
 describe("@clew/cli", () => {
   it("prints read command JSON envelopes with warnings arrays", async () => {
     const projectRoot = createProject();
@@ -689,6 +695,54 @@ describe("@clew/cli", () => {
       "claude skill must include non-empty instructions or content",
     );
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it("matches the provider interop fidelity boundary for import and export commands", async () => {
+    const fixture = providerInteropBoundaryFixture();
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(process.cwd(), "claude-skill.json");
+    writeFileSync(
+      inputPath,
+      JSON.stringify({
+        id: "db-migration",
+        name: "Database Migration",
+        instructions: "Plan migrations with rollback steps.",
+        allowed_tools: ["Bash"],
+        risk_level: "high",
+      }),
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["import", "claude", inputPath]);
+    await main(["export", "opencode", "typescript-core"]);
+
+    const imported = outputAt(log, 0) as {
+      provider: string;
+      bundles: Array<{ manifest: { id: string; extensions: Record<string, unknown> } }>;
+      warnings: Array<{ code: string; origin?: string }>;
+    };
+    const exported = outputAt(log, 1) as {
+      provider: string;
+      artifacts: Array<{ path: string }>;
+      warnings: Array<{ code: string; origin?: string }>;
+    };
+
+    expect({
+      importClaudeDegraded: {
+        provider: imported.provider,
+        bundleIds: imported.bundles.map((bundle) => bundle.manifest.id),
+        extensionNamespaceKeys: Object.keys(imported.bundles[0]?.manifest.extensions ?? {}).sort(),
+        warningCodes: imported.warnings.map((warning) => warning.code),
+        warningOrigins: imported.warnings.map((warning) => warning.origin),
+      },
+      exportOpenCodeUndeclared: {
+        provider: exported.provider,
+        artifactPaths: exported.artifacts.map((artifact) => artifact.path),
+        warningCodes: exported.warnings.map((warning) => warning.code),
+        warningOrigins: exported.warnings.map((warning) => warning.origin),
+      },
+    }).toEqual(fixture.cli);
   });
 
   it("lists valid registry bundles and warnings for invalid registry bundles", async () => {
