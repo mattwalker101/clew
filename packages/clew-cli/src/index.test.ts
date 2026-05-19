@@ -58,6 +58,37 @@ function outputAt(log: { mock: { calls: unknown[][] } }, index: number): unknown
   return JSON.parse(log.mock.calls[index]?.[0] as string);
 }
 
+function doctorBoundaryContractFixture() {
+  return JSON.parse(
+    readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "doctor-boundary-contract.json"), "utf8"),
+  ) as {
+    emptyRegistry: {
+      skills: number;
+      repoSignals: string[];
+      overlaps: number;
+      conflicts: unknown[];
+      registryWarnings: unknown[];
+      agentsDiagnostics: unknown[];
+      agentsPreferences: string[];
+      warnings: unknown[];
+    };
+    repoSignals: { signals: string[] };
+    overlapsPresent: { overlaps: number; conflicts: unknown[] };
+    missingParentConflict: {
+      overlaps: number;
+      conflicts: Array<{ ids: string[]; reason: string; classification: string; evidence: Array<{ kind: string; values: string[] }> }>;
+    };
+    agentsSkillDisabled: {
+      agentsDiagnostics: Array<{ code: string; message: string; severity: string; origin: string; field: string }>;
+      warningCodes: string[];
+      warningOrigins: string[];
+    };
+    populatedPreferences: { agentsPreferences: string[] };
+    multipleDiagnostics: { agentsDiagnosticCodes: string[]; warningCodes: string[] };
+    warningMergeOrder: { warningCodes: string[]; warningOrigins: string[] };
+  };
+}
+
 function publicEnvelopeContractFixture(): { cli: unknown } {
   return JSON.parse(
     readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "public-envelope-contract.json"), "utf8"),
@@ -1194,5 +1225,142 @@ describe("@clew/cli", () => {
         persistedRegistryWarningCodes: warningTelemetry.warnings.map((warning) => warning.code),
       },
     }).toEqual(telemetryMutationBoundaryFixture().cli);
+  });
+
+  it("matches the documented CLI doctor boundary contract fixture", async () => {
+    const fixture = doctorBoundaryContractFixture();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Scenario 1: emptyRegistry — no skills, no project files
+    {
+      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      mkdirSync(join(root, "skills"), { recursive: true });
+      process.chdir(root);
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as Record<string, unknown>;
+      expect({
+        skills: out.skills,
+        repoSignals: out.repoSignals,
+        overlaps: out.overlaps,
+        conflicts: out.conflicts,
+        registryWarnings: out.registryWarnings,
+        agentsDiagnostics: out.agentsDiagnostics,
+        agentsPreferences: out.agentsPreferences,
+        warnings: out.warnings,
+      }).toEqual(fixture.emptyRegistry);
+    }
+
+    // Scenario 2: repoSignals — git dir + zod + vitest in package.json
+    {
+      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      mkdirSync(join(root, "skills"), { recursive: true });
+      mkdirSync(join(root, ".git"), { recursive: true });
+      writeFileSync(join(root, "package.json"), JSON.stringify({ devDependencies: { zod: "latest", vitest: "latest" } }));
+      process.chdir(root);
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { repoSignals: string[] };
+      expect(out.repoSignals).toEqual(fixture.repoSignals.signals);
+    }
+
+    // Scenario 3: overlapsPresent — two skills sharing a trigger
+    {
+      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      for (const [id, name] of [["skill-alpha", "Skill Alpha"], ["skill-beta", "Skill Beta"]] as [string, string][]) {
+        const skillRoot = join(root, "skills", id);
+        mkdirSync(skillRoot, { recursive: true });
+        writeFileSync(
+          join(skillRoot, "clew.yaml"),
+          ["id: " + id, "version: 1.0.0", "kind: instruction_skill", "name: " + name, "instructions:", "  file: skill.md", "activation:", "  triggers:", "    - shared-trigger"].join("\n"),
+        );
+        writeFileSync(join(skillRoot, "skill.md"), "# " + name + "\n\nContent.\n");
+      }
+      process.chdir(root);
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { overlaps: number; conflicts: unknown[] };
+      expect({ overlaps: out.overlaps, conflicts: out.conflicts }).toEqual(fixture.overlapsPresent);
+    }
+
+    // Scenario 4: missingParentConflict — skill extends a non-existent parent
+    {
+      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      const skillRoot = join(root, "skills", "child-skill");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        join(skillRoot, "clew.yaml"),
+        ["id: child-skill", "version: 1.0.0", "kind: instruction_skill", "name: Child Skill", "instructions:", "  file: skill.md", "extends:", "  - nonexistent-parent"].join("\n"),
+      );
+      writeFileSync(join(skillRoot, "skill.md"), "# Child Skill\n\nContent.\n");
+      process.chdir(root);
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { overlaps: number; conflicts: unknown[] };
+      expect({ overlaps: out.overlaps, conflicts: out.conflicts }).toEqual(fixture.missingParentConflict);
+    }
+
+    // Scenario 5: agentsSkillDisabled — AGENTS.md references a disabled skill
+    {
+      const root = createProject();
+      process.chdir(root);
+      await main(["disable", "typescript-core"]);
+      writeFileSync(join(root, "AGENTS.md"), "# Active Skills\n- typescript-core\n");
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as {
+        agentsDiagnostics: Array<{ code: string; message: string; severity: string; origin: string; field: string }>;
+        warnings: Array<{ code: string; origin: string }>;
+      };
+      expect({
+        agentsDiagnostics: out.agentsDiagnostics,
+        warningCodes: out.warnings.map((w) => w.code),
+        warningOrigins: out.warnings.map((w) => w.origin),
+      }).toEqual(fixture.agentsSkillDisabled);
+    }
+
+    // Scenario 6: populatedPreferences — AGENTS.md with Runtime Preferences section
+    {
+      const root = createProject();
+      process.chdir(root);
+      writeFileSync(
+        join(root, "AGENTS.md"),
+        ["# Active Skills", "", "## Runtime Preferences", "- Prefer explicit over implicit.", "- Avoid unnecessary complexity."].join("\n"),
+      );
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { agentsPreferences: string[] };
+      expect(out.agentsPreferences).toEqual(fixture.populatedPreferences.agentsPreferences);
+    }
+
+    // Scenario 7: multipleDiagnostics — AGENTS.md with both unknown and disabled skill refs
+    {
+      const root = createProject();
+      process.chdir(root);
+      await main(["disable", "typescript-core"]);
+      writeFileSync(join(root, "AGENTS.md"), "# Active Skills\n- unknown-skill\n- typescript-core\n");
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { agentsDiagnostics: Array<{ code: string }>; warnings: Array<{ code: string }> };
+      expect({
+        agentsDiagnosticCodes: out.agentsDiagnostics.map((d) => d.code),
+        warningCodes: out.warnings.map((w) => w.code),
+      }).toEqual(fixture.multipleDiagnostics);
+    }
+
+    // Scenario 8: warningMergeOrder — registry warning + agents diagnostic, registry comes first
+    {
+      const root = createProject();
+      process.chdir(root);
+      writeInvalidFutureKindBundle(root);
+      writeFileSync(join(root, "AGENTS.md"), "# Active Skills\n- missing-skill\n");
+      log.mockClear();
+      await main(["doctor"]);
+      const out = outputAt(log, 0) as { warnings: Array<{ code: string; origin: string }> };
+      expect({
+        warningCodes: out.warnings.map((w) => w.code),
+        warningOrigins: out.warnings.map((w) => w.origin),
+      }).toEqual(fixture.warningMergeOrder);
+    }
   });
 });
