@@ -9,6 +9,8 @@ Default read surfaces remain compatibility-shaped:
 - CLI `clew recommend <query>` and MCP `recommend()` return `{ query, recommendations, warnings }`.
 - CLI `clew lookup <skill-id>` and MCP `lookup()` return `{ skillId, bundle, warnings }`.
 - CLI `clew explain <skill-id> [query]` and MCP `explain()` return `{ skillId, query, recommendation, warnings }`.
+- CLI `clew overlaps` returns `{ overlaps, warnings }`.
+- CLI `clew conflicts` returns `{ conflicts, warnings }`.
 - CLI `clew telemetry` returns `{ dbPath, skills, warnings, telemetry }`.
 
 Opt-in analysis surfaces expose analysis explicitly without changing default envelopes:
