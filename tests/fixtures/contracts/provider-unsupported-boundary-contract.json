@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "description": "Unsupported provider and malformed provider-input boundary fixture. Claude and OpenCode remain the only executable provider import/export surfaces; Cursor, Windsurf, and Copilot fail clearly without JSON output or state mutation.",
+  "scope": {
+    "supportedProviders": [
+      "claude",
+      "opencode"
+    ],
+    "excludedProviders": [
+      "cursor",
+      "windsurf",
+      "copilot"
+    ]
+  },
+  "cli": {
+    "unsupportedProviders": {
+      "importUsage": "usage: clew import <claude|opencode> <json-file>",
+      "exportUsage": "usage: clew export <claude|opencode> <skill-id>",
+      "printsJson": false
+    },
+    "malformedInput": {
+      "invalidIdError": "claude field \"id\" must be a string",
+      "emptyInstructionsError": "claude skill must include non-empty instructions or content",
+      "printsJson": false
+    },
+    "failedCommandsDoNotMutate": {
+      "telemetryRows": [
+        {
+          "skillId": "typescript-core",
+          "usageCount": 0
+        }
+      ],
+      "listSkillIds": [
+        "typescript-core"
+      ],
+      "warnings": []
+    }
+  }
+}

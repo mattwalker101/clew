@@ -76,6 +76,26 @@ function providerInteropBoundaryFixture(): { cli: unknown } {
   ) as { cli: unknown };
 }
 
+function providerUnsupportedBoundaryFixture(): {
+  scope: { supportedProviders: string[]; excludedProviders: string[] };
+  cli: {
+    unsupportedProviders: { importUsage: string; exportUsage: string; printsJson: boolean };
+    malformedInput: { invalidIdError: string; emptyInstructionsError: string; printsJson: boolean };
+    failedCommandsDoNotMutate: {
+      telemetryRows: Array<{ skillId: string; usageCount: number }>;
+      listSkillIds: string[];
+      warnings: unknown[];
+    };
+  };
+} {
+  return JSON.parse(
+    readFileSync(
+      join(originalCwd, "tests", "fixtures", "contracts", "provider-unsupported-boundary-contract.json"),
+      "utf8",
+    ),
+  );
+}
+
 describe("@clew/cli", () => {
   it("prints read command JSON envelopes with warnings arrays", async () => {
     const projectRoot = createProject();
@@ -695,6 +715,106 @@ describe("@clew/cli", () => {
       "claude skill must include non-empty instructions or content",
     );
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it("matches the provider unsupported boundary scope from the provider interop fixture", () => {
+    const unsupported = providerUnsupportedBoundaryFixture();
+    const interop = JSON.parse(
+      readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "provider-interop-boundary-contract.json"), "utf8"),
+    ) as { scope: unknown };
+
+    expect(unsupported.scope).toEqual(interop.scope);
+  });
+
+  it("rejects unsupported provider import and export commands before printing JSON", async () => {
+    const fixture = providerUnsupportedBoundaryFixture();
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(process.cwd(), "claude-skill.json");
+    writeFileSync(inputPath, JSON.stringify({ id: "db-migration", instructions: "Plan migrations." }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(process, "exit").mockImplementation(((code?: string | number | null) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    for (const provider of fixture.scope.excludedProviders) {
+      await expect(main(["import", provider, inputPath])).rejects.toThrow("process.exit:1");
+      await expect(main(["export", provider, "typescript-core"])).rejects.toThrow("process.exit:1");
+    }
+
+    expect(log).not.toHaveBeenCalled();
+    expect(fixture.cli.unsupportedProviders.printsJson).toBe(false);
+    expect(error.mock.calls.map((call) => call[0])).toEqual(
+      fixture.scope.excludedProviders.flatMap(() => [
+        fixture.cli.unsupportedProviders.importUsage,
+        fixture.cli.unsupportedProviders.exportUsage,
+      ]),
+    );
+  });
+
+  it("matches malformed provider input failures without printing JSON", async () => {
+    const fixture = providerUnsupportedBoundaryFixture();
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const invalidIdPath = join(process.cwd(), "invalid-id-skill.json");
+    const emptyInstructionsPath = join(process.cwd(), "empty-instructions-skill.json");
+    writeFileSync(invalidIdPath, JSON.stringify({ id: 123, instructions: "Use the skill." }));
+    writeFileSync(emptyInstructionsPath, JSON.stringify({ id: "broken", instructions: "" }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(main(["import", "claude", invalidIdPath])).rejects.toThrow(fixture.cli.malformedInput.invalidIdError);
+    await expect(main(["import", "claude", emptyInstructionsPath])).rejects.toThrow(
+      fixture.cli.malformedInput.emptyInstructionsError,
+    );
+
+    expect(log).not.toHaveBeenCalled();
+    expect(fixture.cli.malformedInput.printsJson).toBe(false);
+  });
+
+  it("does not mutate registry or telemetry state after failed provider commands", async () => {
+    const fixture = providerUnsupportedBoundaryFixture();
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(process.cwd(), "claude-skill.json");
+    const malformedPath = join(process.cwd(), "malformed-skill.json");
+    writeFileSync(inputPath, JSON.stringify({ id: "db-migration", instructions: "Plan migrations." }));
+    writeFileSync(malformedPath, JSON.stringify({ id: "broken", instructions: "" }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(process, "exit").mockImplementation(((code?: string | number | null) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+
+    await expect(main(["import", fixture.scope.excludedProviders[0] ?? "cursor", inputPath])).rejects.toThrow(
+      "process.exit:1",
+    );
+    await expect(main(["export", fixture.scope.excludedProviders[0] ?? "cursor", "typescript-core"])).rejects.toThrow(
+      "process.exit:1",
+    );
+    await expect(main(["import", "claude", malformedPath])).rejects.toThrow(
+      fixture.cli.malformedInput.emptyInstructionsError,
+    );
+    await expect(main(["export", "opencode", "missing-skill"])).rejects.toThrow("process.exit:1");
+    expect(log).not.toHaveBeenCalled();
+
+    await main(["telemetry"]);
+    await main(["list"]);
+
+    const telemetry = outputAt(log, 0) as {
+      telemetry: Array<{ skillId: string; usageCount: number }>;
+      warnings: unknown[];
+    };
+    const list = outputAt(log, 1) as { skills: Array<{ id: string }>; warnings: unknown[] };
+
+    expect({
+      telemetryRows: telemetry.telemetry.map((record) => ({
+        skillId: record.skillId,
+        usageCount: record.usageCount,
+      })),
+      listSkillIds: list.skills.map((skill) => skill.id),
+      warnings: [...telemetry.warnings, ...list.warnings],
+    }).toEqual(fixture.cli.failedCommandsDoNotMutate);
   });
 
   it("matches the provider interop fidelity boundary for import and export commands", async () => {
