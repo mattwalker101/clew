@@ -1,11 +1,6 @@
 import { z } from "zod";
 
 export const supportedSkillKinds = ["instruction_skill"] as const;
-export const reservedFutureSkillKinds = [
-  "workflow_skill",
-  "persona_skill",
-  "tool_extension",
-] as const;
 
 export const coreCapabilities = [
   "filesystem",
@@ -17,14 +12,6 @@ export const coreCapabilities = [
   "vector_memory",
   "persistent_memory",
   "subagents",
-] as const;
-
-export const reservedExtensionNamespaces = [
-  "claude",
-  "opencode",
-  "pi",
-  "codex",
-  "local",
 ] as const;
 
 export const registryLayers = ["session", "project", "org", "global"] as const;
