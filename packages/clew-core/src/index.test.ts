@@ -1048,6 +1048,7 @@ describe("@clew/core", () => {
         },
       });
       const registry = new SkillRegistry(snapshot);
+      const engine = new ActivationEngine(registry);
       const contract = {
         precedence: registryPrecedence,
         snapshot: {
@@ -1067,7 +1068,12 @@ describe("@clew/core", () => {
           lookupLayeredSkill: registry.lookup("layered-skill")?.manifest.name,
           lookupDisabledPublic: registry.lookup("disabled-public") ?? null,
           searchDisabled: registry.search("disabled").map((candidate) => candidate.manifest.id),
+          analyzeSearchDisabled: registry.analyzeSearch("disabled").matches.map((match) => match.skillId),
           index: registry.analyzeIndex(),
+          recommendDisabled: engine
+            .recommend({ query: "disabled", capabilities: [] })
+            .map((recommendation) => recommendation.skillId),
+          explainDisabledPublic: engine.explain("disabled-public", { query: "disabled", capabilities: [] }) ?? null,
         },
         publicSurfaces: {
           snapshotHasResolutionDiagnostics: Object.hasOwn(snapshot, "resolutionDiagnostics"),

@@ -43,6 +43,7 @@
     "lookupLayeredSkill": "Session Skill",
     "lookupDisabledPublic": null,
     "searchDisabled": [],
+    "analyzeSearchDisabled": [],
     "index": {
       "index": [
         {
@@ -99,7 +100,9 @@
           ]
         }
       ]
-    }
+    },
+    "recommendDisabled": [],
+    "explainDisabledPublic": null
   },
   "publicSurfaces": {
     "snapshotHasResolutionDiagnostics": false,
