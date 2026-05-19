@@ -120,6 +120,10 @@
       ]
     },
     "analysisSurfaces": {
+      "indexAnalysisKeys": [
+        "analysis",
+        "warnings"
+      ],
       "searchAnalysisKeys": [
         "query",
         "analysis",
@@ -136,6 +140,9 @@
       ]
     },
     "enabledReads": {
+      "indexAnalysisSkillIds": [
+        "typescript-core"
+      ],
       "searchSkillIds": [
         "typescript-core"
       ],
@@ -197,6 +204,9 @@
       }
     ],
     "topLevelWarningCodes": {
+      "indexAnalysis": [
+        "skill_bundle_invalid"
+      ],
       "search": [
         "skill_bundle_invalid"
       ],

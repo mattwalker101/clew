@@ -474,6 +474,7 @@ describe("@clew/mcp", () => {
     );
 
     const search = bridge.search("typescript");
+    const indexAnalysis = bridge.analyzeIndex();
     const searchAnalysis = bridge.analyzeSearch("typescript");
     const recommendation = bridge.recommend({ query: "typescript", context: { capabilities: [] } });
     const recommendationAnalysis = bridge.analyzeRecommendations({
@@ -499,11 +500,13 @@ describe("@clew/mcp", () => {
         explainKeys: Object.keys(disabledExplain),
       },
       analysisSurfaces: {
+        indexAnalysisKeys: Object.keys(indexAnalysis),
         searchAnalysisKeys: Object.keys(searchAnalysis),
         recommendationAnalysisKeys: Object.keys(recommendationAnalysis),
         telemetryAnalysisKeys: Object.keys(telemetryAnalysis),
       },
       enabledReads: {
+        indexAnalysisSkillIds: indexAnalysis.analysis.index.map((item) => item.skillId),
         searchSkillIds: search.skills.map((skill) => skill.id),
         searchAnalysisMatchIds: searchAnalysis.analysis.matches.map((match) => match.skillId),
         recommendationIds: recommendation.recommendations.map((item) => item.skillId),
@@ -529,6 +532,7 @@ describe("@clew/mcp", () => {
         enabled: record.enabled,
       })),
       topLevelWarningCodes: {
+        indexAnalysis: indexAnalysis.warnings.map((warning) => warning.code),
         search: search.warnings.map((warning) => warning.code),
         searchAnalysis: searchAnalysis.warnings.map((warning) => warning.code),
         recommend: recommendation.warnings.map((warning) => warning.code),
