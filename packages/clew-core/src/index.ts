@@ -378,12 +378,15 @@ export function stringifyYaml(value: unknown, indent = 0): string {
   const lines: string[] = [];
   for (const [key, child] of Object.entries(value)) {
     if (Array.isArray(child)) {
+      if (child.length === 0) continue;
       lines.push(`${" ".repeat(indent)}${key}:`);
       for (const item of child) lines.push(`${" ".repeat(indent + 2)}- ${item}`);
     } else if (isRecord(child)) {
+      const childYaml = stringifyYaml(child, indent + 2);
+      if (!childYaml.trim()) continue;
       lines.push(`${" ".repeat(indent)}${key}:`);
-      lines.push(stringifyYaml(child, indent + 2));
-    } else if (child !== undefined) {
+      lines.push(childYaml);
+    } else if (child !== undefined && child !== null && child !== "") {
       lines.push(`${" ".repeat(indent)}${key}: ${child}`);
     }
   }

@@ -741,6 +741,38 @@ describe("@clew/cli", () => {
     });
   });
 
+  it("persists imported skills with --save and maintains round-trip fidelity", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const inputPath = join(projectRoot, "claude-skill.json");
+    writeFileSync(
+      inputPath,
+      JSON.stringify({
+        id: "imported-skill",
+        name: "Imported Skill",
+        instructions: "Imported instructions.",
+        slash_command: "/imported",
+      }),
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // 1. Import with --save
+    await main(["import", "claude", inputPath, "--save"]);
+
+    // 2. Verify it's in the list
+    log.mockClear();
+    await main(["list"]);
+    const list = JSON.parse(log.mock.calls[0]?.[0] as string) as { skills: Array<{ id: string }> };
+    expect(list.skills.map((s) => s.id)).toContain("imported-skill");
+
+    // 3. Export it back and check fidelity
+    log.mockClear();
+    await main(["export", "claude", "imported-skill"]);
+    const exported = JSON.parse(log.mock.calls[0]?.[0] as string) as { artifacts: Array<{ contents: string }> };
+    expect(exported.artifacts[0]?.contents).toContain("Slash command: /imported");
+    expect(exported.artifacts[0]?.contents).toContain("Imported instructions.");
+  });
+
   it("rejects malformed import input before printing JSON", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
