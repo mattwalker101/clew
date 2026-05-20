@@ -29,34 +29,34 @@ export type ClewMcpBridge = {
 };
 
 export type ClewMcpBridgeOptions = {
-  registry?: SkillRegistry;
-  defaultContext?: Partial<ClewMcpRequestContext>;
-  defaultLimit?: number;
+  registry?: SkillRegistry | undefined;
+  defaultContext?: Partial<ClewMcpRequestContext> | undefined;
+  defaultLimit?: number | undefined;
 };
 
 export type ClewMcpRequestContext = {
-  tags?: string[];
-  agentsMd?: string;
-  repoSignals?: string[];
-  capabilities?: Capability[];
-  activeSkillIds?: string[];
+  tags?: string[] | undefined;
+  agentsMd?: string | undefined;
+  repoSignals?: string[] | undefined;
+  capabilities?: Capability[] | undefined;
+  activeSkillIds?: string[] | undefined;
 };
 
 export type ClewMcpSearchInput = {
   query: string;
-  limit?: number;
+  limit?: number | undefined;
 };
 
 export type ClewMcpRecommendInput = {
   query: string;
-  context?: Partial<ClewMcpRequestContext>;
-  limit?: number;
+  context?: Partial<ClewMcpRequestContext> | undefined;
+  limit?: number | undefined;
 };
 
 export type ClewMcpExplainInput = {
   skillId: string;
   query: string;
-  context?: Partial<ClewMcpRequestContext>;
+  context?: Partial<ClewMcpRequestContext> | undefined;
 };
 
 export type ClewMcpLookupInput = {
@@ -216,16 +216,26 @@ export function createClewMcpBridge(
   };
 }
 
+export { runClewMcpServer } from "./server.js";
+
 function toActivationContext(
   query: string,
   defaultContext: Partial<ClewMcpRequestContext> | undefined,
   requestContext: Partial<ClewMcpRequestContext> | undefined,
 ): Partial<ActivationContext> {
-  return {
-    ...defaultContext,
-    ...requestContext,
-    query,
-  };
+  const context: any = { query };
+  const sources = [defaultContext, requestContext];
+
+  for (const source of sources) {
+    if (!source) continue;
+    for (const [key, value] of Object.entries(source)) {
+      if (value !== undefined) {
+        context[key] = value;
+      }
+    }
+  }
+
+  return context as Partial<ActivationContext>;
 }
 
 function applyLimit<T>(values: T[], limit: number | undefined): T[] {
