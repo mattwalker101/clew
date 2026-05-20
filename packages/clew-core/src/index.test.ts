@@ -91,6 +91,98 @@ describe("@clew/core", () => {
     ]);
   });
 
+  it("parses AGENTS.md with nested headers and complex preferences", () => {
+    const content = `
+# Project Context
+## Active Skills
+- engineering-core
+- safe-editing
+
+### Sub-Section
+- typescript-core
+
+# Another Section
+- must prefer local-first behavior
+- should avoid opaque orchestration
+- always use typescript
+- never use recursion
+- some random bullet point
+    `;
+    const parsed = parseAgentsMd(content);
+    expect(parsed.activeSkillIds).toEqual(["engineering-core", "safe-editing", "typescript-core"]);
+    expect(parsed.preferences).toEqual([
+      "- must prefer local-first behavior",
+      "- should avoid opaque orchestration",
+      "- always use typescript",
+      "- never use recursion",
+    ]);
+  });
+
+  it("diagnoses AGENTS.md skill mismatches", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-core-"));
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("typescript-core", { tags: ["typescript"] }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const content = "# Active Skills\n- typescript-core";
+    // In a directory without typescript files, it should issue a mismatch warning
+    const diagnostics = getAgentsMdDiagnostics(content, registry, projectRoot);
+    expect(diagnostics).toMatchObject([
+      {
+        code: "agents_skill_mismatch",
+        message: expect.stringContaining('expects repository signals [typescript]'),
+      },
+    ]);
+  });
+
+  it("boosts recommendations based on project preferences", () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core", {
+            activation: { triggers: ["build"], tags: [], weight: 1 },
+            policies: ["deterministic behavior"],
+          }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("random-skill"),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const activation = new ActivationEngine(registry);
+    const context = {
+      query: "build",
+      agentsMd: "# Preferences\n- must use deterministic behavior",
+    };
+
+    const recommendations = activation.recommend(context);
+    const eng = recommendations.find((r) => r.skillId === "engineering-core")!;
+    expect(eng.score).toBeGreaterThan(
+      activation.recommend({ query: "build" }).find((r) => r.skillId === "engineering-core")!.score,
+    );
+    expect(eng.reasons).toContain('matched project preference "- must use deterministic behavior"');
+    expect(eng.signals).toContainEqual({ type: "project_preference", value: "- must use deterministic behavior" });
+  });
+
   it("matches the documented AGENTS.md parsing and diagnostic contract fixture", () => {
     const contract = contractFixture("agents-md-contract.json") as {
       content: string;

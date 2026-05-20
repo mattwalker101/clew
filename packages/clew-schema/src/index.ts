@@ -30,6 +30,7 @@ export const recommendationSignalTypes = [
   "repo_signal",
   "telemetry_favorite",
   "telemetry_usage",
+  "project_preference",
 ] as const;
 
 export const skillKindSchema = z.enum(supportedSkillKinds);
