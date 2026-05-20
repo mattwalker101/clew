@@ -1,0 +1,24 @@
+id: roundtrip-test
+version: 1.0.0
+kind: instruction_skill
+name: Roundtrip Test
+instructions:
+  file: skill.md
+compatibility:
+  providers:
+    - claude
+activation:
+  weight: 1
+provenance:
+  source:
+    type: claude
+    location: claude
+    original_id: roundtrip-test
+  imported_via:
+    importer: claude
+extensions:
+  claude:
+    id: roundtrip-test
+    name: Roundtrip Test
+    instructions: Roundtrip instructions.
+    slash_command: /roundtrip

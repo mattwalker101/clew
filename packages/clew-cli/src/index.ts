@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -12,6 +12,7 @@ import {
   parseAgentsMd,
   rebuildRegistryIndex,
   SkillRegistry,
+  stringifyYaml,
 } from "@clew/core";
 import { exportProviderSkill } from "@clew/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
@@ -109,10 +110,27 @@ const commands: Record<string, Command> = {
     });
   },
   import(args) {
-    const [provider, file] = args;
-    if ((provider !== "claude" && provider !== "opencode") || !file) fail("usage: clew import <claude|opencode> <json-file>");
+    const save = args.includes("--save");
+    const filteredArgs = args.filter((arg) => arg !== "--save");
+    const [provider, file] = filteredArgs;
+    if ((provider !== "claude" && provider !== "opencode") || !file) {
+      fail("usage: clew import <claude|opencode> <json-file> [--save]");
+    }
     const input = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-    printJson(provider === "claude" ? importClaudeSkill(input) : importOpenCodeSkill(input));
+    const result = provider === "claude" ? importClaudeSkill(input) : importOpenCodeSkill(input);
+
+    if (save) {
+      const projectRegistryRoot = join(process.cwd(), ".clew");
+      for (const bundle of result.bundles) {
+        const skillPath = join(projectRegistryRoot, bundle.manifest.id);
+        mkdirSync(skillPath, { recursive: true });
+        writeFileSync(join(skillPath, "clew.yaml"), stringifyYaml(bundle.manifest));
+        writeFileSync(join(skillPath, "skill.md"), bundle.instructions);
+      }
+      rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+    }
+
+    printJson(result);
   },
   export(args) {
     const [provider, skillId] = args;
@@ -185,7 +203,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  recommend <query>",
         "  recommend --explain <query>",
         "  explain <skill-id> [query]",
-        "  import <claude|opencode> <json-file>",
+        "  import <claude|opencode> <json-file> [--save]",
         "  export <claude|opencode> <skill-id>",
         "  enable <skill-id>",
         "  disable <skill-id>",

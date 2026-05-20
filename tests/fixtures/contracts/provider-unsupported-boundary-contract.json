@@ -14,7 +14,7 @@
   },
   "cli": {
     "unsupportedProviders": {
-      "importUsage": "usage: clew import <claude|opencode> <json-file>",
+      "importUsage": "usage: clew import <claude|opencode> <json-file> [--save]",
       "exportUsage": "usage: clew export <claude|opencode> <skill-id>",
       "printsJson": false
     },
