@@ -6,5 +6,10 @@
     "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../clew-core" }, { "path": "../clew-importers" }, { "path": "../clew-exporters" }]
+  "references": [
+    { "path": "../clew-core" },
+    { "path": "../clew-importers" },
+    { "path": "../clew-exporters" },
+    { "path": "../clew-mcp" }
+  ]
 }

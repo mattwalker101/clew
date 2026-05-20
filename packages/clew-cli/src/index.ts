@@ -10,12 +10,14 @@ import {
   getAgentsMdDiagnostics,
   openRegistryDb,
   parseAgentsMd,
+  rebuildRegistry,
   rebuildRegistryIndex,
   SkillRegistry,
   stringifyYaml,
 } from "@clew/core";
 import { exportProviderSkill } from "@clew/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
+import { runClewMcpServer } from "@clew/mcp";
 import {
   formatValidationIssue,
   SkillBundleValidationError,
@@ -25,88 +27,101 @@ import {
 
 type Command = (args: string[]) => void | Promise<void>;
 
-const registryDbPath = () => join(process.cwd(), ".clew-registry.db");
-
-const registry = () => new SkillRegistry(rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() }));
-
 const commands: Record<string, Command> = {
   list() {
-    const current = readRegistry();
     printJsonEnvelope({
-      skills: current.registry.list().map((bundle) => bundle.manifest),
-      warnings: current.warnings,
+      skills: registry().list().map((b) => b.manifest),
+      warnings: registry().warnings,
     });
   },
   search(args) {
-    const explain = args[0] === "--explain";
-    const query = queryText(explain ? args.slice(1) : args);
-    const current = readRegistry();
+    const explain = args.includes("--explain");
+    const query = args.filter((arg) => arg !== "--explain").join(" ");
+    if (!query) fail("usage: clew search <query> [--explain]");
     if (explain) {
       printJsonEnvelope({
         query,
-        analysis: current.registry.analyzeSearch(query),
-        warnings: current.warnings,
+        analysis: registry().analyzeSearch(query),
+        warnings: registry().warnings,
       });
-      return;
+    } else {
+      printJsonEnvelope({
+        query,
+        skills: registry().search(query).map((b) => b.manifest),
+        warnings: registry().warnings,
+      });
     }
-    printJsonEnvelope({
-      query,
-      skills: current.registry.search(query).map((bundle) => bundle.manifest),
-      warnings: current.warnings,
-    });
   },
   lookup(args) {
     const [skillId] = args;
     if (!skillId) fail("usage: clew lookup <skill-id>");
-    const current = readRegistry();
-    const warning = skillStateWarning(current.registry, skillId);
+    const stateWarning = lookupStateWarning(skillId);
+    if (stateWarning) {
+      printJsonEnvelope({
+        skillId,
+        bundle: null,
+        warnings: [...registry().warnings, stateWarning],
+      });
+      return;
+    }
+    const bundle = registry().lookup(skillId) ?? null;
     printJsonEnvelope({
       skillId,
-      bundle: warning ? null : current.registry.lookup(skillId) ?? null,
-      warnings: warning ? [...current.warnings, warning] : current.warnings,
+      bundle,
+      warnings: bundle ? registry().warnings : [...registry().warnings, skillUnknownWarning(skillId)],
     });
   },
   recommend(args) {
-    const explain = args[0] === "--explain";
-    const query = queryText(explain ? args.slice(1) : args);
-    const current = readRegistry();
-    const activationContext = buildActivationContext(query);
-    const activation = new ActivationEngine(current.registry);
+    const explain = args.includes("--explain");
+    const query = args.filter((arg) => arg !== "--explain").join(" ");
+    if (!query) fail("usage: clew recommend <query> [--explain]");
+    const activation = new ActivationEngine(registry());
+    const context = buildActivationContext(query);
     if (explain) {
-      printJsonEnvelope({ query, analysis: activation.analyzeRecommendations(activationContext), warnings: current.warnings });
-      return;
-    }
-    const db = openRegistryDb(registryDbPath());
-    try {
-      const recommendations = activation.recommend(activationContext);
-      for (const recommendation of recommendations) db.recordRecommendation(recommendation.skillId);
-      printJsonEnvelope({ query, recommendations, warnings: current.warnings });
-    } finally {
-      db.close();
+      printJsonEnvelope({
+        query,
+        analysis: activation.analyzeRecommendations(context),
+        warnings: registry().warnings,
+      });
+    } else {
+      const recommendations = activation.recommend(context);
+      const db = openRegistryDb(registryDbPath());
+      try {
+        for (const rec of recommendations) {
+          db.recordRecommendation(rec.skillId);
+        }
+      } finally {
+        db.close();
+      }
+      printJsonEnvelope({
+        query,
+        recommendations,
+        warnings: registry().warnings,
+      });
     }
   },
   explain(args) {
     const [skillId, ...queryArgs] = args;
+    const query = queryArgs.join(" ");
     if (!skillId) fail("usage: clew explain <skill-id> [query]");
-    const query = queryText(queryArgs);
-    const current = readRegistry();
-    const stateWarning = skillStateWarning(current.registry, skillId);
+
+    const stateWarning = lookupStateWarning(skillId);
     if (stateWarning) {
       printJsonEnvelope({
         skillId,
         query,
         recommendation: null,
-        warnings: [...current.warnings, stateWarning],
+        warnings: [...registry().warnings, stateWarning],
       });
       return;
     }
 
-    const recommendation = new ActivationEngine(current.registry).explain(skillId, buildActivationContext(query)) ?? null;
+    const recommendation = new ActivationEngine(registry()).explain(skillId, buildActivationContext(query)) ?? null;
     printJsonEnvelope({
       skillId,
       query,
       recommendation,
-      warnings: recommendation ? current.warnings : [...current.warnings, notRecommendedWarning(skillId)],
+      warnings: recommendation ? registry().warnings : [...registry().warnings, notRecommendedWarning(skillId)],
     });
   },
   import(args) {
@@ -134,7 +149,9 @@ const commands: Record<string, Command> = {
   },
   export(args) {
     const [provider, skillId] = args;
-    if ((provider !== "claude" && provider !== "opencode") || !skillId) fail("usage: clew export <claude|opencode> <skill-id>");
+    if ((provider !== "claude" && provider !== "opencode") || !skillId) {
+      fail("usage: clew export <claude|opencode> <skill-id>");
+    }
     const bundle = registry().lookup(skillId);
     if (!bundle) fail(`unknown skill: ${skillId}`);
     printJson(exportProviderSkill(provider, bundle));
@@ -146,15 +163,19 @@ const commands: Record<string, Command> = {
     setDisabledState(args, true);
   },
   overlaps() {
-    const current = readRegistry();
-    printJsonEnvelope({ overlaps: findOverlaps(current.registry.list()), warnings: current.warnings });
+    printJsonEnvelope({
+      overlaps: findOverlaps(registry().list()),
+      warnings: registry().warnings,
+    });
   },
   conflicts() {
-    const current = readRegistry();
-    printJsonEnvelope({ conflicts: findConflicts(current.registry.list()), warnings: current.warnings });
+    printJsonEnvelope({
+      conflicts: findConflicts(registry().list()),
+      warnings: registry().warnings,
+    });
   },
-  async telemetry(args) {
-    const explain = args[0] === "--explain";
+  telemetry(args) {
+    const explain = args.includes("--explain");
     const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
     const registry = new SkillRegistry(snapshot);
     const db = openRegistryDb(registryDbPath());
@@ -188,7 +209,109 @@ const commands: Record<string, Command> = {
       warnings: [...registryWarnings, ...agentsDiagnostics],
     });
   },
+  async mcp(args) {
+    const [action] = args;
+    if (action === "run" || !action) {
+      await runClewMcpServer(process.cwd());
+    } else {
+      fail("usage: clew mcp [run]");
+    }
+  },
 };
+
+function readRegistry() {
+  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+  return { registry: new SkillRegistry(snapshot), warnings: snapshot.warnings };
+}
+
+function registry() {
+  return readRegistry().registry;
+}
+
+function registryDbPath() {
+  return join(process.cwd(), ".clew-registry.db");
+}
+
+function buildActivationContext(query: string): Partial<ActivationContext> {
+  const agents = readAgentsContext();
+  return {
+    query,
+    tags: [],
+    agentsMd: agents.raw,
+    repoSignals: detectRepoSignals(process.cwd()),
+    capabilities: [],
+    activeSkillIds: agents.activeSkillIds,
+  };
+}
+
+function readAgentsContext() {
+  const path = join(process.cwd(), "AGENTS.md");
+  try {
+    const raw = readFileSync(path, "utf8");
+    return { raw, ...parseAgentsMd(raw) };
+  } catch {
+    return { raw: "", activeSkillIds: [], preferences: [] };
+  }
+}
+
+function setDisabledState(args: string[], disabled: boolean) {
+  const [skillId] = args;
+  if (!skillId) fail(`usage: clew ${disabled ? "disable" : "enable"} <skill-id>`);
+  const db = openRegistryDb(registryDbPath());
+  try {
+    db.setSkillDisabled(skillId, disabled);
+    db.rebuildIndex(rebuildRegistry({ projectRoot: process.cwd(), telemetry: db.getTelemetryState() }));
+    printJson({ skillId, active: !disabled, disabled });
+  } finally {
+    db.close();
+  }
+}
+
+function lookupStateWarning(skillId: string): CompatibilityWarning | undefined {
+  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+  const entry = snapshot.entries.find((e) => e.bundle.manifest.id === skillId);
+  if (!entry) return skillUnknownWarning(skillId);
+  if (entry.disabled) {
+    return {
+      code: "skill_disabled",
+      message: `Skill "${skillId}" is disabled.`,
+      severity: "warning",
+      origin: "request",
+    };
+  }
+  return undefined;
+}
+
+function skillUnknownWarning(skillId: string): CompatibilityWarning {
+  return {
+    code: "skill_unknown",
+    message: `Skill "${skillId}" is not registered.`,
+    severity: "warning",
+    origin: "request",
+  };
+}
+
+function notRecommendedWarning(skillId: string): CompatibilityWarning {
+  return {
+    code: "skill_not_recommended",
+    message: `Skill "${skillId}" was not recommended for the supplied activation context.`,
+    severity: "warning",
+    origin: "request",
+  };
+}
+
+function printJson(data: unknown) {
+  console.log(JSON.stringify(data, null, 2));
+}
+
+function printJsonEnvelope(data: Record<string, unknown> & { warnings: CompatibilityWarning[] }) {
+  printJson(data);
+}
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   const [name, ...args] = argv;
@@ -212,6 +335,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  telemetry",
         "  telemetry --explain",
         "  doctor",
+        "  mcp [run]",
       ].join("\n"),
     );
     return;
@@ -224,106 +348,13 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     if (error instanceof SkillBundleValidationError) {
       printJson({
         ok: false,
-        errors: error.issues,
-        formattedErrors: error.issues.map(formatValidationIssue),
+        errors: error.issues.map(formatValidationIssue),
         warnings: [],
       });
-      return;
+      process.exit(1);
     }
     throw error;
   }
-}
-
-function readRegistry(): { registry: SkillRegistry; warnings: CompatibilityWarning[] } {
-  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
-  return { registry: new SkillRegistry(snapshot), warnings: snapshot.warnings };
-}
-
-function readAgentsContext(): { raw: string; activeSkillIds: string[]; preferences: string[] } {
-  try {
-    const raw = readFileSync("AGENTS.md", "utf8");
-    return { raw, ...parseAgentsMd(raw) };
-  } catch {
-    return { raw: "", activeSkillIds: [], preferences: [] };
-  }
-}
-
-function buildActivationContext(query: string): Partial<ActivationContext> {
-  const agentContext = readAgentsContext();
-  return {
-    query,
-    agentsMd: agentContext.raw,
-    activeSkillIds: agentContext.activeSkillIds,
-    repoSignals: detectRepoSignals(process.cwd()),
-    capabilities: ["filesystem", "terminal", "git", "mcp"],
-  };
-}
-
-function queryText(args: string[]): string {
-  return args.join(" ");
-}
-
-function skillStateWarning(registry: SkillRegistry, skillId: string): CompatibilityWarning | undefined {
-  const entry = registry.entries.find((candidate) => candidate.bundle.manifest.id === skillId);
-  if (!entry) {
-    return {
-      code: "skill_unknown",
-      message: `Skill "${skillId}" is not registered.`,
-      severity: "warning",
-      origin: "request",
-    };
-  }
-  if (entry.disabled) {
-    return {
-      code: "skill_disabled",
-      message: `Skill "${skillId}" is disabled.`,
-      severity: "warning",
-      origin: "request",
-    };
-  }
-  return undefined;
-}
-
-function notRecommendedWarning(skillId: string): CompatibilityWarning {
-  return {
-    code: "skill_not_recommended",
-    message: `Skill "${skillId}" was not recommended for the supplied activation context.`,
-    severity: "warning",
-    origin: "request",
-  };
-}
-
-function setDisabledState(args: string[], disabled: boolean): void {
-  const [skillId] = args;
-  const action = disabled ? "disable" : "enable";
-  if (!skillId) fail(`usage: clew ${action} <skill-id>`);
-  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
-  if (!snapshot.entries.some((entry) => entry.bundle.manifest.id === skillId)) fail(`unknown skill: ${skillId}`);
-  const db = openRegistryDb(registryDbPath());
-  try {
-    db.setSkillDisabled(skillId, disabled);
-  } finally {
-    db.close();
-  }
-  const refreshed = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
-  printJson({
-    skillId,
-    disabled,
-    active: refreshed.entries.some((entry) => entry.bundle.manifest.id === skillId && !entry.disabled),
-  });
-}
-
-function printJson(value: unknown): void {
-  console.log(JSON.stringify(value, null, 2));
-}
-
-function printJsonEnvelope<T extends { warnings: CompatibilityWarning[] }>(value: T): void {
-  printJson(value);
-}
-
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
