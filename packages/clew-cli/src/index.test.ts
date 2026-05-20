@@ -773,6 +773,31 @@ describe("@clew/cli", () => {
     expect(exported.artifacts[0]?.contents).toContain("Imported instructions.");
   });
 
+  it("installs mcp server to Claude desktop config", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const home = join(projectRoot, "home");
+    const configPath = join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json");
+    mkdirSync(join(home, "Library", "Application Support", "Claude"), { recursive: true });
+
+    // 1. Initial install
+    vi.stubEnv("HOME", home);
+    await main(["mcp", "install"]);
+    const first = JSON.parse(readFileSync(configPath, "utf8"));
+    expect(first.mcpServers.clew).toMatchObject({
+      command: "node",
+      args: [expect.stringContaining("dist/index.js"), "mcp", "run"],
+    });
+
+    // 2. Preserve existing config
+    writeFileSync(configPath, JSON.stringify({ mcpServers: { other: { command: "test" } } }));
+    await main(["mcp", "install"]);
+    const second = JSON.parse(readFileSync(configPath, "utf8"));
+    expect(second.mcpServers.other).toEqual({ command: "test" });
+    expect(second.mcpServers.clew).toBeDefined();
+    vi.unstubAllEnvs();
+  });
+
   it("rejects malformed import input before printing JSON", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);

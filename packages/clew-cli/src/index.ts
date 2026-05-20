@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -213,8 +214,37 @@ const commands: Record<string, Command> = {
     const [action] = args;
     if (action === "run" || !action) {
       await runClewMcpServer(process.cwd());
+    } else if (action === "install") {
+      const configPath = join(
+        homedir(),
+        "Library",
+        "Application Support",
+        "Claude",
+        "claude_desktop_config.json",
+      );
+      const cliPath = join(process.cwd(), "packages", "clew-cli", "dist", "index.js");
+
+      let config: any = { mcpServers: {} };
+      try {
+        config = JSON.parse(readFileSync(configPath, "utf8"));
+      } catch {
+        // Use default
+      }
+
+      if (!config.mcpServers) config.mcpServers = {};
+
+      config.mcpServers.clew = {
+        command: "node",
+        args: [cliPath, "mcp", "run"],
+        env: {
+          NODE_ENV: "production",
+        },
+      };
+
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`Successfully installed clew MCP server to ${configPath}`);
     } else {
-      fail("usage: clew mcp [run]");
+      fail("usage: clew mcp [run|install]");
     }
   },
 };
@@ -335,7 +365,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  telemetry",
         "  telemetry --explain",
         "  doctor",
-        "  mcp [run]",
+        "  mcp [run|install]",
       ].join("\n"),
     );
     return;
