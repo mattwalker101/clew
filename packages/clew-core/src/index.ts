@@ -244,17 +244,20 @@ export function parseAgentsMd(content: string): { activeSkillIds: string[]; pref
     const line = rawLine.trim();
     if (!line) continue;
 
-    const headerMatch = line.match(/^(#+)\s+(.*)$/);
-    if (headerMatch) {
-      const level = headerMatch[1]!.length;
-      const title = headerMatch[2]!.trim();
+    if (line.startsWith("#")) {
+      let level = 0;
+      while (level < line.length && line[level] === "#") level++;
 
-      if (/^Active Skills$/i.test(title)) {
-        activeSkillsHeaderLevel = level;
-      } else if (activeSkillsHeaderLevel !== undefined && level <= activeSkillsHeaderLevel) {
-        activeSkillsHeaderLevel = undefined;
+      if (level > 0 && level <= 6 && (level === line.length || line[level] === " ")) {
+        const title = line.slice(level).trim();
+
+        if (/^Active Skills$/i.test(title)) {
+          activeSkillsHeaderLevel = level;
+        } else if (activeSkillsHeaderLevel !== undefined && level <= activeSkillsHeaderLevel) {
+          activeSkillsHeaderLevel = undefined;
+        }
+        continue;
       }
-      continue;
     }
 
     if (activeSkillsHeaderLevel !== undefined) {
@@ -266,7 +269,11 @@ export function parseAgentsMd(content: string): { activeSkillIds: string[]; pref
       !line.startsWith("#") &&
       /prefer|avoid|must|should|local-first|deterministic|explainable|always|never/i.test(line)
     ) {
-      preferences.push(line);
+      if (line.startsWith("- ") || line.startsWith("* ")) {
+        preferences.push(line);
+      } else {
+        preferences.push(line);
+      }
     }
   }
 
