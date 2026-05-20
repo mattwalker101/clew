@@ -32,6 +32,9 @@ importers:
       '@clew/importers':
         specifier: workspace:*
         version: link:../clew-importers
+      '@clew/schema':
+        specifier: workspace:*
+        version: link:../clew-schema
     devDependencies:
       typescript:
         specifier: ^6.0.3
