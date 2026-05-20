@@ -19,7 +19,8 @@
   "dependencies": {
     "@clew/core": "workspace:*",
     "@clew/exporters": "workspace:*",
-    "@clew/importers": "workspace:*"
+    "@clew/importers": "workspace:*",
+    "@clew/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

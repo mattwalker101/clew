@@ -58,6 +58,12 @@ function outputAt(log: { mock: { calls: unknown[][] } }, index: number): unknown
   return JSON.parse(log.mock.calls[index]?.[0] as string);
 }
 
+function createEmptyProjectRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+  mkdirSync(join(root, "skills"), { recursive: true });
+  return root;
+}
+
 function doctorBoundaryContractFixture() {
   return JSON.parse(
     readFileSync(join(originalCwd, "tests", "fixtures", "contracts", "doctor-boundary-contract.json"), "utf8"),
@@ -1231,10 +1237,8 @@ describe("@clew/cli", () => {
     const fixture = doctorBoundaryContractFixture();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
-    // Scenario 1: emptyRegistry — no skills, no project files
     {
-      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
-      mkdirSync(join(root, "skills"), { recursive: true });
+      const root = createEmptyProjectRoot();
       process.chdir(root);
       log.mockClear();
       await main(["doctor"]);
@@ -1251,10 +1255,8 @@ describe("@clew/cli", () => {
       }).toEqual(fixture.emptyRegistry);
     }
 
-    // Scenario 2: repoSignals — git dir + zod + vitest in package.json
     {
-      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
-      mkdirSync(join(root, "skills"), { recursive: true });
+      const root = createEmptyProjectRoot();
       mkdirSync(join(root, ".git"), { recursive: true });
       writeFileSync(join(root, "package.json"), JSON.stringify({ devDependencies: { zod: "latest", vitest: "latest" } }));
       process.chdir(root);
@@ -1264,9 +1266,8 @@ describe("@clew/cli", () => {
       expect(out.repoSignals).toEqual(fixture.repoSignals.signals);
     }
 
-    // Scenario 3: overlapsPresent — two skills sharing a trigger
     {
-      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      const root = createEmptyProjectRoot();
       for (const [id, name] of [["skill-alpha", "Skill Alpha"], ["skill-beta", "Skill Beta"]] as [string, string][]) {
         const skillRoot = join(root, "skills", id);
         mkdirSync(skillRoot, { recursive: true });
@@ -1283,9 +1284,8 @@ describe("@clew/cli", () => {
       expect({ overlaps: out.overlaps, conflicts: out.conflicts }).toEqual(fixture.overlapsPresent);
     }
 
-    // Scenario 4: missingParentConflict — skill extends a non-existent parent
     {
-      const root = mkdtempSync(join(tmpdir(), "clew-doctor-"));
+      const root = createEmptyProjectRoot();
       const skillRoot = join(root, "skills", "child-skill");
       mkdirSync(skillRoot, { recursive: true });
       writeFileSync(
@@ -1300,7 +1300,6 @@ describe("@clew/cli", () => {
       expect({ overlaps: out.overlaps, conflicts: out.conflicts }).toEqual(fixture.missingParentConflict);
     }
 
-    // Scenario 5: agentsSkillDisabled — AGENTS.md references a disabled skill
     {
       const root = createProject();
       process.chdir(root);
@@ -1319,7 +1318,6 @@ describe("@clew/cli", () => {
       }).toEqual(fixture.agentsSkillDisabled);
     }
 
-    // Scenario 6: populatedPreferences — AGENTS.md with Runtime Preferences section
     {
       const root = createProject();
       process.chdir(root);
@@ -1333,7 +1331,6 @@ describe("@clew/cli", () => {
       expect(out.agentsPreferences).toEqual(fixture.populatedPreferences.agentsPreferences);
     }
 
-    // Scenario 7: multipleDiagnostics — AGENTS.md with both unknown and disabled skill refs
     {
       const root = createProject();
       process.chdir(root);
@@ -1348,7 +1345,6 @@ describe("@clew/cli", () => {
       }).toEqual(fixture.multipleDiagnostics);
     }
 
-    // Scenario 8: warningMergeOrder — registry warning + agents diagnostic, registry comes first
     {
       const root = createProject();
       process.chdir(root);

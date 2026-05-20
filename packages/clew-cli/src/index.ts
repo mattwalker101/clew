@@ -142,7 +142,7 @@ const commands: Record<string, Command> = {
     const db = openRegistryDb(registryDbPath());
     try {
       const telemetry = db.listTelemetry();
-      printJson({
+      printJsonEnvelope({
         dbPath: registryDbPath(),
         skills: snapshot.entries.length,
         warnings: db.listRegistryWarnings(),
@@ -158,7 +158,7 @@ const commands: Record<string, Command> = {
     const agentsContext = readAgentsContext();
     const registryWarnings = current.warnings;
     const agentsDiagnostics = getAgentsMdDiagnostics(agentsContext.raw, current.registry);
-    printJson({
+    printJsonEnvelope({
       skills: bundles.length,
       dbPath: registryDbPath(),
       repoSignals: detectRepoSignals(process.cwd()),
