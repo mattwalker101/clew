@@ -1,0 +1,16 @@
+.env
+.env.*
+*.log
+.DS_Store
+sandbox/
+node_modules/
+coverage/
+.cache/
+.code-index/
+.aimux/
+*.pem
+*.key
+*.crt
+CLAUDE.local.md
+.local/
+tmp/
