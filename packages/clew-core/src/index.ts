@@ -166,13 +166,13 @@ export type SkillActivationCandidate = {
   enabled: boolean;
   status: SkillActivationCandidateStatus;
   score: number;
-  rank?: number;
+  rank?: number | undefined;
   components: SkillActivationScoreComponent[];
   reasons: string[];
   signals: RecommendationSignal[];
   warnings: CompatibilityWarning[];
   exclusions: SkillActivationExclusion[];
-  suppression?: Suppression;
+  suppression?: Suppression | undefined;
 };
 
 export type SkillActivationAnalysisResult = {
@@ -540,7 +540,12 @@ export async function rebuildRegistryIndex(options: RegistryOptions = {}): Promi
       db.upsertEmbedding(entry.bundle.manifest.id, embedding);
     }
 
-    return { ...snapshot, dbPath };
+    const result: RegistrySnapshot = {
+      entries: snapshot.entries,
+      warnings: snapshot.warnings,
+      dbPath,
+    };
+    return result;
   } finally {
     db.close();
   }
@@ -1042,12 +1047,12 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
 export class SkillRegistry {
   readonly entries: RegistryEntry[];
   readonly warnings: CompatibilityWarning[];
-  readonly dbPath?: string;
+  readonly dbPath?: string | undefined;
 
   constructor(snapshot: RegistrySnapshot) {
     this.entries = snapshot.entries;
     this.warnings = snapshot.warnings;
-    this.dbPath = snapshot.dbPath;
+    this.dbPath = snapshot.dbPath ?? undefined;
   }
 
   static async fromProject(projectRoot = process.cwd()): Promise<SkillRegistry> {
@@ -1186,13 +1191,14 @@ export class ActivationEngine {
       const relationship = includedWithRelationships.find((item) => item.recommendation.skillId === candidate.skillId);
       const status: SkillActivationCandidateStatus = suppressedIds.has(candidate.skillId) ? "suppressed" : "included";
 
-      return {
+      const result: SkillActivationCandidate = {
         ...candidate,
         status,
-        ...(ranked ? { rank: ranked.rank } : {}),
+        rank: ranked ? ranked.rank : undefined,
         warnings: relationship?.recommendation.warnings ?? candidate.warnings,
-        suppression: relationship?.recommendation.suppression,
+        suppression: relationship?.recommendation.suppression ?? undefined,
       };
+      return result;
     });
 
     const suppressed = processedIncluded.filter((c) => c.status === "suppressed");
