@@ -6,8 +6,8 @@ import type { CompatibilityWarning } from "@clew/schema";
 import { createClewMcpBridge } from "./index.js";
 
 describe("@clew/mcp", () => {
-  it("exposes only read-oriented bridge methods", () => {
-    const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
+  it("exposes only read-oriented bridge methods", async () => {
+    const bridge = await createClewMcpBridge(registryWith(entry("engineering-core")));
 
     expect(Object.keys(bridge).sort()).toEqual([
       "analyzeIndex",
@@ -25,7 +25,7 @@ describe("@clew/mcp", () => {
     expect("tools" in bridge).toBe(false);
   });
 
-  it("exposes the deterministic semantic index analysis with registry warnings", () => {
+  it("exposes the deterministic semantic index analysis with registry warnings", async () => {
     const registryWarning: CompatibilityWarning = {
       code: "skill_bundle_invalid",
       severity: "error",
@@ -46,7 +46,7 @@ describe("@clew/mcp", () => {
       ],
       [registryWarning],
     );
-    const bridge = createClewMcpBridge(registry);
+    const bridge = await createClewMcpBridge(registry);
 
     expect(bridge.analyzeIndex()).toEqual({
       analysis: registry.analyzeIndex(),
@@ -71,20 +71,20 @@ describe("@clew/mcp", () => {
     expect(bridge.analyzeIndex().analysis.index.map((candidate) => candidate.skillId)).toEqual(["engineering-core"]);
   });
 
-  it("returns structured envelopes for legacy positional calls", () => {
-    const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
+  it("returns structured envelopes for legacy positional calls", async () => {
+    const bridge = await createClewMcpBridge(registryWith(entry("engineering-core")));
 
-    expect(bridge.search("engineering")).toMatchObject({
+    expect(await bridge.search("engineering")).toMatchObject({
       query: "engineering",
       skills: [{ id: "engineering-core" }],
       warnings: [],
     });
-    expect(bridge.recommend("build")).toMatchObject({
+    expect(await bridge.recommend("build")).toMatchObject({
       query: "build",
       recommendations: [{ skillId: "engineering-core" }],
       warnings: [],
     });
-    expect(bridge.explain("engineering-core", "build")).toMatchObject({
+    expect(await bridge.explain("engineering-core", "build")).toMatchObject({
       skillId: "engineering-core",
       query: "build",
       recommendation: { skillId: "engineering-core" },
@@ -97,15 +97,15 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("exposes opt-in deterministic search analysis without changing search", () => {
-    const bridge = createClewMcpBridge(registryWith(entry("engineering-core")));
+  it("exposes opt-in deterministic search analysis without changing search", async () => {
+    const bridge = await createClewMcpBridge(registryWith(entry("engineering-core")));
 
-    expect(bridge.search("engineering")).toMatchObject({
+    expect(await bridge.search("engineering")).toMatchObject({
       query: "engineering",
       skills: [{ id: "engineering-core" }],
       warnings: [],
     });
-    expect(bridge.search("engineering")).not.toHaveProperty("analysis");
+    expect(await bridge.search("engineering")).not.toHaveProperty("analysis");
     expect(bridge.analyzeSearch("engineering")).toMatchObject({
       query: "engineering",
       analysis: {
@@ -126,14 +126,14 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("exposes telemetry analysis with registry warnings", () => {
+  it("exposes telemetry analysis with registry warnings", async () => {
     const registryWarning: CompatibilityWarning = {
       code: "skill_bundle_invalid",
       severity: "error",
       origin: "registry_rebuild",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings(
         [
           entry("disabled-skill", { disabled: true }),
@@ -159,14 +159,14 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("exposes opt-in recommendation analysis without changing recommend", () => {
+  it("exposes opt-in recommendation analysis without changing recommend", async () => {
     const registryWarning: CompatibilityWarning = {
       code: "skill_bundle_invalid",
       severity: "error",
       origin: "registry_rebuild",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings(
         [
           entry("terminal-skill", { requiredCapabilities: ["terminal"] }),
@@ -176,8 +176,8 @@ describe("@clew/mcp", () => {
       ),
     );
 
-    expect(bridge.recommend({ query: "build", context: { capabilities: [] } })).not.toHaveProperty("analysis");
-    expect(bridge.analyzeRecommendations({ query: "build", context: { capabilities: [] } })).toMatchObject({
+    expect(await bridge.recommend({ query: "build", context: { capabilities: [] } })).not.toHaveProperty("analysis");
+    expect(await bridge.analyzeRecommendations({ query: "build", context: { capabilities: [] } })).toMatchObject({
       query: "build",
       analysis: {
         candidates: [
@@ -198,26 +198,26 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("supports object inputs and limits result sets", () => {
-    const bridge = createClewMcpBridge(
+  it("supports object inputs and limits result sets", async () => {
+    const bridge = await createClewMcpBridge(
       registryWith(
         entry("engineering-core", { triggers: ["build"], weight: 1 }),
         entry("typescript-core", { triggers: ["build"], tags: ["typescript"], weight: 2 }),
       ),
     );
 
-    expect(bridge.search({ query: "core", limit: 1 }).skills.map((skill) => skill.id)).toEqual(["engineering-core"]);
-    expect(bridge.analyzeSearch({ query: "typescript", limit: 1 }).analysis.matches.map((item) => item.skillId)).toEqual([
+    expect((await bridge.search({ query: "core", limit: 1 })).skills.map((skill) => skill.id)).toEqual(["engineering-core"]);
+    expect((await bridge.analyzeSearch({ query: "typescript", limit: 1 })).analysis.matches.map((item) => item.skillId)).toEqual([
       "typescript-core",
     ]);
     expect(bridge.analyzeIndex().analysis.index.map((item) => item.skillId)).toEqual([
       "engineering-core",
       "typescript-core",
     ]);
-    expect(bridge.recommend({ query: "build", limit: 1 }).recommendations.map((item) => item.skillId)).toEqual([
+    expect((await bridge.recommend({ query: "build", limit: 1 })).recommendations.map((item) => item.skillId)).toEqual([
       "typescript-core",
     ]);
-    expect(bridge.explain({ skillId: "typescript-core", query: "build" })).toMatchObject({
+    expect(await bridge.explain({ skillId: "typescript-core", query: "build" })).toMatchObject({
       skillId: "typescript-core",
       query: "build",
       recommendation: { skillId: "typescript-core" },
@@ -230,8 +230,8 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("threads activation context through recommend and explain", () => {
-    const bridge = createClewMcpBridge(
+  it("threads activation context through recommend and explain", async () => {
+    const bridge = await createClewMcpBridge(
       registryWith(
         entry("typescript-core", {
           triggers: ["compile"],
@@ -243,7 +243,7 @@ describe("@clew/mcp", () => {
     );
 
     expect(
-      bridge.recommend({
+      await bridge.recommend({
         query: "",
         context: { tags: ["typescript"], capabilities: ["terminal"] },
       }),
@@ -253,7 +253,7 @@ describe("@clew/mcp", () => {
       warnings: [],
     });
     expect(
-      bridge.explain({
+      await bridge.explain({
         skillId: "safe-editing",
         query: "",
         context: { activeSkillIds: ["safe-editing"] },
@@ -269,7 +269,7 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("includes registry warnings in successful read envelopes", () => {
+  it("includes registry warnings in successful read envelopes", async () => {
     const warning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
@@ -277,15 +277,15 @@ describe("@clew/mcp", () => {
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(registryWithWarnings([entry("engineering-core")], [warning]));
+    const bridge = await createClewMcpBridge(registryWithWarnings([entry("engineering-core")], [warning]));
 
-    expect(bridge.search("engineering")).toMatchObject({
+    expect(await bridge.search("engineering")).toMatchObject({
       warnings: [warning],
     });
-    expect(bridge.recommend("build")).toMatchObject({
+    expect(await bridge.recommend("build")).toMatchObject({
       warnings: [warning],
     });
-    expect(bridge.explain("engineering-core", "build")).toMatchObject({
+    expect(await bridge.explain("engineering-core", "build")).toMatchObject({
       warnings: [warning],
     });
     expect(bridge.lookup("engineering-core")).toMatchObject({
@@ -293,7 +293,7 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("keeps capability warnings on recommendations while preserving top-level registry warnings", () => {
+  it("keeps capability warnings on recommendations while preserving top-level registry warnings", async () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
@@ -301,11 +301,11 @@ describe("@clew/mcp", () => {
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings([entry("terminal-skill", { requiredCapabilities: ["terminal"] })], [registryWarning]),
     );
 
-    expect(bridge.recommend({ query: "build", context: { capabilities: [] } })).toMatchObject({
+    expect(await bridge.recommend({ query: "build", context: { capabilities: [] } })).toMatchObject({
       warnings: [registryWarning],
       recommendations: [
         {
@@ -316,8 +316,8 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("exposes overlap and conflict warnings on recommend and explain recommendations", () => {
-    const bridge = createClewMcpBridge(
+  it("exposes overlap and conflict warnings on recommend and explain recommendations", async () => {
+    const bridge = await createClewMcpBridge(
       registryWith(
         entry("safe-refactor", { triggers: ["refactor"], tags: ["refactor"], incompatibleWith: ["incremental-refactor"] }),
         entry("incremental-refactor", { triggers: ["refactor"], tags: ["refactor"] }),
@@ -325,8 +325,8 @@ describe("@clew/mcp", () => {
       ),
     );
 
-    const recommendEnvelope = bridge.recommend("refactor");
-    const explainEnvelope = bridge.explain("typescript-core", "typescript");
+    const recommendEnvelope = await bridge.recommend("refactor");
+    const explainEnvelope = await bridge.explain("typescript-core", "typescript");
 
     expect(Object.keys(recommendEnvelope)).toEqual(["query", "recommendations", "warnings"]);
     expect(Object.keys(explainEnvelope)).toEqual(["skillId", "query", "recommendation", "warnings"]);
@@ -384,7 +384,7 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("returns null plus explicit warnings for missing, disabled, or unrecommended skills", () => {
+  it("returns null plus explicit warnings for missing, disabled, or unrecommended skills", async () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
@@ -392,7 +392,7 @@ describe("@clew/mcp", () => {
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings(
         [entry("disabled-skill", { disabled: true }), entry("available-skill", { triggers: ["available"] })],
         [registryWarning],
@@ -409,7 +409,7 @@ describe("@clew/mcp", () => {
       bundle: null,
       warnings: [registryWarning, { code: "skill_disabled", origin: "request" }],
     });
-    expect(bridge.explain("available-skill", "no match")).toMatchObject({
+    expect(await bridge.explain("available-skill", "no match")).toMatchObject({
       skillId: "available-skill",
       query: "no match",
       recommendation: null,
@@ -417,10 +417,10 @@ describe("@clew/mcp", () => {
     });
   });
 
-  it("matches the documented public warning contract fixture", () => {
+  it("matches the documented public warning contract fixture", async () => {
     const contract = warningContractFixture();
     const registryWarning = contract.warnings.registryRebuild;
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings(
         [
           entry("disabled-skill", { disabled: true }),
@@ -436,7 +436,7 @@ describe("@clew/mcp", () => {
       warnings: bridge.lookup("missing-skill").warnings,
     }).toEqual(contract.envelopes.lookupMissingSkill);
 
-    const recommendation = bridge.recommend({ query: "build", context: { capabilities: [] } });
+    const recommendation = await bridge.recommend({ query: "build", context: { capabilities: [] } });
     expect({
       warnings: recommendation.warnings,
       recommendations: recommendation.recommendations.map((item) => ({
@@ -446,7 +446,7 @@ describe("@clew/mcp", () => {
     }).toEqual(contract.envelopes.recommendCapabilityWarning);
   });
 
-  it("matches the documented MCP public envelope contract fixture", () => {
+  it("matches the documented MCP public envelope contract fixture", async () => {
     const registryWarning = {
       code: "skill_bundle_invalid",
       severity: "error" as const,
@@ -454,7 +454,7 @@ describe("@clew/mcp", () => {
       field: "skills/future-kind",
       message: "Unsupported skill kind.",
     };
-    const bridge = createClewMcpBridge(
+    const bridge = await createClewMcpBridge(
       registryWithWarnings(
         [
           entry("typescript-core", {
@@ -473,16 +473,16 @@ describe("@clew/mcp", () => {
       ),
     );
 
-    const search = bridge.search("typescript");
+    const search = await bridge.search("typescript");
     const indexAnalysis = bridge.analyzeIndex();
     const searchAnalysis = bridge.analyzeSearch("typescript");
-    const recommendation = bridge.recommend({ query: "typescript", context: { capabilities: [] } });
-    const recommendationAnalysis = bridge.analyzeRecommendations({
+    const recommendation = await bridge.recommend({ query: "typescript", context: { capabilities: [] } });
+    const recommendationAnalysis = await bridge.analyzeRecommendations({
       query: "typescript",
       context: { capabilities: [] },
     });
     const disabledLookup = bridge.lookup("disabled-skill");
-    const disabledExplain = bridge.explain("disabled-skill", "typescript");
+    const disabledExplain = await bridge.explain("disabled-skill", "typescript");
     const telemetryAnalysis = bridge.analyzeTelemetry([
       {
         skillId: "orphan-telemetry-skill",
@@ -542,7 +542,7 @@ describe("@clew/mcp", () => {
     }).toEqual(publicEnvelopeContractFixture().mcp);
   });
 
-  it("matches the documented MCP telemetry mutation boundary contract fixture", () => {
+  it("matches the documented MCP telemetry mutation boundary contract fixture", async () => {
     const fixture = telemetryMutationBoundaryFixture().mcp;
     const registryWarning: CompatibilityWarning = {
       code: "skill_bundle_invalid",
@@ -558,7 +558,7 @@ describe("@clew/mcp", () => {
       ],
       [registryWarning],
     );
-    const bridge = createClewMcpBridge(registry);
+    const bridge = await createClewMcpBridge(registry);
     const forbiddenMutationMethodNames = [
       "recordRecommendation",
       "enable",
@@ -574,13 +574,13 @@ describe("@clew/mcp", () => {
       }));
     const initialUsageCounts = usageCounts();
 
-    bridge.recommend("typescript");
-    bridge.analyzeRecommendations("typescript");
-    bridge.search("typescript");
-    bridge.analyzeSearch("typescript");
+    await bridge.recommend("typescript");
+    await bridge.analyzeRecommendations("typescript");
+    await bridge.search("typescript");
+    await bridge.analyzeSearch("typescript");
     const missingLookup = bridge.lookup("missing-skill");
     const disabledLookup = bridge.lookup("disabled-skill");
-    const unrecommendedExplain = bridge.explain("typescript-core", "unrelated");
+    const unrecommendedExplain = await bridge.explain("typescript-core", "unrelated");
     const telemetryAnalysis = bridge.analyzeTelemetry();
     bridge.analyzeIndex();
 

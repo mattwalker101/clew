@@ -21,10 +21,10 @@ export type ClewMcpBridge = {
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
   analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
   analyzeTelemetry(records?: TelemetryRecord[]): ClewMcpTelemetryAnalysisResult;
-  analyzeRecommendations(input: string | ClewMcpRecommendInput): ClewMcpRecommendationAnalysisResult;
-  recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult;
-  explain(skillId: string, query: string): ClewMcpExplainResult;
-  explain(input: ClewMcpExplainInput): ClewMcpExplainResult;
+  analyzeRecommendations(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendationAnalysisResult>;
+  recommend(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendResult>;
+  explain(skillId: string, query: string): Promise<ClewMcpExplainResult>;
+  explain(input: ClewMcpExplainInput): Promise<ClewMcpExplainResult>;
   lookup(input: string | ClewMcpLookupInput): ClewMcpLookupResult;
 };
 
@@ -110,11 +110,12 @@ export type ClewMcpLookupResult = {
   warnings: CompatibilityWarning[];
 };
 
-export function createClewMcpBridge(
-  registryOrOptions: SkillRegistry | ClewMcpBridgeOptions = SkillRegistry.fromProject(),
-): ClewMcpBridge {
-  const options = registryOrOptions instanceof SkillRegistry ? { registry: registryOrOptions } : registryOrOptions;
-  const registry = options.registry ?? SkillRegistry.fromProject();
+export async function createClewMcpBridge(
+  registryOrOptions: SkillRegistry | ClewMcpBridgeOptions | Promise<SkillRegistry> = SkillRegistry.fromProject(),
+): Promise<ClewMcpBridge> {
+  const resolved = await registryOrOptions;
+  const options = resolved instanceof SkillRegistry ? { registry: resolved } : resolved;
+  const registry = options.registry ?? (await SkillRegistry.fromProject());
   const activation = new ActivationEngine(registry);
   const registryWarnings = registry.warnings;
   return {
@@ -153,9 +154,9 @@ export function createClewMcpBridge(
         warnings: registryWarnings,
       };
     },
-    analyzeRecommendations(input: string | ClewMcpRecommendInput): ClewMcpRecommendationAnalysisResult {
+    async analyzeRecommendations(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendationAnalysisResult> {
       const request = typeof input === "string" ? { query: input } : input;
-      const analysis = activation.analyzeRecommendations(
+      const analysis = await activation.analyzeRecommendations(
         toActivationContext(request.query, options.defaultContext, request.context),
       );
       return {
@@ -167,22 +168,20 @@ export function createClewMcpBridge(
         warnings: registryWarnings,
       };
     },
-    recommend(input: string | ClewMcpRecommendInput): ClewMcpRecommendResult {
+    async recommend(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendResult> {
       const request = typeof input === "string" ? { query: input } : input;
       return {
         query: request.query,
         recommendations: applyLimit(
-          activation.recommend(toActivationContext(request.query, options.defaultContext, request.context)),
+          await activation.recommend(toActivationContext(request.query, options.defaultContext, request.context)),
           request.limit ?? options.defaultLimit,
         ),
         warnings: registryWarnings,
       };
     },
-    explain(skillIdOrInput: string | ClewMcpExplainInput, query?: string): ClewMcpExplainResult {
+    async explain(skillIdOrInput: string | ClewMcpExplainInput, query?: string): Promise<ClewMcpExplainResult> {
       const request =
-        typeof skillIdOrInput === "string"
-          ? { skillId: skillIdOrInput, query: query ?? "" }
-          : skillIdOrInput;
+        typeof skillIdOrInput === "string" ? { skillId: skillIdOrInput, query: query ?? "" } : skillIdOrInput;
       const stateWarning = lookupStateWarning(registry, request.skillId);
       if (stateWarning) {
         return {
@@ -193,7 +192,7 @@ export function createClewMcpBridge(
         };
       }
 
-      const recommendation = activation.explain(
+      const recommendation = await activation.explain(
         request.skillId,
         toActivationContext(request.query, options.defaultContext, request.context),
       );

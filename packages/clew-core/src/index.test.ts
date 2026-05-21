@@ -20,6 +20,7 @@ import {
   rebuildRegistry,
   rebuildRegistryIndex,
   rebuildSqliteIndex,
+  type RegistrySnapshot,
   registryPrecedence,
   SkillRegistry,
 } from "./index.js";
@@ -144,7 +145,7 @@ describe("@clew/core", () => {
     ]);
   });
 
-  it("boosts recommendations based on project preferences", () => {
+  it("boosts recommendations based on project preferences", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -174,10 +175,10 @@ describe("@clew/core", () => {
       agentsMd: "# Preferences\n- must use deterministic behavior",
     };
 
-    const recommendations = activation.recommend(context);
+    const recommendations = await activation.recommend(context);
     const eng = recommendations.find((r) => r.skillId === "engineering-core")!;
     expect(eng.score).toBeGreaterThan(
-      activation.recommend({ query: "build" }).find((r) => r.skillId === "engineering-core")!.score,
+      (await activation.recommend({ query: "build" })).find((r) => r.skillId === "engineering-core")!.score,
     );
     expect(eng.reasons).toContain('matched project preference "- must use deterministic behavior"');
     expect(eng.signals).toContainEqual({ type: "project_preference", value: "- must use deterministic behavior" });
@@ -393,7 +394,7 @@ describe("@clew/core", () => {
     expect(registry.warnings).toEqual([]);
   });
 
-  it("recommends only explained matches", () => {
+  it("recommends only explained matches", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -411,7 +412,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const [recommendation] = new ActivationEngine(registry).recommend({
+    const [recommendation] = await new ActivationEngine(registry).recommend({
       query: "debug failing tests",
       capabilities: [],
     });
@@ -950,17 +951,17 @@ describe("@clew/core", () => {
     }
   });
 
-  it("preserves disabled telemetry across deterministic registry rebuilds", () => {
+  it("preserves disabled telemetry across deterministic registry rebuilds", async () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), "clew-")), "registry.db");
     const db = openRegistryDb(dbPath);
     try {
       db.setSkillDisabled("engineering-core", true);
-      const first = rebuildRegistryIndex({
+      const first = await rebuildRegistryIndex({
         dbPath,
         sessionBundles: [bundle("engineering-core"), bundle("typescript-core")],
         includeReferenceSkills: false,
       });
-      const second = rebuildRegistryIndex({
+      const second = await rebuildRegistryIndex({
         dbPath,
         sessionBundles: [bundle("engineering-core"), bundle("typescript-core")],
         includeReferenceSkills: false,
@@ -1084,7 +1085,7 @@ describe("@clew/core", () => {
     expect(snapshot).not.toHaveProperty("resolutionDiagnostics");
   });
 
-  it("matches the documented registry resolution contract fixture", () => {
+  it("matches the documented registry resolution contract fixture", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const fakeHome = mkdtempSync(join(tmpdir(), "clew-home-"));
     writeFilesystemBundle(join(projectRoot, ".clew", "layered-skill"), {
@@ -1162,10 +1163,10 @@ describe("@clew/core", () => {
           searchDisabled: registry.search("disabled").map((candidate) => candidate.manifest.id),
           analyzeSearchDisabled: registry.analyzeSearch("disabled").matches.map((match) => match.skillId),
           index: registry.analyzeIndex(),
-          recommendDisabled: engine
-            .recommend({ query: "disabled", capabilities: [] })
+          recommendDisabled: (await engine
+            .recommend({ query: "disabled", capabilities: [] }))
             .map((recommendation) => recommendation.skillId),
-          explainDisabledPublic: engine.explain("disabled-public", { query: "disabled", capabilities: [] }) ?? null,
+          explainDisabledPublic: (await engine.explain("disabled-public", { query: "disabled", capabilities: [] })) ?? null,
         },
         publicSurfaces: {
           snapshotHasResolutionDiagnostics: Object.hasOwn(snapshot, "resolutionDiagnostics"),
@@ -1259,7 +1260,7 @@ describe("@clew/core", () => {
     }
   });
 
-  it("adds conservative telemetry evidence only after normal activation matches", () => {
+  it("adds conservative telemetry evidence only after normal activation matches", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1290,7 +1291,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const recommendations = new ActivationEngine(registry).recommend({ query: "build" });
+    const recommendations = await new ActivationEngine(registry).recommend({ query: "build" });
 
     expect(recommendations.map((recommendation) => [recommendation.skillId, recommendation.score])).toEqual([
       ["favorite-skill", 7],
@@ -1308,7 +1309,7 @@ describe("@clew/core", () => {
     expect(recommendationSchema.parse(recommendations[0])).toEqual(recommendations[0]);
   });
 
-  it("analyzes activation recommendations with included and excluded candidate rows", () => {
+  it("analyzes activation recommendations with included and excluded candidate rows", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1357,7 +1358,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const analysis = new ActivationEngine(registry).analyzeRecommendations({
+    const analysis = await new ActivationEngine(registry).analyzeRecommendations({
       query: "typescript",
       agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
       repoSignals: ["typescript"],
@@ -1401,7 +1402,7 @@ describe("@clew/core", () => {
       score: 0,
       exclusions: [{ kind: "unmatched", reason: "no activation evidence matched the supplied context" }],
     });
-    expect(analysis.recommendations).toEqual(new ActivationEngine(registry).recommend({
+    expect(analysis.recommendations).toEqual(await new ActivationEngine(registry).recommend({
       query: "typescript",
       agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
       repoSignals: ["typescript"],
@@ -1409,7 +1410,7 @@ describe("@clew/core", () => {
     }));
   });
 
-  it("matches the documented activation analysis contract fixture", () => {
+  it("matches the documented activation analysis contract fixture", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1471,7 +1472,7 @@ describe("@clew/core", () => {
     });
 
     expect(
-      new ActivationEngine(registry).analyzeRecommendations({
+      await new ActivationEngine(registry).analyzeRecommendations({
         query: "typescript",
         tags: ["typescript"],
         agentsMd: "# Active Skills\n- typescript-core\n- disabled-skill\n",
@@ -1481,7 +1482,7 @@ describe("@clew/core", () => {
     ).toEqual(contractFixture("activation-analysis-contract.json"));
   });
 
-  it("matches the documented activation and telemetry boundary contract fixture", () => {
+  it("matches the documented activation and telemetry boundary contract fixture", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1532,11 +1533,11 @@ describe("@clew/core", () => {
     expect(
       JSON.parse(
         JSON.stringify({
-          activation: engine.analyzeRecommendations(context),
-          recommend: engine.recommend(context),
-          explainMatched: engine.explain("matched-boosted-skill", context),
-          explainTelemetryOnly: engine.explain("telemetry-only-skill", context),
-          explainDisabledMatched: engine.explain("disabled-matched-skill", context),
+          activation: await engine.analyzeRecommendations(context),
+          recommend: await engine.recommend(context),
+          explainMatched: await engine.explain("matched-boosted-skill", context),
+          explainTelemetryOnly: await engine.explain("telemetry-only-skill", context),
+          explainDisabledMatched: await engine.explain("disabled-matched-skill", context),
           telemetry: registry.analyzeTelemetry(orphanTelemetry),
           publicReadSurfaces: {
             list: registry.list().map((skill) => skill.manifest.id),
@@ -1551,7 +1552,7 @@ describe("@clew/core", () => {
     ).toEqual(contractFixture("activation-telemetry-boundary-contract.json"));
   });
 
-  it("detects repository signals and explains repo heuristic matches", () => {
+  it("detects repository signals and explains repo heuristic matches", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ devDependencies: { typescript: "latest" } }));
     writeFileSync(join(projectRoot, "tsconfig.json"), "{}");
@@ -1570,7 +1571,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const [recommendation] = new ActivationEngine(registry).recommend({
+    const [recommendation] = await new ActivationEngine(registry).recommend({
       query: "update validation",
       repoSignals: detectRepoSignals(projectRoot),
     });
@@ -1580,7 +1581,7 @@ describe("@clew/core", () => {
     expect(recommendation?.signals).toContainEqual({ type: "repo_signal", value: "typescript" });
   });
 
-  it("recommends active skill ids with AGENTS.md activation provenance", () => {
+  it("recommends active skill ids with AGENTS.md activation provenance", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1594,7 +1595,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    expect(new ActivationEngine(registry).recommend({ activeSkillIds: ["safe-editing"] })).toEqual([
+    expect(await new ActivationEngine(registry).recommend({ activeSkillIds: ["safe-editing"] })).toEqual([
       expect.objectContaining({
         skillId: "safe-editing",
         reasons: ["referenced by AGENTS.md active skills"],
@@ -1603,7 +1604,7 @@ describe("@clew/core", () => {
     ]);
   });
 
-  it("activates only parsed AGENTS.md active skills, not raw prose mentions", () => {
+  it("activates only parsed AGENTS.md active skills, not raw prose mentions", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1624,7 +1625,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const recommendations = new ActivationEngine(registry).recommend({
+    const recommendations = await new ActivationEngine(registry).recommend({
       agentsMd: [
         "# Active Skills",
         "- safe-editing",
@@ -1637,7 +1638,7 @@ describe("@clew/core", () => {
     expect(recommendations[0]?.signals).toEqual([{ type: "agents_md", value: "safe-editing" }]);
   });
 
-  it("does not cross-activate similar AGENTS.md skill ids", () => {
+  it("does not cross-activate similar AGENTS.md skill ids", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1659,13 +1660,13 @@ describe("@clew/core", () => {
     });
 
     expect(
-      new ActivationEngine(registry)
-        .recommend({ agentsMd: "# Active Skills\n- typescript-core\n" })
+      (await new ActivationEngine(registry)
+        .recommend({ agentsMd: "# Active Skills\n- typescript-core\n" }))
         .map((recommendation) => recommendation.skillId),
     ).toEqual(["typescript-core"]);
   });
 
-  it("deduplicates AGENTS.md activation references from context and parsed content", () => {
+  it("deduplicates AGENTS.md activation references from context and parsed content", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1679,7 +1680,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const [recommendation] = new ActivationEngine(registry).recommend({
+    const [recommendation] = await new ActivationEngine(registry).recommend({
       activeSkillIds: ["safe-editing"],
       agentsMd: "# Active Skills\n- safe-editing\n",
     });
@@ -1688,7 +1689,7 @@ describe("@clew/core", () => {
     expect(recommendation?.signals).toEqual([{ type: "agents_md", value: "safe-editing" }]);
   });
 
-  it("sorts equal-score recommendations deterministically by skill id", () => {
+  it("sorts equal-score recommendations deterministically by skill id", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1710,13 +1711,13 @@ describe("@clew/core", () => {
     });
 
     expect(
-      new ActivationEngine(registry)
-        .recommend({ activeSkillIds: ["beta-skill", "alpha-skill"] })
+      (await new ActivationEngine(registry)
+        .recommend({ activeSkillIds: ["beta-skill", "alpha-skill"] }))
         .map((recommendation) => recommendation.skillId),
     ).toEqual(["alpha-skill", "beta-skill"]);
   });
 
-  it("marks recommendation capability warnings as activation provenance", () => {
+  it("marks recommendation capability warnings as activation provenance", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1733,12 +1734,12 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    expect(new ActivationEngine(registry).recommend({ query: "build", capabilities: [] })[0]?.warnings).toEqual([
+    expect((await new ActivationEngine(registry).recommend({ query: "build", capabilities: [] }))[0]?.warnings).toEqual([
       expect.objectContaining({ code: "capability_missing", origin: "activation" }),
     ]);
   });
 
-  it("adds overlap warnings only for overlapping recommended skills", () => {
+  it("adds overlap warnings only for overlapping recommended skills", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1783,7 +1784,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const recommendations = new ActivationEngine(registry).recommend({ query: "refactor" });
+    const recommendations = await new ActivationEngine(registry).recommend({ query: "refactor" });
 
     expect(recommendations.map((recommendation) => recommendation.skillId)).toEqual([
       "incremental-refactor",
@@ -1817,7 +1818,7 @@ describe("@clew/core", () => {
     ]);
   });
 
-  it("adds deterministic conflict warnings to affected recommendations", () => {
+  it("adds deterministic conflict warnings to affected recommendations", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1845,7 +1846,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const recommendations = new ActivationEngine(registry).recommend({
+    const recommendations = await new ActivationEngine(registry).recommend({
       query: "typescript",
       activeSkillIds: ["debugging-core"],
     });
@@ -1886,7 +1887,7 @@ describe("@clew/core", () => {
     ]);
   });
 
-  it("returns schema-valid recommendations from activation", () => {
+  it("returns schema-valid recommendations from activation", async () => {
     const registry = new SkillRegistry({
       entries: [
         {
@@ -1904,7 +1905,7 @@ describe("@clew/core", () => {
       warnings: [],
     });
 
-    const recommendations = new ActivationEngine(registry).recommend({
+    const recommendations = await new ActivationEngine(registry).recommend({
       query: "test typescript",
       repoSignals: ["typescript"],
       capabilities: [],
@@ -1998,7 +1999,7 @@ describe("@clew/core", () => {
     ]);
   });
 
-  it("matches the documented filesystem discovery warning contract fixture", () => {
+  it("matches the documented filesystem discovery warning contract fixture", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const skillsRoot = join(projectRoot, "skills");
     const alphaRoot = join(skillsRoot, "alpha-skill");
@@ -2028,7 +2029,7 @@ describe("@clew/core", () => {
     const loadedAlpha = loadSkillBundle(alphaRoot);
     const snapshot = rebuildRegistry({ projectRoot, includeReferenceSkills: true });
     const dbPath = join(projectRoot, ".clew-registry.db");
-    const indexedSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const indexedSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const db = openRegistryDb(dbPath);
     try {
       const contract = {
@@ -2066,7 +2067,7 @@ describe("@clew/core", () => {
     }
   });
 
-  it("matches the documented SQLite registry rebuildability contract fixture", () => {
+  it("matches the documented SQLite registry rebuildability contract fixture", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const skillsRoot = join(projectRoot, "skills");
     const dbPath = join(projectRoot, ".clew-registry.db");
@@ -2140,7 +2141,7 @@ describe("@clew/core", () => {
       ].join("\n"),
     );
 
-    const firstSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const firstSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const firstDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
     const db = openRegistryDb(dbPath);
     try {
@@ -2160,7 +2161,7 @@ describe("@clew/core", () => {
     `);
     telemetryDb.close();
 
-    const secondSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const secondSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const secondDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
     const preservedDb = openRegistryDb(dbPath);
     const preservedTelemetry = preservedDb.listTelemetry();
@@ -2171,7 +2172,7 @@ describe("@clew/core", () => {
     unlinkIfExists(`${dbPath}-wal`);
     unlinkIfExists(`${dbPath}-shm`);
 
-    const deletedDbSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const deletedDbSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const deletedDbDerivedRows = readSqliteRegistryRows(dbPath, projectRoot);
     const recreatedDb = openRegistryDb(dbPath);
     const recreatedTelemetry = recreatedDb.listTelemetry();
@@ -2200,7 +2201,7 @@ describe("@clew/core", () => {
     expect(contract).toEqual(contractFixture("registry-rebuildability-contract.json"));
   });
 
-  it("matches the documented core telemetry mutation boundary contract fixture", () => {
+  it("matches the documented core telemetry mutation boundary contract fixture", async () => {
     const fixture = contractFixture("telemetry-mutation-boundary-contract.json") as {
       core: {
         sqliteDerivedState: unknown;
@@ -2219,7 +2220,7 @@ describe("@clew/core", () => {
     const manifestPath = join(skillRoot, "clew.yaml");
     const originalManifest = readFileSync(manifestPath, "utf8");
 
-    rebuildRegistryIndex({ projectRoot, dbPath });
+    await rebuildRegistryIndex({ projectRoot, dbPath });
     const db = openRegistryDb(dbPath);
     try {
       db.setSkillDisabled("typescript-core", true);
@@ -2227,7 +2228,7 @@ describe("@clew/core", () => {
       db.close();
     }
 
-    const disabledSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const disabledSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const disabledRegistry = new SkillRegistry(disabledSnapshot);
     const disabledAffectsRegistryWhileDbExists = disabledRegistry.list().map((skill) => skill.manifest.id).length === 0;
     const filesystemManifestUnchanged = readFileSync(manifestPath, "utf8") === originalManifest;
@@ -2236,7 +2237,7 @@ describe("@clew/core", () => {
     unlinkIfExists(`${dbPath}-wal`);
     unlinkIfExists(`${dbPath}-shm`);
 
-    const resetSnapshot = rebuildRegistryIndex({ projectRoot, dbPath });
+    const resetSnapshot = await rebuildRegistryIndex({ projectRoot, dbPath });
     const resetRegistry = new SkillRegistry(resetSnapshot);
     const deleteDbClearsDisabledState = resetRegistry.list().map((skill) => skill.manifest.id).includes("typescript-core");
 
@@ -2256,7 +2257,7 @@ describe("@clew/core", () => {
       name: "Future Kind",
       instructions: "Reserved for later.",
     });
-    rebuildRegistryIndex({ projectRoot: warningProjectRoot, dbPath: warningDbPath });
+    await rebuildRegistryIndex({ projectRoot: warningProjectRoot, dbPath: warningDbPath });
     const warningDb = openRegistryDb(warningDbPath);
     const persistedWarningCodes = warningDb.listRegistryWarnings().map((warning) => warning.code);
     warningDb.close();
@@ -2276,7 +2277,7 @@ describe("@clew/core", () => {
     }).toEqual(fixture.core);
   });
 
-  it("rebuilds registry indexes with valid bundles and invalid bundle warnings", () => {
+  it("rebuilds registry indexes with valid bundles and invalid bundle warnings", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-"));
     const validRoot = join(projectRoot, "skills", "valid-skill");
     const invalidRoot = join(projectRoot, "skills", "future-kind");
@@ -2293,7 +2294,7 @@ describe("@clew/core", () => {
       instructions: "Reserved for later.",
     });
 
-    const snapshot = rebuildRegistryIndex({
+    const snapshot = await rebuildRegistryIndex({
       projectRoot,
       dbPath: join(projectRoot, ".clew-registry.db"),
     });
@@ -2330,7 +2331,7 @@ describe("@clew/core", () => {
   });
 });
 
-function summarizeSnapshot(snapshot: ReturnType<typeof rebuildRegistryIndex>, projectRoot: string): unknown {
+function summarizeSnapshot(snapshot: RegistrySnapshot, projectRoot: string): unknown {
   return {
     entries: snapshot.entries.map((entry) => ({
       skillId: entry.bundle.manifest.id,

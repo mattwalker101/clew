@@ -29,103 +29,113 @@ import {
 type Command = (args: string[]) => void | Promise<void>;
 
 const commands: Record<string, Command> = {
-  list() {
+  async list() {
+    const current = await readRegistry();
     printJsonEnvelope({
-      skills: registry().list().map((b) => b.manifest),
-      warnings: registry().warnings,
+      skills: current.registry.list().map((b) => b.manifest),
+      warnings: current.registry.warnings,
     });
   },
-  search(args) {
+  async search(args) {
     const explain = args.includes("--explain");
     const query = args.filter((arg) => arg !== "--explain").join(" ");
     if (!query) fail("usage: clew search <query> [--explain]");
+    const current = await readRegistry();
     if (explain) {
       printJsonEnvelope({
         query,
-        analysis: registry().analyzeSearch(query),
-        warnings: registry().warnings,
+        analysis: current.registry.analyzeSearch(query),
+        warnings: current.registry.warnings,
       });
     } else {
       printJsonEnvelope({
         query,
-        skills: registry().search(query).map((b) => b.manifest),
-        warnings: registry().warnings,
+        skills: current.registry.search(query).map((b) => b.manifest),
+        warnings: current.registry.warnings,
       });
     }
   },
-  lookup(args) {
+  async lookup(args) {
     const [skillId] = args;
     if (!skillId) fail("usage: clew lookup <skill-id>");
-    const stateWarning = lookupStateWarning(skillId);
+    const stateWarning = await lookupStateWarning(skillId);
     if (stateWarning) {
       printJsonEnvelope({
         skillId,
         bundle: null,
-        warnings: [...registry().warnings, stateWarning],
+        warnings: [...(await registry()).warnings, stateWarning],
       });
       return;
     }
-    const bundle = registry().lookup(skillId) ?? null;
+    const current = await registry();
+    const bundle = current.lookup(skillId) ?? null;
     printJsonEnvelope({
       skillId,
       bundle,
-      warnings: bundle ? registry().warnings : [...registry().warnings, skillUnknownWarning(skillId)],
+      warnings: bundle ? current.warnings : [...current.warnings, skillUnknownWarning(skillId)],
     });
   },
-  recommend(args) {
+  async recommend(args) {
     const explain = args.includes("--explain");
     const query = args.filter((arg) => arg !== "--explain").join(" ");
     if (!query) fail("usage: clew recommend <query> [--explain]");
-    const activation = new ActivationEngine(registry());
+    const current = await registry();
+    const db = openRegistryDb(registryDbPath());
+    const activation = new ActivationEngine(current, db);
     const context = buildActivationContext(query);
-    if (explain) {
-      printJsonEnvelope({
-        query,
-        analysis: activation.analyzeRecommendations(context),
-        warnings: registry().warnings,
-      });
-    } else {
-      const recommendations = activation.recommend(context);
-      const db = openRegistryDb(registryDbPath());
-      try {
+    try {
+      if (explain) {
+        printJsonEnvelope({
+          query,
+          analysis: await activation.analyzeRecommendations(context),
+          warnings: current.warnings,
+        });
+      } else {
+        const recommendations = await activation.recommend(context);
         for (const rec of recommendations) {
           db.recordRecommendation(rec.skillId);
         }
-      } finally {
-        db.close();
+        printJsonEnvelope({
+          query,
+          recommendations,
+          warnings: current.warnings,
+        });
       }
-      printJsonEnvelope({
-        query,
-        recommendations,
-        warnings: registry().warnings,
-      });
+    } finally {
+      db.close();
     }
-  },
-  explain(args) {
+    },
+    async explain(args) {
     const [skillId, ...queryArgs] = args;
     const query = queryArgs.join(" ");
     if (!skillId) fail("usage: clew explain <skill-id> [query]");
 
-    const stateWarning = lookupStateWarning(skillId);
+    const stateWarning = await lookupStateWarning(skillId);
     if (stateWarning) {
       printJsonEnvelope({
         skillId,
         query,
         recommendation: null,
-        warnings: [...registry().warnings, stateWarning],
+        warnings: [...(await registry()).warnings, stateWarning],
       });
       return;
     }
 
-    const recommendation = new ActivationEngine(registry()).explain(skillId, buildActivationContext(query)) ?? null;
-    printJsonEnvelope({
-      skillId,
-      query,
-      recommendation,
-      warnings: recommendation ? registry().warnings : [...registry().warnings, notRecommendedWarning(skillId)],
-    });
-  },
-  import(args) {
+    const current = await registry();
+    const db = openRegistryDb(registryDbPath());
+    const activation = new ActivationEngine(current, db);
+    try {
+      const recommendation = (await activation.explain(skillId, buildActivationContext(query))) ?? null;
+      printJsonEnvelope({
+        skillId,
+        query,
+        recommendation,
+        warnings: recommendation ? current.warnings : [...current.warnings, notRecommendedWarning(skillId)],
+      });
+    } finally {
+      db.close();
+    }
+    },  async import(args) {
     const save = args.includes("--save");
     const filteredArgs = args.filter((arg) => arg !== "--save");
     const [provider, file] = filteredArgs;
@@ -143,41 +153,44 @@ const commands: Record<string, Command> = {
         writeFileSync(join(skillPath, "clew.yaml"), stringifyYaml(bundle.manifest));
         writeFileSync(join(skillPath, "skill.md"), bundle.instructions);
       }
-      rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+      await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
     }
 
     printJson(result);
   },
-  export(args) {
+  async export(args) {
     const [provider, skillId] = args;
     if ((provider !== "claude" && provider !== "opencode") || !skillId) {
       fail("usage: clew export <claude|opencode> <skill-id>");
     }
-    const bundle = registry().lookup(skillId);
+    const current = await registry();
+    const bundle = current.lookup(skillId);
     if (!bundle) fail(`unknown skill: ${skillId}`);
     printJson(exportProviderSkill(provider, bundle));
   },
-  enable(args) {
-    setDisabledState(args, false);
+  async enable(args) {
+    await setDisabledState(args, false);
   },
-  disable(args) {
-    setDisabledState(args, true);
+  async disable(args) {
+    await setDisabledState(args, true);
   },
-  overlaps() {
+  async overlaps() {
+    const current = await registry();
     printJsonEnvelope({
-      overlaps: findOverlaps(registry().list()),
-      warnings: registry().warnings,
+      overlaps: findOverlaps(current.list()),
+      warnings: current.warnings,
     });
   },
-  conflicts() {
+  async conflicts() {
+    const current = await registry();
     printJsonEnvelope({
-      conflicts: findConflicts(registry().list()),
-      warnings: registry().warnings,
+      conflicts: findConflicts(current.list()),
+      warnings: current.warnings,
     });
   },
-  telemetry(args) {
+  async telemetry(args) {
     const explain = args.includes("--explain");
-    const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+    const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
     const registry = new SkillRegistry(snapshot);
     const db = openRegistryDb(registryDbPath());
     try {
@@ -192,8 +205,8 @@ const commands: Record<string, Command> = {
       db.close();
     }
   },
-  doctor() {
-    const current = readRegistry();
+  async doctor() {
+    const current = await readRegistry();
     const bundles = current.registry.list();
     const agentsContext = readAgentsContext();
     const registryWarnings = current.warnings;
@@ -249,13 +262,13 @@ const commands: Record<string, Command> = {
   },
 };
 
-function readRegistry() {
-  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+async function readRegistry() {
+  const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
   return { registry: new SkillRegistry(snapshot), warnings: snapshot.warnings };
 }
 
-function registry() {
-  return readRegistry().registry;
+async function registry() {
+  return (await readRegistry()).registry;
 }
 
 function registryDbPath() {
@@ -284,7 +297,7 @@ function readAgentsContext() {
   }
 }
 
-function setDisabledState(args: string[], disabled: boolean) {
+async function setDisabledState(args: string[], disabled: boolean) {
   const [skillId] = args;
   if (!skillId) fail(`usage: clew ${disabled ? "disable" : "enable"} <skill-id>`);
   const db = openRegistryDb(registryDbPath());
@@ -297,8 +310,8 @@ function setDisabledState(args: string[], disabled: boolean) {
   }
 }
 
-function lookupStateWarning(skillId: string): CompatibilityWarning | undefined {
-  const snapshot = rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
+async function lookupStateWarning(skillId: string): Promise<CompatibilityWarning | undefined> {
+  const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
   const entry = snapshot.entries.find((e) => e.bundle.manifest.id === skillId);
   if (!entry) return skillUnknownWarning(skillId);
   if (entry.disabled) {

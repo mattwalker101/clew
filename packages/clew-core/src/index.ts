@@ -2,7 +2,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
+import { pipeline } from "@huggingface/transformers";
 import Database from "better-sqlite3";
+import * as sqliteVec from "sqlite-vec";
 import {
   type ActivationContext,
   activationContextSchema,
@@ -139,7 +141,8 @@ export type SkillActivationScoreComponentKind =
   | "repo_signal"
   | "telemetry_favorite"
   | "telemetry_usage"
-  | "project_preference";
+  | "project_preference"
+  | "semantic";
 
 export type SkillActivationScoreComponent = {
   kind: SkillActivationScoreComponentKind;
@@ -215,6 +218,7 @@ type SqliteDatabase = {
   exec(sql: string): void;
   prepare(sql: string): SqliteStatement;
   transaction<T>(fn: () => T): () => T;
+  loadExtension(path: string): void;
   close(): void;
 };
 
@@ -517,12 +521,21 @@ export function rebuildRegistry(options: RegistryOptions & { telemetry?: Telemet
   return { entries: resolveRegistryEntries(entries), warnings: sortWarnings(warnings) };
 }
 
-export function rebuildRegistryIndex(options: RegistryOptions = {}): RegistrySnapshot {
+export async function rebuildRegistryIndex(options: RegistryOptions = {}): Promise<RegistrySnapshot> {
   const dbPath = options.dbPath ?? join(options.projectRoot ?? process.cwd(), ".clew-registry.db");
   const db = openRegistryDb(dbPath);
   try {
     const snapshot = rebuildRegistry({ ...options, telemetry: db.getTelemetryState() });
     db.rebuildIndex(snapshot);
+
+    // Semantic indexing
+    const engine = new EmbeddingEngine();
+    for (const entry of snapshot.entries) {
+      const text = `${entry.bundle.manifest.name}. ${entry.bundle.manifest.description ?? ""}. ${entry.bundle.instructions}`;
+      const embedding = await engine.embed(text);
+      db.upsertEmbedding(entry.bundle.manifest.id, embedding);
+    }
+
     return snapshot;
   } finally {
     db.close();
@@ -716,11 +729,29 @@ export function openRegistryDb(dbPath: string): RegistryDb {
   return new RegistryDb(dbPath);
 }
 
+export class EmbeddingEngine {
+  private static extractor: any | undefined = undefined;
+
+  async embed(text: string): Promise<Float32Array> {
+    const extractor = await this.getExtractor();
+    const output = await extractor(text, { pooling: "mean", normalize: true });
+    return new Float32Array(output.data);
+  }
+
+  private async getExtractor() {
+    if (!EmbeddingEngine.extractor) {
+      EmbeddingEngine.extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    }
+    return EmbeddingEngine.extractor;
+  }
+}
+
 export class RegistryDb {
   private readonly db: SqliteDatabase;
 
   constructor(readonly dbPath: string) {
     this.db = openSqliteDatabase(dbPath);
+    sqliteVec.load(this.db);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS skills (
@@ -732,6 +763,10 @@ export class RegistryDb {
         disabled INTEGER NOT NULL,
         favorite INTEGER NOT NULL,
         manifest_json TEXT NOT NULL
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS vec_skills USING vec0(
+        skill_id TEXT PRIMARY KEY,
+        embedding float[384]
       );
       CREATE TABLE IF NOT EXISTS telemetry (
         skill_id TEXT PRIMARY KEY,
@@ -808,6 +843,33 @@ export class RegistryDb {
       .prepare("SELECT warning_json FROM registry_warnings ORDER BY position")
       .all() as Array<{ warning_json: string }>;
     return rows.map((row) => compatibilityWarningSchema.parse(JSON.parse(row.warning_json)));
+  }
+
+  searchSemantic(queryEmbedding: Float32Array, k = 10): Array<{ skillId: string; distance: number }> {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT 
+          skill_id, 
+          distance 
+        FROM vec_skills 
+        WHERE embedding MATCH ? 
+          AND k = ?
+      `,
+      )
+      .all(Buffer.from(queryEmbedding.buffer), k) as Array<{ skill_id: string; distance: number }>;
+
+    return rows.map((row) => ({
+      skillId: (row as any).skill_id,
+      distance: row.distance,
+    }));
+  }
+
+  upsertEmbedding(skillId: string, embedding: Float32Array): void {
+    this.db.prepare("DELETE FROM vec_skills WHERE skill_id = ?").run(skillId);
+    this.db
+      .prepare("INSERT INTO vec_skills(skill_id, embedding) VALUES (?, ?)")
+      .run(skillId, Buffer.from(embedding.buffer));
   }
 
   setSkillDisabled(skillId: string, disabled: boolean): void {
@@ -923,6 +985,9 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
       transaction<T>(fn: () => T) {
         return db.transaction(fn) as () => T;
       },
+      loadExtension(path: string) {
+        db.loadExtension(path);
+      },
       close() {
         db.close();
       },
@@ -933,6 +998,7 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
       DatabaseSync: new (path: string) => {
         exec(sql: string): void;
         prepare(sql: string): SqliteStatement;
+        loadExtension?(path: string): void;
         close(): void;
       };
     };
@@ -957,6 +1023,11 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
           }
         };
       },
+      loadExtension(path: string) {
+        if (db.loadExtension) {
+          db.loadExtension(path);
+        }
+      },
       close() {
         db.close();
       },
@@ -973,8 +1044,8 @@ export class SkillRegistry {
     this.warnings = snapshot.warnings;
   }
 
-  static fromProject(projectRoot = process.cwd()): SkillRegistry {
-    return new SkillRegistry(rebuildRegistryIndex({ projectRoot }));
+  static async fromProject(projectRoot = process.cwd()): Promise<SkillRegistry> {
+    return new SkillRegistry(await rebuildRegistryIndex({ projectRoot }));
   }
 
   list(): SkillBundle[] {
@@ -1050,11 +1121,28 @@ export class SkillRegistry {
 }
 
 export class ActivationEngine {
-  constructor(private readonly registry: SkillRegistry) {}
+  constructor(
+    private readonly registry: SkillRegistry,
+    private readonly db?: RegistryDb,
+  ) {}
 
-  analyzeRecommendations(input: Partial<ActivationContext>): SkillActivationAnalysisResult {
+  async analyzeRecommendations(input: Partial<ActivationContext>): Promise<SkillActivationAnalysisResult> {
     const context = activationContextSchema.parse(input);
-    const candidates = [...this.registry.entries].sort(entrySort).map((entry) => analyzeActivationCandidate(entry, context));
+
+    const semanticMatches = new Map<string, number>();
+    if (this.db) {
+      const engine = new EmbeddingEngine();
+      const embedding = await engine.embed(context.query);
+      const matches = this.db.searchSemantic(embedding);
+      for (const match of matches) {
+        semanticMatches.set(match.skillId, match.distance);
+      }
+    }
+
+    const candidates = [...this.registry.entries]
+      .sort(entrySort)
+      .map((entry) => analyzeActivationCandidate(entry, context, semanticMatches.get(entry.bundle.manifest.id)));
+
     const included = candidates
       .filter((candidate) => candidate.status === "included")
       .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
@@ -1067,7 +1155,10 @@ export class ActivationEngine {
       this.registry.list(),
     );
     const recommendationBySkillId = new Map(
-      includedWithWarnings.map((item, index) => [item.recommendation.skillId, { recommendation: item.recommendation, rank: index + 1 }]),
+      includedWithWarnings.map((item, index) => [
+        item.recommendation.skillId,
+        { recommendation: item.recommendation, rank: index + 1 },
+      ]),
     );
     const rankedIncluded = included.map((candidate) => {
       const ranked = recommendationBySkillId.get(candidate.skillId);
@@ -1085,16 +1176,20 @@ export class ActivationEngine {
     return { context, candidates: [...rankedIncluded, ...excluded], recommendations };
   }
 
-  recommend(input: Partial<ActivationContext>): Recommendation[] {
-    return this.analyzeRecommendations(input).recommendations;
+  async recommend(input: Partial<ActivationContext>): Promise<Recommendation[]> {
+    return (await this.analyzeRecommendations(input)).recommendations;
   }
 
-  explain(skillId: string, input: Partial<ActivationContext>): Recommendation | undefined {
-    return this.recommend(input).find((recommendation) => recommendation.skillId === skillId);
+  async explain(skillId: string, input: Partial<ActivationContext>): Promise<Recommendation | undefined> {
+    return (await this.recommend(input)).find((recommendation) => recommendation.skillId === skillId);
   }
 }
 
-function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationContext): SkillActivationCandidate {
+function analyzeActivationCandidate(
+  entry: RegistryEntry,
+  context: ActivationContext,
+  distance?: number,
+): SkillActivationCandidate {
   const bundle = entry.bundle;
   const components: SkillActivationScoreComponent[] = [];
   const queryTerms = normalizeTerms(context.query);
@@ -1152,6 +1247,17 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
       });
     }
   }
+
+  if (distance !== undefined && distance < 1.2) {
+    const semanticPoints = Math.max(1, Math.round((1.5 - distance) * 5));
+    components.push({
+      kind: "semantic",
+      value: distance.toFixed(4),
+      points: semanticPoints,
+      reason: `semantic similarity match (distance: ${distance.toFixed(4)})`,
+    });
+  }
+
   if (enabled && components.length) {
     if (entry.favorite) {
       components.push({ kind: "telemetry_favorite", value: "true", points: 1, reason: "favorite skill" });

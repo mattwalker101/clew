@@ -4,6 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { SkillRegistry } from "@clew/core";
 import { runClewMcpServer } from "./server.js";
 
 // Define the mock outside the factory function to avoid [vitest] warning
@@ -28,6 +29,9 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => {
 
 describe("runClewMcpServer", () => {
   it("initializes a server and registers tool handlers", async () => {
+    // Mock the async fromProject
+    const fromProjectSpy = vi.spyOn(SkillRegistry, "fromProject").mockResolvedValue(new SkillRegistry({ entries: [], warnings: [] }));
+    
     await runClewMcpServer();
 
     expect(Server).toHaveBeenCalledWith(
@@ -44,5 +48,7 @@ describe("runClewMcpServer", () => {
       expect.any(Function)
     );
     expect(mockServerInstance.connect).toHaveBeenCalled();
+
+    fromProjectSpy.mockRestore();
   });
 });
