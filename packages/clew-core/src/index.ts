@@ -16,11 +16,13 @@ import {
   type RegistryLayer,
   type SkillBundle,
   type SkillManifest,
+  type Suppression,
   compatibilityWarningSchema,
   compositionInputSchema,
   compositionResultSchema,
   formatValidationIssue,
   parseSkillBundle,
+  suppressionSchema,
   SkillBundleValidationError,
 } from "@clew/schema";
 
@@ -37,6 +39,7 @@ export type RegistryEntry = {
 export type RegistrySnapshot = {
   entries: RegistryEntry[];
   warnings: CompatibilityWarning[];
+  dbPath?: string;
 };
 
 export type SkillBundleDiscoveryResult = {
@@ -132,7 +135,7 @@ export type SkillTelemetryAnalysisResult = {
   records: SkillTelemetryAnalysisRecord[];
 };
 
-export type SkillActivationCandidateStatus = "included" | "excluded";
+export type SkillActivationCandidateStatus = "included" | "excluded" | "suppressed";
 
 export type SkillActivationScoreComponentKind =
   | "trigger"
@@ -151,7 +154,7 @@ export type SkillActivationScoreComponent = {
   reason: string;
 };
 
-export type SkillActivationExclusionKind = "disabled" | "unmatched";
+export type SkillActivationExclusionKind = "disabled" | "unmatched" | "relationship" | "preference_violation";
 
 export type SkillActivationExclusion = {
   kind: SkillActivationExclusionKind;
@@ -169,6 +172,7 @@ export type SkillActivationCandidate = {
   signals: RecommendationSignal[];
   warnings: CompatibilityWarning[];
   exclusions: SkillActivationExclusion[];
+  suppression?: Suppression;
 };
 
 export type SkillActivationAnalysisResult = {
@@ -536,7 +540,7 @@ export async function rebuildRegistryIndex(options: RegistryOptions = {}): Promi
       db.upsertEmbedding(entry.bundle.manifest.id, embedding);
     }
 
-    return snapshot;
+    return { ...snapshot, dbPath };
   } finally {
     db.close();
   }
@@ -1038,10 +1042,12 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
 export class SkillRegistry {
   readonly entries: RegistryEntry[];
   readonly warnings: CompatibilityWarning[];
+  readonly dbPath?: string;
 
   constructor(snapshot: RegistrySnapshot) {
     this.entries = snapshot.entries;
     this.warnings = snapshot.warnings;
+    this.dbPath = snapshot.dbPath;
   }
 
   static async fromProject(projectRoot = process.cwd()): Promise<SkillRegistry> {
@@ -1143,37 +1149,63 @@ export class ActivationEngine {
       .sort(entrySort)
       .map((entry) => analyzeActivationCandidate(entry, context, semanticMatches.get(entry.bundle.manifest.id)));
 
+    const entryById = new Map(this.registry.entries.map((entry) => [entry.bundle.manifest.id, entry]));
     const included = candidates
       .filter((candidate) => candidate.status === "included")
-      .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
+      .sort((a, b) => {
+        const scoreDiff = b.score - a.score;
+        if (scoreDiff !== 0) return scoreDiff;
+        const entryA = entryById.get(a.skillId)!;
+        const entryB = entryById.get(b.skillId)!;
+        return entrySort(entryA, entryB);
+      });
     const bySkillId = new Map(this.registry.entries.map((entry) => [entry.bundle.manifest.id, entry.bundle]));
-    const includedWithWarnings = withActivationRelationshipWarnings(
+    const includedWithRelationships = withActivationRelationships(
       included.flatMap((candidate) => {
         const bundle = bySkillId.get(candidate.skillId);
         return bundle ? [{ bundle, recommendation: candidateRecommendation(candidate) }] : [];
       }),
       this.registry.list(),
     );
-    const recommendationBySkillId = new Map(
-      includedWithWarnings.map((item, index) => [
-        item.recommendation.skillId,
-        { recommendation: item.recommendation, rank: index + 1 },
-      ]),
+
+    const suppressedIds = new Set(
+      includedWithRelationships.filter((item) => item.recommendation.suppression).map((item) => item.recommendation.skillId),
     );
-    const rankedIncluded = included.map((candidate) => {
+
+    const recommendationBySkillId = new Map(
+      includedWithRelationships
+        .filter((item) => !item.recommendation.suppression)
+        .map((item, index) => [
+          item.recommendation.skillId,
+          { recommendation: item.recommendation, rank: index + 1 },
+        ]),
+    );
+
+    const processedIncluded = included.map((candidate) => {
       const ranked = recommendationBySkillId.get(candidate.skillId);
+      const relationship = includedWithRelationships.find((item) => item.recommendation.skillId === candidate.skillId);
+      const status: SkillActivationCandidateStatus = suppressedIds.has(candidate.skillId) ? "suppressed" : "included";
+
       return {
         ...candidate,
+        status,
         ...(ranked ? { rank: ranked.rank } : {}),
-        warnings: ranked?.recommendation.warnings ?? candidate.warnings,
+        warnings: relationship?.recommendation.warnings ?? candidate.warnings,
+        suppression: relationship?.recommendation.suppression,
       };
     });
+
+    const suppressed = processedIncluded.filter((c) => c.status === "suppressed");
+    const finalIncluded = processedIncluded.filter((c) => c.status === "included");
+
     const excluded = candidates
       .filter((candidate) => candidate.status === "excluded")
       .sort((a, b) => a.skillId.localeCompare(b.skillId));
-    const recommendations = includedWithWarnings.map((item) => item.recommendation);
+    const recommendations = includedWithRelationships
+      .filter((item) => !item.recommendation.suppression)
+      .map((item) => item.recommendation);
 
-    return { context, candidates: [...rankedIncluded, ...excluded], recommendations };
+    return { context, candidates: [...finalIncluded, ...suppressed, ...excluded], recommendations };
   }
 
   async recommend(input: Partial<ActivationContext>): Promise<Recommendation[]> {
@@ -1197,6 +1229,13 @@ function analyzeActivationCandidate(
   const agentsActiveSkillIds = unique([...context.activeSkillIds, ...agentsParsed.activeSkillIds]);
   const projectPreferences = agentsParsed.preferences;
   const enabled = !entry.disabled;
+  const exclusions: SkillActivationExclusion[] = [];
+  let status: SkillActivationCandidateStatus = "included";
+
+  if (!enabled) {
+    exclusions.push({ kind: "disabled", reason: "skill is disabled" });
+    status = "excluded";
+  }
 
   for (const trigger of bundle.manifest.activation.triggers) {
     if (queryTerms.includes(normalize(trigger))) {
@@ -1237,14 +1276,23 @@ function analyzeActivationCandidate(
       (p) => prefLower.includes(p.toLowerCase()) || p.toLowerCase().includes(prefLower),
     );
     const matchesTag = bundle.manifest.tags.some((t) => prefLower.includes(t.toLowerCase()));
+    const matchesName = prefLower.includes(bundle.manifest.name.toLowerCase());
 
-    if (matchesPolicy || matchesTag) {
-      components.push({
-        kind: "project_preference",
-        value: preference,
-        points: 3,
-        reason: `matched project preference "${preference}"`,
-      });
+    if (matchesPolicy || matchesTag || matchesName) {
+      if (/avoid|never/i.test(preference)) {
+        exclusions.push({
+          kind: "preference_violation",
+          reason: `violates project preference "${preference}"`,
+        });
+        status = "excluded";
+      } else {
+        components.push({
+          kind: "project_preference",
+          value: preference,
+          points: 3,
+          reason: `matched project preference "${preference}"`,
+        });
+      }
     }
   }
 
@@ -1258,7 +1306,12 @@ function analyzeActivationCandidate(
     });
   }
 
-  if (enabled && components.length) {
+  if (status === "included" && components.length === 0) {
+    exclusions.push({ kind: "unmatched", reason: "no activation evidence matched the supplied context" });
+    status = "excluded";
+  }
+
+  if (status === "included") {
     if (entry.favorite) {
       components.push({ kind: "telemetry_favorite", value: "true", points: 1, reason: "favorite skill" });
     }
@@ -1272,16 +1325,11 @@ function analyzeActivationCandidate(
       });
     }
   }
+
   const score = components.reduce((sum, component) => sum + component.points, 0);
   const reasons = unique(components.map((component) => component.reason));
-  const status: SkillActivationCandidateStatus = enabled && score > 0 && reasons.length > 0 ? "included" : "excluded";
-  const exclusions: SkillActivationExclusion[] = [];
   const warnings: CompatibilityWarning[] = status === "included" ? [...bundle.manifest.compatibility.warnings] : [];
-  if (!enabled) {
-    exclusions.push({ kind: "disabled", reason: "skill is disabled" });
-  } else if (score === 0 || reasons.length === 0) {
-    exclusions.push({ kind: "unmatched", reason: "no activation evidence matched the supplied context" });
-  }
+
   if (status === "included") {
     const missing = bundle.manifest.capabilities.required.filter((capability) => !context.capabilities.includes(capability));
     if (missing.length) {
@@ -1321,15 +1369,17 @@ function componentSignal(component: SkillActivationScoreComponent): Recommendati
   return { type: component.kind, value: component.value };
 }
 
-function withActivationRelationshipWarnings(
+function withActivationRelationships(
   scored: Array<{ bundle: SkillBundle; recommendation: Recommendation }>,
   activeBundles: SkillBundle[],
 ): Array<{ bundle: SkillBundle; recommendation: Recommendation }> {
   const bySkillId = new Map(scored.map((item) => [item.recommendation.skillId, item]));
 
-  for (const overlap of findOverlaps(scored.map((item) => item.bundle))) {
+  const overlaps = findOverlaps(scored.map((item) => item.bundle));
+  for (const overlap of overlaps) {
     const [leftSkillId, rightSkillId] = overlap.ids;
     if (!leftSkillId || !rightSkillId) continue;
+
     appendActivationWarning(leftSkillId, {
       code: "activation_overlap",
       message: overlapMessage(overlap, rightSkillId),
@@ -1344,6 +1394,24 @@ function withActivationRelationshipWarnings(
       origin: "activation",
       field: overlap.ids.join(":"),
     }, bySkillId);
+
+    // Smart Redundancy Suppression
+    if (overlap.classification === "redundant") {
+      const winner = scored.find(item => item.recommendation.skillId === leftSkillId || item.recommendation.skillId === rightSkillId);
+      if (!winner) continue;
+      
+      const winnerId = winner.recommendation.skillId;
+      const loserId = winnerId === leftSkillId ? rightSkillId : leftSkillId;
+
+      const loser = bySkillId.get(loserId)!;
+      if (!loser.recommendation.suppression) {
+        loser.recommendation.suppression = {
+          kind: "redundancy",
+          reason: `suppressed due to redundant overlap with higher-ranked skill "${winnerId}"`,
+          bySkillId: winnerId,
+        };
+      }
+    }
   }
 
   for (const conflict of findConflicts(activeBundles)) {

@@ -182,9 +182,93 @@ describe("@clew/core", () => {
     );
     expect(eng.reasons).toContain('matched project preference "- must use deterministic behavior"');
     expect(eng.signals).toContainEqual({ type: "project_preference", value: "- must use deterministic behavior" });
-  });
+    });
 
-  it("matches the documented AGENTS.md parsing and diagnostic contract fixture", () => {
+    it("suppresses redundant recommendations from lower layers", async () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core"),
+          layer: "global",
+          root: "global-skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("safe-editing", {
+            tags: ["editing"],
+            activation: { triggers: ["edit"], tags: ["editing"], weight: 1 },
+            capabilities: { required: ["filesystem", "terminal"], optional: [] },
+            extends: ["engineering-core"],
+          }),
+          layer: "global",
+          root: "global-skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("specific-safe-editing", {
+            tags: ["safety", "editing"], // Redundant shared_tag
+            activation: { triggers: ["edit"], tags: ["editing"], weight: 1 }, // Redundant shared_trigger
+            capabilities: { required: ["filesystem", "terminal"], optional: [] }, // Redundant shared_required_capability
+            extends: ["engineering-core"], // Redundant common_parent
+          }),
+          layer: "project",
+          root: "project-skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const activation = new ActivationEngine(registry);
+    const result = await activation.analyzeRecommendations({ query: "edit" });
+
+    const specific = result.candidates.find((c) => c.skillId === "specific-safe-editing")!;
+    const global = result.candidates.find((c) => c.skillId === "safe-editing")!;
+
+    expect(specific.status).toBe("included");
+    expect(global.status).toBe("suppressed");
+    expect(global.suppression).toMatchObject({
+      kind: "redundancy",
+      bySkillId: "specific-safe-editing",
+    });
+    expect(result.recommendations.map((r) => r.skillId)).toEqual(["specific-safe-editing"]);
+    });
+
+    it("excludes skills that violate negative project preferences", async () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("recursive-skill", { tags: ["recursion"] }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const activation = new ActivationEngine(registry);
+    const context = {
+      query: "build",
+      agentsMd: "# Rules\n- avoid recursion",
+    };
+
+    const result = await activation.analyzeRecommendations(context);
+    const candidate = result.candidates.find((c) => c.skillId === "recursive-skill")!;
+
+    expect(candidate.status).toBe("excluded");
+    expect(candidate.exclusions).toContainEqual({
+      kind: "preference_violation",
+      reason: 'violates project preference "- avoid recursion"',
+    });
+    expect(result.recommendations).toHaveLength(0);
+    });
+
+    it("matches the documented AGENTS.md parsing and diagnostic contract fixture", async () => {
     const contract = contractFixture("agents-md-contract.json") as {
       content: string;
       parsed: ReturnType<typeof parseAgentsMd>;

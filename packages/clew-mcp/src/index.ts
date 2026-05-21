@@ -1,5 +1,6 @@
 import {
   ActivationEngine,
+  openRegistryDb,
   SkillRegistry,
   type SkillActivationAnalysisResult,
   type SkillIndexAnalysisResult,
@@ -26,6 +27,7 @@ export type ClewMcpBridge = {
   explain(skillId: string, query: string): Promise<ClewMcpExplainResult>;
   explain(input: ClewMcpExplainInput): Promise<ClewMcpExplainResult>;
   lookup(input: string | ClewMcpLookupInput): ClewMcpLookupResult;
+  close(): void;
 };
 
 export type ClewMcpBridgeOptions = {
@@ -116,7 +118,8 @@ export async function createClewMcpBridge(
   const resolved = await registryOrOptions;
   const options = resolved instanceof SkillRegistry ? { registry: resolved } : resolved;
   const registry = options.registry ?? (await SkillRegistry.fromProject());
-  const activation = new ActivationEngine(registry);
+  const db = registry.dbPath ? openRegistryDb(registry.dbPath) : undefined;
+  const activation = new ActivationEngine(registry, db);
   const registryWarnings = registry.warnings;
   return {
     analyzeIndex(): ClewMcpIndexAnalysisResult {
@@ -211,6 +214,9 @@ export async function createClewMcpBridge(
         bundle: warning ? null : registry.lookup(skillId) ?? null,
         warnings: warning ? [...registryWarnings, warning] : registryWarnings,
       };
+    },
+    close() {
+      db?.close();
     },
   };
 }
