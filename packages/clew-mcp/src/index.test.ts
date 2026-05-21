@@ -14,6 +14,7 @@ describe("@clew/mcp", () => {
       "analyzeRecommendations",
       "analyzeSearch",
       "analyzeTelemetry",
+      "close",
       "explain",
       "lookup",
       "recommend",

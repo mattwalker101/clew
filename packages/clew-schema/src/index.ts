@@ -245,6 +245,12 @@ export const recommendationSignalSchema = z.object({
   value: z.string().min(1),
 });
 
+export const suppressionSchema = z.object({
+  kind: z.enum(["redundancy", "conflict", "preference_violation"]),
+  reason: z.string().min(1),
+  bySkillId: z.string().optional(),
+});
+
 export const recommendationSchema = z
   .object({
     skillId: z.string().min(1),
@@ -252,6 +258,7 @@ export const recommendationSchema = z
     reasons: z.array(z.string().min(1)).min(1),
     signals: z.array(recommendationSignalSchema).default([]),
     warnings: z.array(compatibilityWarningSchema).default([]),
+    suppression: suppressionSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (new Set(value.reasons).size !== value.reasons.length) {
@@ -337,6 +344,7 @@ export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 export type ValidationResult = z.infer<typeof validationResultSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;
 export type ExportResult = z.infer<typeof exportResultSchema>;
+export type Suppression = z.infer<typeof suppressionSchema>;
 export type ExtensionNamespaces = z.infer<typeof extensionNamespacesSchema>;
 export type Provenance = z.infer<typeof provenanceSchema>;
 

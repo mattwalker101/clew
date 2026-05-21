@@ -58,6 +58,7 @@
         "analyzeRecommendations",
         "analyzeSearch",
         "analyzeTelemetry",
+        "close",
         "explain",
         "lookup",
         "recommend",
