@@ -138,7 +138,8 @@ export type SkillActivationScoreComponentKind =
   | "agents_md"
   | "repo_signal"
   | "telemetry_favorite"
-  | "telemetry_usage";
+  | "telemetry_usage"
+  | "project_preference";
 
 export type SkillActivationScoreComponent = {
   kind: SkillActivationScoreComponentKind;
@@ -237,32 +238,57 @@ export function canonicalRegistryRoots(
 export function parseAgentsMd(content: string): { activeSkillIds: string[]; preferences: string[] } {
   const active: string[] = [];
   const preferences: string[] = [];
-  let inActiveSkills = false;
+  let activeSkillsHeaderLevel: number | undefined = undefined;
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (/^#+\s+Active Skills/i.test(line)) {
-      inActiveSkills = true;
-      continue;
+    if (!line) continue;
+
+    if (line.startsWith("#")) {
+      let level = 0;
+      while (level < line.length && line[level] === "#") level++;
+
+      if (level > 0 && level <= 6 && (level === line.length || line[level] === " ")) {
+        const title = line.slice(level).trim();
+
+        if (/^Active Skills$/i.test(title)) {
+          activeSkillsHeaderLevel = level;
+        } else if (activeSkillsHeaderLevel !== undefined && level <= activeSkillsHeaderLevel) {
+          activeSkillsHeaderLevel = undefined;
+        }
+        continue;
+      }
     }
-    if (inActiveSkills && /^#+\s+/.test(line)) {
-      inActiveSkills = false;
-    }
-    if (inActiveSkills) {
-      const match = line.match(/^-\s+`?([a-z0-9._-]+)`?/i);
+
+    if (activeSkillsHeaderLevel !== undefined) {
+      const match = line.match(/^-\s+`?([a-z0-9._-]+)`?\s*$/i);
       if (match?.[1]) active.push(match[1]);
     }
-    if (!/^#+\s+/.test(line) && /prefer|avoid|must|should|local-first|deterministic|explainable/i.test(line)) {
-      preferences.push(line);
+
+    if (
+      !line.startsWith("#") &&
+      /prefer|avoid|must|should|local-first|deterministic|explainable|always|never/i.test(line)
+    ) {
+      if (line.startsWith("- ") || line.startsWith("* ")) {
+        preferences.push(line);
+      } else {
+        preferences.push(line);
+      }
     }
   }
 
   return { activeSkillIds: unique(active), preferences: unique(preferences) };
 }
 
-export function getAgentsMdDiagnostics(content: string, registry: SkillRegistry): CompatibilityWarning[] {
+export function getAgentsMdDiagnostics(
+  content: string,
+  registry: SkillRegistry,
+  projectRoot = process.cwd(),
+): CompatibilityWarning[] {
   const diagnostics: CompatibilityWarning[] = [];
   const parsed = parseAgentsMd(content);
+  const repoSignals = detectRepoSignals(projectRoot);
+
   for (const skillId of parsed.activeSkillIds) {
     const entry = registry.entries.find((candidate) => candidate.bundle.manifest.id === skillId);
     if (!entry) {
@@ -281,6 +307,23 @@ export function getAgentsMdDiagnostics(content: string, registry: SkillRegistry)
         origin: "agents_diagnostic",
         field: "AGENTS.md",
       });
+    } else {
+      const skill = entry.bundle.manifest;
+      const mismatchingSignals = [...skill.activation.triggers, ...skill.tags].filter(
+        (t) =>
+          ["typescript", "python", "go", "rust", "node", "pnpm", "npm", "yarn", "testing"].includes(t) &&
+          !repoSignals.includes(t as any),
+      );
+
+      if (mismatchingSignals.length > 0) {
+        diagnostics.push({
+          code: "agents_skill_mismatch",
+          message: `AGENTS.md references skill "${skillId}" which expects repository signals [${mismatchingSignals.join(", ")}] not detected in this project.`,
+          severity: "info",
+          origin: "agents_diagnostic",
+          field: "AGENTS.md",
+        });
+      }
     }
   }
   return diagnostics;
@@ -1055,7 +1098,9 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
   const bundle = entry.bundle;
   const components: SkillActivationScoreComponent[] = [];
   const queryTerms = normalizeTerms(context.query);
-  const agentsActiveSkillIds = unique([...context.activeSkillIds, ...parseAgentsMd(context.agentsMd).activeSkillIds]);
+  const agentsParsed = parseAgentsMd(context.agentsMd);
+  const agentsActiveSkillIds = unique([...context.activeSkillIds, ...agentsParsed.activeSkillIds]);
+  const projectPreferences = agentsParsed.preferences;
   const enabled = !entry.disabled;
 
   for (const trigger of bundle.manifest.activation.triggers) {
@@ -1088,6 +1133,22 @@ function analyzeActivationCandidate(entry: RegistryEntry, context: ActivationCon
         value: repoSignal,
         points: 2,
         reason: `matched repository signal "${repoSignal}"`,
+      });
+    }
+  }
+  for (const preference of projectPreferences) {
+    const prefLower = preference.toLowerCase();
+    const matchesPolicy = bundle.manifest.policies.some(
+      (p) => prefLower.includes(p.toLowerCase()) || p.toLowerCase().includes(prefLower),
+    );
+    const matchesTag = bundle.manifest.tags.some((t) => prefLower.includes(t.toLowerCase()));
+
+    if (matchesPolicy || matchesTag) {
+      components.push({
+        kind: "project_preference",
+        value: preference,
+        points: 3,
+        reason: `matched project preference "${preference}"`,
       });
     }
   }
