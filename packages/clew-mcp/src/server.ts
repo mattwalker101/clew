@@ -62,8 +62,8 @@ const TelemetryInputSchema = z.object({
 });
 
 export async function runClewMcpServer(projectRoot = process.cwd()) {
-  const registry = SkillRegistry.fromProject(projectRoot);
-  const bridge = createClewMcpBridge(registry);
+  const registry = await SkillRegistry.fromProject(projectRoot);
+  const bridge = await createClewMcpBridge(registry);
 
   const server = new Server(
     {
@@ -157,11 +157,11 @@ export async function runClewMcpServer(projectRoot = process.cwd()) {
         }
         case "clew_recommend": {
           const parsed = RecommendInputSchema.parse(args);
-          return { content: [{ type: "text", text: JSON.stringify(bridge.recommend(parsed), null, 2) }] };
+          return { content: [{ type: "text", text: JSON.stringify(await bridge.recommend(parsed), null, 2) }] };
         }
         case "clew_explain": {
           const parsed = ExplainInputSchema.parse(args);
-          return { content: [{ type: "text", text: JSON.stringify(bridge.explain(parsed), null, 2) }] };
+          return { content: [{ type: "text", text: JSON.stringify(await bridge.explain(parsed), null, 2) }] };
         }
         case "clew_lookup": {
           const parsed = LookupInputSchema.parse(args);

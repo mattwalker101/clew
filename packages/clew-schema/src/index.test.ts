@@ -501,6 +501,7 @@ describe("@clew/schema", () => {
       "telemetry_favorite",
       "telemetry_usage",
       "project_preference",
+      "semantic",
     ]);
     expect(recommendationSignalSchema.parse({ type: "telemetry_usage", value: "3" })).toEqual({
       type: "telemetry_usage",
