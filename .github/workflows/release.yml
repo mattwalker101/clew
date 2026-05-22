@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "The package to publish (e.g., packages/clew-cli)"
+        required: true
+        type: string
+      version_type:
+        description: "Version bump type (patch, minor, major)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  id-token: write # Required for OIDC / Trusted Publishing
+
+jobs:
+  publish:
+    name: Publish Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Validate build
+        run: corepack pnpm -r build && corepack pnpm -r check && corepack pnpm test
+
+      - name: Prepare Release
+        working-directory: ${{ github.event.inputs.package }}
+        run: |
+          npm version ${{ github.event.inputs.version_type }} -m "chore: release %s"
+          echo "NEW_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
+
+      - name: Dry-run Pack
+        working-directory: ${{ github.event.inputs.package }}
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        working-directory: ${{ github.event.inputs.package }}
+        run: pnpm publish --no-git-checks --access public --provenance --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Fallback if OIDC not yet linked
+
+      - name: Push Version Change
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "chore: release ${{ github.event.inputs.package }}@${{ env.NEW_VERSION }}"
+          git tag "${{ github.event.inputs.package }}/v${{ env.NEW_VERSION }}"
+          git push origin main --tags
