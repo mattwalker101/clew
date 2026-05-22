@@ -37,7 +37,7 @@ corepack pnpm -w exec node packages/clew-cli/dist/index.js mcp install
 ### 3. Get Your First Recommendation
 From any project directory:
 ```sh
-clew recommend "I need to refactor a complex module" --explain
+clew-cli recommend "I need to refactor a complex module" --explain
 ```
 
 ---

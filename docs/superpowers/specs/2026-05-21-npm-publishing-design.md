@@ -1,72 +1,64 @@
 # clew npm Publishing Design
 
-## Current status
+## Current Status
+- **Scope:** `@clew` is UNAVAILABLE (owned by Clew, Inc.).
+- **Decision:** Use **`@clew-ops`** as the official npm scope.
+- **Decision:** Rename the CLI binary to **`clew-cli`** to avoid conflict with the existing Rust-based `clew` tool.
 
-No `@clew/*` packages should be published until this document is implemented and reviewed.
+No packages should be published until this document is fully implemented and reviewed.
 
-## Candidate package classification
+## Candidate Package Mapping
+Transitioning from the internal `@clew` namespace to the public `@clew-ops` scope:
 
-Candidate public packages:
+| Current Name | New Public Name | Status |
+| :--- | :--- | :--- |
+| `@clew-ops/cli` | `@clew-ops/cli` | Public (Binary: `clew-cli`) |
+| `@clew-ops/core` | `@clew-ops/core` | Public |
+| `@clew-ops/schema` | `@clew-ops/schema` | Public |
+| `@clew-ops/mcp` | `@clew-ops/mcp` | Public |
+| `@clew-ops/importers` | `@clew-ops/importers` | Internal/Pending |
+| `@clew-ops/exporters` | `@clew-ops/exporters` | Internal/Pending |
 
-- `@clew/cli`
-- `@clew/core`
-- `@clew/schema`
-- `@clew/mcp`
+## Migration Guide (Implementation Steps)
 
-Candidate internal or later-review packages:
+### 1. Claim the Scope
+- Log in to [npmjs.com](https://www.npmjs.com/).
+- Create a new Organization named **`clew-ops`**.
+- Set the organization to "Public" (free for open source).
 
-- `@clew/importers`
-- `@clew/exporters`
+### 2. Rename Packages in Monorepo
+- Update all `package.json` `name` fields to use the `@clew-ops/` prefix.
+- Update `dependencies` and `devDependencies` in sibling packages to point to the new names.
+- Update the `bin` field in `packages/clew-cli/package.json` to `"clew-cli": "./dist/index.js"`.
 
-This classification must be reviewed before first release.
+### 3. Update Build & Import Logic
+- Grep for `import ... from '@clew-ops/` across the monorepo and replace with `@clew-ops/`.
+- Verify `pnpm-workspace.yaml` and root-level scripts still resolve correctly.
 
-## Required controls before first publish
+## Required Controls Before First Publish
 
 Each public package must have:
+- `private: false` changed in an explicit release-preparation commit.
+- `publishConfig.access: "public"`.
+- Package-level `files` allowlist (already implemented for `clew-cli`).
+- `README.md` and `LICENSE` in each package directory.
+- Clean `npm pack --dry-run` output (verified manually).
+- No sandbox, cache, session, log, env, or auth files.
+- CI-only release workflow (GitHub Actions).
+- npm Trusted Publishing (OIDC) configured.
+- Provenance enabled (`--provenance`).
 
-- `private: false` changed in an explicit release-preparation commit
-- `publishConfig.access: public`
-- package-level `files` allowlist
-- README
-- LICENSE
-- clean `npm pack --dry-run`
-- no sandbox, cache, session, log, env, or auth files
-- exact repository metadata
-- CI-only release workflow
-- npm Trusted Publishing configured if possible
-- provenance enabled
-- package owner review
-- no long-lived npm publish token by default
+## Preferred Publishing Model
 
-## Preferred publishing model
+Use **npm Trusted Publishing** with GitHub Actions OIDC.
+- **NO** long-lived `NPM_TOKEN` should be used if OIDC is available.
+- The GitHub workflow must have `id-token: write` permissions.
 
-Use npm Trusted Publishing with GitHub Actions OIDC.
+## Manual Publish Policy
+Manual publish is strictly prohibited except for emergency recovery and must be explicitly approved by Matt.
 
-Do not use a long-lived `NPM_TOKEN` unless Trusted Publishing is unavailable and the exception is explicitly approved.
-
-## Manual publish policy
-
-Manual publish is prohibited except for emergency recovery and must be explicitly approved by Matt.
-
-## First publish checklist
-
-For each package:
-
-```bash
-cd packages/<package>
-npm pack --dry-run
-```
-
-Inspect tarball contents before publishing.
-
-Verify npm package scope ownership before any publish attempt.
-
-## Post-publish controls
-
-After a package exists:
-
-- configure Trusted Publishing
-- require 2FA for account and package settings
-- minimize package owners
-- enable provenance
-- consider staged publishing after package exists
+## Post-Publish Verification
+After the first successful publish:
+- Verify the "Provenance" badge appears on npmjs.com.
+- Verify that `npm install -g @clew-ops/cli` correctly installs the `clew-cli` binary.
+- Enable 2FA for all organization members.

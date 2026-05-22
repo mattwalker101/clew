@@ -24,7 +24,7 @@ import {
   parseSkillBundle,
   suppressionSchema,
   SkillBundleValidationError,
-} from "@clew/schema";
+} from "@clew-ops/schema";
 
 export type RegistryEntry = {
   bundle: SkillBundle;

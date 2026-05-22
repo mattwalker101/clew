@@ -29,7 +29,7 @@ import {
   recommendationSchema,
   type CompatibilityWarning,
   type SkillBundle,
-} from "@clew/schema";
+} from "@clew-ops/schema";
 
 function bundle(id: string, overrides: Partial<SkillBundle["manifest"]> = {}): SkillBundle {
   return {
@@ -84,7 +84,7 @@ function normalizeProjectWarning(warning: CompatibilityWarning, projectRoot: str
   return { ...warning, field: warning.field.slice(projectRoot.length + 1) };
 }
 
-describe("@clew/core", () => {
+describe("@clew-ops/core", () => {
   it("parses AGENTS.md active skills", () => {
     expect(parseAgentsMd("# Active Skills\n\n- engineering-core\n- `safe-editing`\n").activeSkillIds).toEqual([
       "engineering-core",

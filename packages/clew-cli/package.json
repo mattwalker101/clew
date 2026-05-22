@@ -1,9 +1,9 @@
 {
-  "name": "@clew/cli",
+  "name": "@clew-ops/cli",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "clew": "./dist/index.js"
+    "clew-cli": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -22,11 +22,11 @@
     "test": "cd ../.. && vitest run packages/clew-cli/src/index.test.ts"
   },
   "dependencies": {
-    "@clew/core": "workspace:*",
-    "@clew/exporters": "workspace:*",
-    "@clew/importers": "workspace:*",
-    "@clew/mcp": "workspace:^",
-    "@clew/schema": "workspace:*"
+    "@clew-ops/core": "workspace:*",
+    "@clew-ops/exporters": "workspace:*",
+    "@clew-ops/importers": "workspace:*",
+    "@clew-ops/mcp": "workspace:^",
+    "@clew-ops/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

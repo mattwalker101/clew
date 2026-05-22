@@ -453,7 +453,7 @@ The public fixtures under `tests/fixtures/contracts/schema/` pin the Phase 1 sch
 * recommendation result with typed evidence signals
 * validation failure envelope
 
-These fixtures are parsed by `@clew/schema` tests. Runtime packages may depend on these contracts, but must not redefine them.
+These fixtures are parsed by `@clew-ops/schema` tests. Runtime packages may depend on these contracts, but must not redefine them.
 
 ---
 
@@ -528,22 +528,22 @@ CLI output should be:
 
 ## **Import**
 
-clew import ./claude-skill  
+clew-cli import ./claude-skill  
 ---
 
 ## **Search**
 
-clew search "safe database migration"  
+clew-cli search "safe database migration"  
 ---
 
 ## **Recommend**
 
-clew recommend "refactor authentication service"  
+clew-cli recommend "refactor authentication service"  
 ---
 
 ## **Explain**
 
-clew explain safe-refactor  
+clew-cli explain safe-refactor  
 ---
 
 # **21\. Explainability Example**

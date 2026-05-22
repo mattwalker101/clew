@@ -6,12 +6,12 @@ The root package is private and all workspace packages are intentionally private
 
 Workspace packages:
 
-- @clew/core
-- @clew/exporters
-- @clew/schema
-- @clew/cli
-- @clew/mcp
-- @clew/importers
+- @clew-ops/core
+- @clew-ops/exporters
+- @clew-ops/schema
+- @clew-ops/cli
+- @clew-ops/mcp
+- @clew-ops/importers
 
 Do not publish any package manually.
 
@@ -32,11 +32,11 @@ Before any workspace package is changed to `private: false`, it must have:
 
 ## High-risk packages
 
-`@clew/cli` is high-risk because it exposes an executable entrypoint.
+`@clew-ops/cli` is high-risk because it exposes an executable entrypoint.
 
-`@clew/mcp` is high-risk because it touches agent and tooling integration boundaries.
+`@clew-ops/mcp` is high-risk because it touches agent and tooling integration boundaries.
 
-`@clew/core` is high-risk because compromise may affect downstream packages.
+`@clew-ops/core` is high-risk because compromise may affect downstream packages.
 
 ## Agent rules
 

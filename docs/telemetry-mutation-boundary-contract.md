@@ -4,17 +4,17 @@ Telemetry mutation is derived local state only. Filesystem skill bundles remain 
 
 ## Mutating Surfaces
 
-- `clew recommend <query>` records usage only for skills included in the returned recommendations.
-- `clew disable <skill-id>` records disabled state only in SQLite telemetry-derived state.
-- `clew enable <skill-id>` clears disabled state only in SQLite telemetry-derived state.
+- `clew-cli recommend <query>` records usage only for skills included in the returned recommendations.
+- `clew-cli disable <skill-id>` records disabled state only in SQLite telemetry-derived state.
+- `clew-cli enable <skill-id>` clears disabled state only in SQLite telemetry-derived state.
 
 ## Non-Mutating Surfaces
 
-- `clew recommend --explain <query>` does not record usage.
-- `clew explain <skill-id> [query]` does not record usage.
-- `clew search <query>` and `clew search --explain <query>` do not record usage.
-- `clew lookup <skill-id>` does not record usage.
-- `clew telemetry` and `clew telemetry --explain` do not record usage.
+- `clew-cli recommend --explain <query>` does not record usage.
+- `clew-cli explain <skill-id> [query]` does not record usage.
+- `clew-cli search <query>` and `clew-cli search --explain <query>` do not record usage.
+- `clew-cli lookup <skill-id>` does not record usage.
+- `clew-cli telemetry` and `clew-cli telemetry --explain` do not record usage.
 - MCP read and analysis surfaces do not record usage unless an explicit future mutation API is introduced.
 
 ## Filesystem Boundary

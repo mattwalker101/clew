@@ -4,21 +4,21 @@ CLI and MCP read surfaces expose compatibility envelopes by default. These envel
 
 Default read surfaces remain compatibility-shaped:
 
-- CLI `clew list` returns `{ skills, warnings }`.
-- CLI `clew search <query>` and MCP `search()` return `{ query, skills, warnings }`.
-- CLI `clew recommend <query>` and MCP `recommend()` return `{ query, recommendations, warnings }`.
-- CLI `clew lookup <skill-id>` and MCP `lookup()` return `{ skillId, bundle, warnings }`.
-- CLI `clew explain <skill-id> [query]` and MCP `explain()` return `{ skillId, query, recommendation, warnings }`.
-- CLI `clew overlaps` returns `{ overlaps, warnings }`.
-- CLI `clew conflicts` returns `{ conflicts, warnings }`.
-- CLI `clew doctor` returns `{ skills, dbPath, repoSignals, overlaps, conflicts, registryWarnings, agentsDiagnostics, agentsPreferences, warnings }`.
-- CLI `clew telemetry` returns `{ dbPath, skills, warnings, telemetry }`.
+- CLI `clew-cli list` returns `{ skills, warnings }`.
+- CLI `clew-cli search <query>` and MCP `search()` return `{ query, skills, warnings }`.
+- CLI `clew-cli recommend <query>` and MCP `recommend()` return `{ query, recommendations, warnings }`.
+- CLI `clew-cli lookup <skill-id>` and MCP `lookup()` return `{ skillId, bundle, warnings }`.
+- CLI `clew-cli explain <skill-id> [query]` and MCP `explain()` return `{ skillId, query, recommendation, warnings }`.
+- CLI `clew-cli overlaps` returns `{ overlaps, warnings }`.
+- CLI `clew-cli conflicts` returns `{ conflicts, warnings }`.
+- CLI `clew-cli doctor` returns `{ skills, dbPath, repoSignals, overlaps, conflicts, registryWarnings, agentsDiagnostics, agentsPreferences, warnings }`.
+- CLI `clew-cli telemetry` returns `{ dbPath, skills, warnings, telemetry }`.
 
 Opt-in analysis surfaces expose analysis explicitly without changing default envelopes:
 
-- CLI `clew search --explain <query>` and MCP `analyzeSearch()` return `{ query, analysis, warnings }`.
-- CLI `clew recommend --explain <query>` and MCP `analyzeRecommendations()` return `{ query, analysis, warnings }`.
-- CLI `clew telemetry --explain` returns `{ dbPath, skills, warnings, analysis }`.
+- CLI `clew-cli search --explain <query>` and MCP `analyzeSearch()` return `{ query, analysis, warnings }`.
+- CLI `clew-cli recommend --explain <query>` and MCP `analyzeRecommendations()` return `{ query, analysis, warnings }`.
+- CLI `clew-cli telemetry --explain` returns `{ dbPath, skills, warnings, analysis }`.
 - MCP `analyzeTelemetry()` returns `{ analysis, warnings }`.
 - MCP `analyzeIndex()` returns `{ analysis, warnings }`.
 
@@ -28,4 +28,4 @@ Disabled telemetry and orphan telemetry remain excluded from public read and rec
 
 The executable fixture at `tests/fixtures/contracts/public-envelope-contract.json` pins representative CLI and MCP envelope keys, opt-in analysis placement, disabled read exclusions, telemetry analysis visibility, top-level registry warning placement, request warning placement, and recommendation-scoped activation warning placement.
 
-Envelope shape is independent from telemetry mutation, which is pinned separately in `docs/telemetry-mutation-boundary-contract.md`. Default and opt-in read envelopes may include warnings and analysis, but only plain `clew recommend <query>` records included recommendation usage; request-time warnings remain envelope-local.
+Envelope shape is independent from telemetry mutation, which is pinned separately in `docs/telemetry-mutation-boundary-contract.md`. Default and opt-in read envelopes may include warnings and analysis, but only plain `clew-cli recommend <query>` records included recommendation usage; request-time warnings remain envelope-local.

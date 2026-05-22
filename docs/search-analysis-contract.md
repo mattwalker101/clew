@@ -21,7 +21,7 @@ The analysis result contains:
 
 MCP `analyzeIndex()` exposes the raw semantic index result explicitly as `{ analysis, warnings }` without ranking, filtering, or result limiting.
 
-`clew search --explain <query>` and MCP `analyzeSearch()` expose the search analysis result explicitly. Plain CLI and MCP `search()` envelopes stay `{ query, skills, warnings }`.
+`clew-cli search --explain <query>` and MCP `analyzeSearch()` expose the search analysis result explicitly. Plain CLI and MCP `search()` envelopes stay `{ query, skills, warnings }`.
 
 Executable fixtures pin the public result shapes and representative evidence ordering:
 

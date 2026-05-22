@@ -5,7 +5,7 @@ import {
   type SkillManifest,
   importResultSchema,
   parseSkillBundle,
-} from "@clew/schema";
+} from "@clew-ops/schema";
 
 export type Provider = "claude" | "opencode";
 

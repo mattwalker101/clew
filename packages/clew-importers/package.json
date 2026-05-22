@@ -1,5 +1,5 @@
 {
-  "name": "@clew/importers",
+  "name": "@clew-ops/importers",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -14,7 +14,7 @@
     "test": "cd ../.. && vitest run packages/clew-importers/src/index.test.ts"
   },
   "dependencies": {
-    "@clew/schema": "workspace:*"
+    "@clew-ops/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

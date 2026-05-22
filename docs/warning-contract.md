@@ -3,7 +3,7 @@
 clew read surfaces expose warnings as plain `CompatibilityWarning` objects. The compatibility surface is the array shape already used by CLI and MCP envelopes:
 
 - top-level `warnings` on read envelopes
-- `registryWarnings` and `agentsDiagnostics` on `clew doctor`
+- `registryWarnings` and `agentsDiagnostics` on `clew-cli doctor`
 - per-recommendation `warnings` for activation capability warnings
 - top-level importer and exporter result `warnings`
 

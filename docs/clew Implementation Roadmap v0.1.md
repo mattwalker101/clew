@@ -293,16 +293,16 @@ Create the primary human interaction surface.
 
 ## **Discovery**
 
-clew search  
-clew recommend  
-clew explain  
-clew list  
+clew-cli search  
+clew-cli recommend  
+clew-cli explain  
+clew-cli list  
 ---
 
 ## **Management**
 
-clew import  
-clew export  
+clew-cli import  
+clew-cli export  
 clew enable  
 clew disable  
 ---
@@ -312,7 +312,7 @@ clew disable
 clew overlaps  
 clew conflicts  
 clew telemetry  
-clew doctor  
+clew-cli doctor  
 ---
 
 # **20\. CLI UX Requirements**

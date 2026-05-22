@@ -362,12 +362,12 @@ Goal:
 
 Initial commands:
 
-clew list  
-clew search  
-clew recommend  
-clew explain  
-clew import  
-clew export
+clew-cli list  
+clew-cli search  
+clew-cli recommend  
+clew-cli explain  
+clew-cli import  
+clew-cli export
 
 Goal:  
  Operational transparency.

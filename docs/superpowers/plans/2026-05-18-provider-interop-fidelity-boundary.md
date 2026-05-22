@@ -6,7 +6,7 @@
 
 **Architecture:** Add one combined contract fixture that summarizes provider boundary outcomes across importers, exporters, and CLI command envelopes. Reuse existing provider fixtures and APIs; only change production code if the new contract exposes drift from the intended behavior.
 
-**Tech Stack:** TypeScript, Vitest, Zod schemas from `@clew/schema`, existing `@clew/importers`, `@clew/exporters`, and `@clew/cli`.
+**Tech Stack:** TypeScript, Vitest, Zod schemas from `@clew-ops/schema`, existing `@clew-ops/importers`, `@clew-ops/exporters`, and `@clew-ops/cli`.
 
 ---
 
@@ -26,7 +26,7 @@
    - Artifacts remain plain arrays.
    - Composition/capability degradation warnings remain explicit.
    - Exporting to undeclared providers warns rather than silently implying compatibility.
-5. In `cli`, pin `clew import` and `clew export` summary envelopes against the same provider boundary outcomes.
+5. In `cli`, pin `clew-cli import` and `clew-cli export` summary envelopes against the same provider boundary outcomes.
 
 ### Task 2: Add Importer Fixture-Backed Boundary Test
 
@@ -37,7 +37,7 @@
 1. Add a helper to read `provider-interop-boundary-contract.json`.
 2. Write a failing test that imports `claude-degraded.json` and `opencode-normalized.json`.
 3. Compare provider names, manifest ids, extension namespace keys, preserved provider metadata, provenance, warning codes, and warning origins to the fixture.
-4. Run `corepack pnpm --filter @clew/importers test` and confirm the test fails until the fixture exists.
+4. Run `corepack pnpm --filter @clew-ops/importers test` and confirm the test fails until the fixture exists.
 
 ### Task 3: Add Exporter Fixture-Backed Boundary Test
 
@@ -48,7 +48,7 @@
 1. Add a helper to read `provider-interop-boundary-contract.json`.
 2. Write a test that exports `canonical-roundtrip.json` to Claude and OpenCode, plus the existing Claude-only bundle to OpenCode.
 3. Compare artifact paths, warning codes, warning origins, and undeclared-provider warning behavior to the fixture.
-4. Run `corepack pnpm --filter @clew/exporters test`.
+4. Run `corepack pnpm --filter @clew-ops/exporters test`.
 
 ### Task 4: Add CLI Fixture-Backed Boundary Test
 
@@ -57,10 +57,10 @@
 
 **Steps:**
 1. Add a helper to read `provider-interop-boundary-contract.json`.
-2. Write a test for `clew import claude <json-file>` using degraded provider metadata.
-3. Write a test for `clew export opencode typescript-core`.
+2. Write a test for `clew-cli import claude <json-file>` using degraded provider metadata.
+3. Write a test for `clew-cli export opencode typescript-core`.
 4. Compare scriptable JSON summaries to the fixture without introducing wrapper envelopes.
-5. Run the targeted CLI test command through `corepack pnpm --filter @clew/cli test`.
+5. Run the targeted CLI test command through `corepack pnpm --filter @clew-ops/cli test`.
 
 ### Task 5: Verify the Slice
 
@@ -69,9 +69,9 @@
 
 **Steps:**
 1. Run targeted package tests:
-   - `corepack pnpm --filter @clew/importers test`
-   - `corepack pnpm --filter @clew/exporters test`
-   - `corepack pnpm --filter @clew/cli test`
+   - `corepack pnpm --filter @clew-ops/importers test`
+   - `corepack pnpm --filter @clew-ops/exporters test`
+   - `corepack pnpm --filter @clew-ops/cli test`
 2. Run full repo verification:
    - `corepack pnpm test`
    - `corepack pnpm check`

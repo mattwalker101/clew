@@ -15,16 +15,16 @@ import {
   rebuildRegistryIndex,
   SkillRegistry,
   stringifyYaml,
-} from "@clew/core";
-import { exportProviderSkill } from "@clew/exporters";
-import { importClaudeSkill, importOpenCodeSkill } from "@clew/importers";
-import { runClewMcpServer } from "@clew/mcp";
+} from "@clew-ops/core";
+import { exportProviderSkill } from "@clew-ops/exporters";
+import { importClaudeSkill, importOpenCodeSkill } from "@clew-ops/importers";
+import { runClewMcpServer } from "@clew-ops/mcp";
 import {
   formatValidationIssue,
   SkillBundleValidationError,
   type ActivationContext,
   type CompatibilityWarning,
-} from "@clew/schema";
+} from "@clew-ops/schema";
 
 type Command = (args: string[]) => void | Promise<void>;
 

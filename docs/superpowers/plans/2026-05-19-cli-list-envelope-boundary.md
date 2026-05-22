@@ -4,9 +4,9 @@
 
 **Goal:** Pin CLI `list` as a default public read envelope with enabled skill IDs and top-level registry warnings.
 
-**Architecture:** Keep `clew list` compatibility-shaped as `{ skills, warnings }`. The command should expose enabled public skills only, and disabled telemetry should continue to remove those skills from the list without creating request-time warnings.
+**Architecture:** Keep `clew-cli list` compatibility-shaped as `{ skills, warnings }`. The command should expose enabled public skills only, and disabled telemetry should continue to remove those skills from the list without creating request-time warnings.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/cli`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/cli`.
 
 ---
 
@@ -43,7 +43,7 @@ warnings: {
 
 **Step 2: Run the focused CLI test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: FAIL because `public-envelope-contract.json` does not yet include enabled CLI list fields.
 
@@ -59,7 +59,7 @@ Update `tests/fixtures/contracts/public-envelope-contract.json` with:
 
 **Step 4: Run the focused CLI test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 
@@ -75,7 +75,7 @@ Do not add MCP `list`, hidden activation, telemetry mutation, workflow behavior,
 
 **Step 2: If docs need clarification**
 
-Add CLI `clew list` to the default read envelope bullets as `{ skills, warnings }`.
+Add CLI `clew-cli list` to the default read envelope bullets as `{ skills, warnings }`.
 
 ### Task 3: Verify
 
@@ -84,7 +84,7 @@ Add CLI `clew list` to the default read envelope bullets as `{ skills, warnings 
 
 **Step 1: Run CLI tests**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 

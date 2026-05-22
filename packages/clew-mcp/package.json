@@ -1,5 +1,5 @@
 {
-  "name": "@clew/mcp",
+  "name": "@clew-ops/mcp",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -14,8 +14,8 @@
     "test": "cd ../.. && vitest run packages/clew-mcp/src/"
   },
   "dependencies": {
-    "@clew/core": "workspace:*",
-    "@clew/schema": "workspace:*",
+    "@clew-ops/core": "workspace:*",
+    "@clew-ops/schema": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },

@@ -4,7 +4,7 @@
 
 **Goal:** Strengthen Phase 1 schema-level provenance validation and add a combined provider interop contract covering warnings, artifacts, and provenance.
 
-**Architecture:** Keep `@clew/schema` as the canonical contract boundary. Provider-specific behavior stays in `manifest.extensions.<provider>` and provider result envelopes remain plain `warnings`, `artifacts`, and `provenance` arrays/objects. Importers and exporters only consume these contracts; they do not introduce provider-specific wrapper envelopes.
+**Architecture:** Keep `@clew-ops/schema` as the canonical contract boundary. Provider-specific behavior stays in `manifest.extensions.<provider>` and provider result envelopes remain plain `warnings`, `artifacts`, and `provenance` arrays/objects. Importers and exporters only consume these contracts; they do not introduce provider-specific wrapper envelopes.
 
 **Tech Stack:** TypeScript, Zod, Vitest, pnpm workspace packages.
 
@@ -117,7 +117,7 @@ import {
 } from "./index.js";
 ```
 
-Add tests inside `describe("@clew/schema", () => { ... })`:
+Add tests inside `describe("@clew-ops/schema", () => { ... })`:
 
 ```ts
   it("requires imported provenance to include a source", () => {
@@ -198,7 +198,7 @@ Add tests inside `describe("@clew/schema", () => { ... })`:
 Run:
 
 ```bash
-corepack pnpm --filter @clew/schema test
+corepack pnpm --filter @clew-ops/schema test
 ```
 
 Expected: FAIL. The first failure should show the missing `provenanceSchema` export or missing custom validation issues, depending on the order of edits.
@@ -283,7 +283,7 @@ export const skillManifestSchema = z
 Run:
 
 ```bash
-corepack pnpm --filter @clew/schema test
+corepack pnpm --filter @clew-ops/schema test
 ```
 
 Expected: PASS.
@@ -396,7 +396,7 @@ function providerRoundTripContract(): ProviderRoundTripContract {
 }
 ```
 
-Add this test inside `describe("@clew/importers", () => { ... })`:
+Add this test inside `describe("@clew-ops/importers", () => { ... })`:
 
 ```ts
   it("matches the combined provider round-trip contract on import", () => {
@@ -418,7 +418,7 @@ Add this test inside `describe("@clew/importers", () => { ... })`:
 Run:
 
 ```bash
-corepack pnpm --filter @clew/importers test
+corepack pnpm --filter @clew-ops/importers test
 ```
 
 Expected: PASS if the combined fixture exactly mirrors existing contracts; otherwise FAIL with a precise diff. If it fails, update only `provider-roundtrip-contract.json` to match existing behavior unless the diff reveals a real schema-contract violation.
@@ -444,7 +444,7 @@ function providerRoundTripContract(): ProviderRoundTripContract {
 }
 ```
 
-Add this test inside `describe("@clew/exporters", () => { ... })`:
+Add this test inside `describe("@clew-ops/exporters", () => { ... })`:
 
 ```ts
   it("matches the combined provider round-trip contract on export", () => {
@@ -466,7 +466,7 @@ Add this test inside `describe("@clew/exporters", () => { ... })`:
 Run:
 
 ```bash
-corepack pnpm --filter @clew/exporters test
+corepack pnpm --filter @clew-ops/exporters test
 ```
 
 Expected: PASS if the combined fixture exactly mirrors existing contracts; otherwise FAIL with a precise diff. If it fails, update only `provider-roundtrip-contract.json` to match existing behavior unless the diff reveals a real schema-contract violation.
@@ -509,9 +509,9 @@ This fixture does not introduce a new runtime envelope. Import results must rema
 Run:
 
 ```bash
-corepack pnpm --filter @clew/schema test
-corepack pnpm --filter @clew/importers test
-corepack pnpm --filter @clew/exporters test
+corepack pnpm --filter @clew-ops/schema test
+corepack pnpm --filter @clew-ops/importers test
+corepack pnpm --filter @clew-ops/exporters test
 ```
 
 Expected: PASS.
@@ -582,5 +582,5 @@ Placeholder scan:
 
 Type consistency:
 
-- `ProviderRoundTripContract` uses existing `ImportResult["provenance"]`, `ExportResult["artifacts"]`, and `CompatibilityWarning` types from `@clew/schema`.
+- `ProviderRoundTripContract` uses existing `ImportResult["provenance"]`, `ExportResult["artifacts"]`, and `CompatibilityWarning` types from `@clew-ops/schema`.
 - Existing exported schema names remain stable: `provenanceSchema`, `skillManifestSchema`, `validateSkillBundle`, `ImportResult`, and `ExportResult`.

@@ -133,7 +133,7 @@ function providerUnsupportedBoundaryFixture(): {
   );
 }
 
-describe("@clew/cli", () => {
+describe("@clew-ops/cli", () => {
   it("prints read command JSON envelopes with warnings arrays", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);

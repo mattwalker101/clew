@@ -37,7 +37,7 @@ function contractFixture(name: string): unknown {
   return JSON.parse(readFileSync(join(contractFixturesRoot, name), "utf8")) as unknown;
 }
 
-describe("@clew/schema", () => {
+describe("@clew-ops/schema", () => {
   it("validates a canonical instruction skill bundle", () => {
     const result = validateSkillBundle({ manifest, instructions: "Refactor safely." });
     expect(result.ok).toBe(true);

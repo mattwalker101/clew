@@ -6,7 +6,7 @@
 
 **Architecture:** Keep filesystem bundles as canonical registry input and telemetry as derived local state. Public registry and activation reads should flow through enabled-only helpers, while `analyzeTelemetry()` remains the explicit diagnostic surface for disabled and orphan telemetry.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/core`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/core`.
 
 ---
 
@@ -40,7 +40,7 @@ publicEligibility: {
 
 **Step 2: Run the focused test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/core test -- --runInBand`
+Run: `corepack pnpm --filter @clew-ops/core test -- --runInBand`
 
 Expected: FAIL because the generated contract has new public surface fields missing from `registry-resolution-contract.json`.
 
@@ -56,7 +56,7 @@ Update `tests/fixtures/contracts/registry-resolution-contract.json` with:
 
 **Step 4: Run the focused test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/core test -- --runInBand`
+Run: `corepack pnpm --filter @clew-ops/core test -- --runInBand`
 
 Expected: PASS.
 
@@ -86,7 +86,7 @@ Keep the existing public boundary shape:
 
 **Step 3: Re-run focused tests**
 
-Run: `corepack pnpm --filter @clew/core test -- --runInBand`
+Run: `corepack pnpm --filter @clew-ops/core test -- --runInBand`
 
 Expected: PASS.
 
@@ -115,7 +115,7 @@ Do not add warnings for valid duplicate skill IDs, disabled telemetry, disabled 
 
 **Step 1: Run core package tests**
 
-Run: `corepack pnpm --filter @clew/core test`
+Run: `corepack pnpm --filter @clew-ops/core test`
 
 Expected: PASS.
 
