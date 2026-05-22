@@ -6,7 +6,7 @@
 
 **Architecture:** Keep CLI default read surfaces compatibility-shaped with named payload fields and top-level warnings. Enabled `lookup` returns `{ skillId, bundle, warnings }`; enabled `explain` returns `{ skillId, query, recommendation, warnings }`; disabled variants continue to return null payloads plus request warnings.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/cli`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/cli`.
 
 ---
 
@@ -47,7 +47,7 @@ warnings: {
 
 **Step 2: Run the focused CLI test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: FAIL because `public-envelope-contract.json` is missing the new CLI `lookup` and `explain` fields.
 
@@ -66,7 +66,7 @@ Update `tests/fixtures/contracts/public-envelope-contract.json` with:
 
 **Step 4: Run the focused CLI test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 
@@ -90,7 +90,7 @@ Keep enabled `lookup` and `explain` aligned with `docs/public-envelope-contract.
 
 **Step 1: Run CLI tests**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 

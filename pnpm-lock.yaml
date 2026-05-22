@@ -26,19 +26,19 @@ importers:
 
   packages/clew-cli:
     dependencies:
-      '@clew/core':
+      '@clew-ops/core':
         specifier: workspace:*
         version: link:../clew-core
-      '@clew/exporters':
+      '@clew-ops/exporters':
         specifier: workspace:*
         version: link:../clew-exporters
-      '@clew/importers':
+      '@clew-ops/importers':
         specifier: workspace:*
         version: link:../clew-importers
-      '@clew/mcp':
+      '@clew-ops/mcp':
         specifier: workspace:^
         version: link:../clew-mcp
-      '@clew/schema':
+      '@clew-ops/schema':
         specifier: workspace:*
         version: link:../clew-schema
     devDependencies:
@@ -51,7 +51,7 @@ importers:
 
   packages/clew-core:
     dependencies:
-      '@clew/schema':
+      '@clew-ops/schema':
         specifier: workspace:*
         version: link:../clew-schema
       '@huggingface/transformers':
@@ -122,7 +122,7 @@ importers:
 
   packages/clew-exporters:
     dependencies:
-      '@clew/schema':
+      '@clew-ops/schema':
         specifier: workspace:*
         version: link:../clew-schema
     devDependencies:
@@ -135,7 +135,7 @@ importers:
 
   packages/clew-importers:
     dependencies:
-      '@clew/schema':
+      '@clew-ops/schema':
         specifier: workspace:*
         version: link:../clew-schema
     devDependencies:
@@ -148,10 +148,10 @@ importers:
 
   packages/clew-mcp:
     dependencies:
-      '@clew/core':
+      '@clew-ops/core':
         specifier: workspace:*
         version: link:../clew-core
-      '@clew/schema':
+      '@clew-ops/schema':
         specifier: workspace:*
         version: link:../clew-schema
       '@modelcontextprotocol/sdk':

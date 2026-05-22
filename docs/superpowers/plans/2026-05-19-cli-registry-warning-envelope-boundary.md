@@ -131,7 +131,7 @@ Replace with:
 - [ ] **Step 2: Run the CLI test to confirm it fails**
 
 ```bash
-cd /Users/matt/code/clew && corepack pnpm --filter @clew/cli test
+cd /Users/matt/code/clew && corepack pnpm --filter @clew-ops/cli test
 ```
 
 Expected: test `matches the documented CLI public envelope contract fixture` FAILS. Error will be something like `TypeError: Cannot read properties of undefined (reading 'invalidBundleWarnings')` because the fixture JSON does not yet have those keys.
@@ -186,7 +186,7 @@ Replace with:
 - [ ] **Step 2: Run the CLI test to confirm it passes**
 
 ```bash
-cd /Users/matt/code/clew && corepack pnpm --filter @clew/cli test
+cd /Users/matt/code/clew && corepack pnpm --filter @clew-ops/cli test
 ```
 
 Expected: ALL tests pass. If `matches the documented CLI public envelope contract fixture` still fails, read the actual error:

@@ -37,6 +37,6 @@ Conflict evidence is ordered by evidence scope:
 
 Relationship rows are sorted by `ids.join(":")`. Evidence values are sorted inside each row so bundle discovery order cannot change public output.
 
-CLI `clew overlaps` must keep returning `{ overlaps, warnings }`. CLI `clew conflicts` must keep returning `{ conflicts, warnings }`. MCP recommendation and explanation surfaces must keep top-level registry/request warnings separate from relationship warnings; overlap and conflict warnings belong on affected recommendations as activation warnings.
+CLI `clew-cli overlaps` must keep returning `{ overlaps, warnings }`. CLI `clew-cli conflicts` must keep returning `{ conflicts, warnings }`. MCP recommendation and explanation surfaces must keep top-level registry/request warnings separate from relationship warnings; overlap and conflict warnings belong on affected recommendations as activation warnings.
 
 The executable fixture at `tests/fixtures/contracts/overlap-conflict-analysis-contract.json` pins overlap evidence ordering, conflict evidence ordering, row ordering, relationship shape, advisory classifications, declared incompatibility output, and missing-parent conflict output.

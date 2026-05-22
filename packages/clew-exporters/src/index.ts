@@ -1,4 +1,4 @@
-import { type CompatibilityWarning, type ExportResult, type SkillBundle, exportResultSchema } from "@clew/schema";
+import { type CompatibilityWarning, type ExportResult, type SkillBundle, exportResultSchema } from "@clew-ops/schema";
 
 type Provider = "claude" | "opencode";
 

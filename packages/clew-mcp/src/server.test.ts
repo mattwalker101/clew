@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SkillRegistry } from "@clew/core";
+import { SkillRegistry } from "@clew-ops/core";
 import { runClewMcpServer } from "./server.js";
 
 // Define the mock outside the factory function to avoid [vitest] warning

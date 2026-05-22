@@ -20,7 +20,7 @@ Capability degradation warnings remain activation warnings on included candidate
 
 `ActivationEngine.recommend(context)` remains compatibility sugar over this analysis and returns `analysis.recommendations`.
 
-`clew recommend --explain <query>` and MCP `analyzeRecommendations()` expose the analysis result explicitly. Plain CLI and MCP `recommend()` envelopes stay `{ query, recommendations, warnings }`.
+`clew-cli recommend --explain <query>` and MCP `analyzeRecommendations()` expose the analysis result explicitly. Plain CLI and MCP `recommend()` envelopes stay `{ query, recommendations, warnings }`.
 
 The executable fixture at `tests/fixtures/contracts/activation-analysis-contract.json` pins the public result shape, ordering, warning placement, score components, included/excluded status, capability degradation, overlap/conflict warnings including declared incompatibility evidence, AGENTS.md evidence, repo signal evidence, and telemetry boost evidence.
 

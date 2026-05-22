@@ -37,7 +37,7 @@ graph TD
     Importers --> OpenCode[OpenCode Agents]
     
     subgraph "Foundations"
-        Schema[@clew/schema]
+        Schema[@clew-ops/schema]
     end
     
     Core -.-> Schema
@@ -49,16 +49,16 @@ graph TD
 
 ## 📦 Package Responsibilities
 
-### 1. `@clew/schema`
+### 1. `@clew-ops/schema`
 The source of truth for all data structures. Every object that moves through the system is validated against these Zod schemas.
 
-### 2. `@clew/core`
+### 2. `@clew-ops/core`
 The "brain" of the system.
 *   **Registry**: Discovers skills in the filesystem and builds the SQLite index.
 *   **Activation Engine**: Processes queries and contexts to find the most relevant skills.
 *   **Composition**: Merges parent/child skill instructions additively.
 
-### 3. `@clew/cli`
+### 3. `@clew-ops/cli`
 The primary human entry point. Built to be fast, explainable, and scriptable.
 
 ### 4. `@clew-mcp`

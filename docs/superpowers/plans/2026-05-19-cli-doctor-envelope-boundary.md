@@ -4,9 +4,9 @@
 
 **Goal:** Pin CLI `doctor` as the diagnostic public envelope that separates registry rebuild warnings from AGENTS.md diagnostics.
 
-**Architecture:** Keep `clew doctor` read-only and compatibility-shaped. The envelope exposes diagnostic counts/context plus `registryWarnings`, `agentsDiagnostics`, and a combined `warnings` array. AGENTS.md diagnostics remain request diagnostics only and must not leak into telemetry or persisted registry warning rows.
+**Architecture:** Keep `clew-cli doctor` read-only and compatibility-shaped. The envelope exposes diagnostic counts/context plus `registryWarnings`, `agentsDiagnostics`, and a combined `warnings` array. AGENTS.md diagnostics remain request diagnostics only and must not leak into telemetry or persisted registry warning rows.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/cli`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/cli`.
 
 ---
 
@@ -43,7 +43,7 @@ doctor: {
 
 **Step 2: Run the focused CLI test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: FAIL because `public-envelope-contract.json` does not yet include doctor envelope fields.
 
@@ -54,12 +54,12 @@ Update `tests/fixtures/contracts/public-envelope-contract.json` with the observe
 Update `docs/public-envelope-contract.md` to list:
 
 ```md
-- CLI `clew doctor` returns `{ skills, dbPath, repoSignals, overlaps, conflicts, registryWarnings, agentsDiagnostics, agentsPreferences, warnings }`.
+- CLI `clew-cli doctor` returns `{ skills, dbPath, repoSignals, overlaps, conflicts, registryWarnings, agentsDiagnostics, agentsPreferences, warnings }`.
 ```
 
 **Step 4: Run the focused CLI test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 
@@ -83,7 +83,7 @@ Keep registry rebuild warnings and AGENTS.md diagnostics categorized separately,
 
 **Step 1: Run CLI tests**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 

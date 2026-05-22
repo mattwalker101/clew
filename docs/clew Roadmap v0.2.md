@@ -14,7 +14,7 @@ Transition `clew` from a declarative skill discovery tool to a context-aware int
 
 ### **2. Relationship Intelligence**
 *   **Runtime Overlap Resolution**: Automatically identify and resolve redundant skill recommendations. If two skills cover the same ground, `clew` should recommend the most relevant one and explicitly state why the other was suppressed.
-*   **Conflict Prevention**: Elevate conflict detection from a diagnostic tool (`clew conflicts`) to a runtime safety guard that warns agents when active skills have contradictory mandates.
+*   **Conflict Prevention**: Elevate conflict detection from a diagnostic tool (`clew-cli conflicts`) to a runtime safety guard that warns agents when active skills have contradictory mandates.
 *   **Constraint-Aware Activation**: Use project preferences to "force-exclude" skills that violate project-level "never" or "avoid" rules.
 
 ### **3. Operational Observability (The Dashboard)**
@@ -29,22 +29,22 @@ Transition `clew` from a declarative skill discovery tool to a context-aware int
 
 ### **Phase 8: Semantic Foundations**
 - [ ] Research and select local embedding library.
-- [ ] Update `@clew/core` to generate and store embeddings for skill instructions.
-- [ ] Implement `clew search --semantic` and integrate into `recommend`.
+- [ ] Update `@clew-ops/core` to generate and store embeddings for skill instructions.
+- [ ] Implement `clew-cli search --semantic` and integrate into `recommend`.
 
 ### **Phase 9: Relationship Overlays**
 - [ ] Implement "Redundancy Suppression" in the Activation Engine.
 - [ ] Add "Preference-Based Exclusion" (mandates from `AGENTS.md`).
-- [ ] Update `clew explain` to show relationship-based logic (e.g., "Skill X suppressed because Skill Y is more specific").
+- [ ] Update `clew-cli explain` to show relationship-based logic (e.g., "Skill X suppressed because Skill Y is more specific").
 
 ### **Phase 10: The clew Cockpit**
-- [ ] Create `@clew/dashboard` package (React/Vite or similar lightweight stack).
-- [ ] Implement `clew dashboard` command to launch the local server.
+- [ ] Create `@clew-ops/dashboard` package (React/Vite or similar lightweight stack).
+- [ ] Implement `clew-cli dashboard` command to launch the local server.
 - [ ] Build visual "Signal Debugger" for Activation Engine verification.
 
 ---
 
 ## **Success Criteria**
-1.  **Discovery Fidelity**: `clew recommend` finds relevant skills even when exact keywords are missing.
+1.  **Discovery Fidelity**: `clew-cli recommend` finds relevant skills even when exact keywords are missing.
 2.  **Explainability Depth**: Every recommendation explains its semantic similarity and its relationship (overlap/conflict) to other candidates.
 3.  **Visual Trust**: Users can see their entire operational knowledge base and its health in a single, intuitive interface.

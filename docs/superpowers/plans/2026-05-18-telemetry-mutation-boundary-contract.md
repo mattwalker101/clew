@@ -86,17 +86,17 @@ Telemetry mutation is derived local state only. Filesystem skill bundles remain 
 
 ## Mutating Surfaces
 
-- `clew recommend <query>` records usage only for skills included in the returned recommendations.
-- `clew disable <skill-id>` records disabled state only in SQLite telemetry-derived state.
-- `clew enable <skill-id>` clears disabled state only in SQLite telemetry-derived state.
+- `clew-cli recommend <query>` records usage only for skills included in the returned recommendations.
+- `clew-cli disable <skill-id>` records disabled state only in SQLite telemetry-derived state.
+- `clew-cli enable <skill-id>` clears disabled state only in SQLite telemetry-derived state.
 
 ## Non-Mutating Surfaces
 
-- `clew recommend --explain <query>` does not record usage.
-- `clew explain <skill-id> [query]` does not record usage.
-- `clew search <query>` and `clew search --explain <query>` do not record usage.
-- `clew lookup <skill-id>` does not record usage.
-- `clew telemetry` and `clew telemetry --explain` do not record usage.
+- `clew-cli recommend --explain <query>` does not record usage.
+- `clew-cli explain <skill-id> [query]` does not record usage.
+- `clew-cli search <query>` and `clew-cli search --explain <query>` do not record usage.
+- `clew-cli lookup <skill-id>` does not record usage.
+- `clew-cli telemetry` and `clew-cli telemetry --explain` do not record usage.
 - MCP read and analysis surfaces do not record usage unless an explicit future mutation API is introduced.
 
 ## Filesystem Boundary
@@ -187,8 +187,8 @@ Expected before implementation/fixture alignment: FAIL if the fixture or behavio
 
 Expected likely implementation state:
 
-- `clew recommend <query>` already calls `db.recordRecommendation()` for returned recommendations only.
-- `clew recommend --explain`, `explain`, `search`, `lookup`, and `telemetry` should already avoid `recordRecommendation()`.
+- `clew-cli recommend <query>` already calls `db.recordRecommendation()` for returned recommendations only.
+- `clew-cli recommend --explain`, `explain`, `search`, `lookup`, and `telemetry` should already avoid `recordRecommendation()`.
 - `enable`/`disable` should already use `db.setSkillDisabled()` and avoid filesystem writes.
 
 Only edit implementation if the test exposes a gap. Do not add hidden mutation APIs.
@@ -292,7 +292,7 @@ Telemetry mutation boundaries are pinned separately in `docs/telemetry-mutation-
 Append a short paragraph to `docs/public-envelope-contract.md`:
 
 ```markdown
-Envelope shape is independent from telemetry mutation. Default and opt-in read envelopes may include warnings and analysis, but only plain `clew recommend <query>` records included recommendation usage; request-time warnings remain envelope-local.
+Envelope shape is independent from telemetry mutation. Default and opt-in read envelopes may include warnings and analysis, but only plain `clew-cli recommend <query>` records included recommendation usage; request-time warnings remain envelope-local.
 ```
 
 - [ ] **Step 3: Run targeted doc check**
@@ -361,5 +361,5 @@ git commit -m "test: harden telemetry mutation boundary contract"
   - Registry rebuild warnings: top-level persisted rebuild diagnostics.
   - Request warnings: top-level request envelope only.
   - Activation warnings: recommendation-scoped.
-- Keep recommendation usage conservative: record only returned included recommendations from plain `clew recommend <query>`.
+- Keep recommendation usage conservative: record only returned included recommendations from plain `clew-cli recommend <query>`.
 - Preserve local-first rebuildability: deleting `.clew-registry.db` must remove telemetry-derived local state without changing filesystem bundles.

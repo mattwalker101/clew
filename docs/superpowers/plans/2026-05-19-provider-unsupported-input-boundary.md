@@ -6,7 +6,7 @@
 
 **Architecture:** Add a focused public contract fixture that derives its provider scope from `provider-interop-boundary-contract.json`: Claude and OpenCode stay supported, while Cursor, Windsurf, and Copilot remain excluded. Pin CLI failure surfaces as stderr-only failures with no JSON output and no registry or telemetry mutation. Reuse existing importer/exporter APIs; do not add new provider adapters, provider-specific wrapper envelopes, or runtime state writes.
 
-**Tech Stack:** TypeScript, Vitest, Node filesystem test helpers, existing `@clew/cli`, `@clew/importers`, `@clew/exporters`, and contract fixtures under `tests/fixtures/contracts`.
+**Tech Stack:** TypeScript, Vitest, Node filesystem test helpers, existing `@clew-ops/cli`, `@clew-ops/importers`, `@clew-ops/exporters`, and contract fixtures under `tests/fixtures/contracts`.
 
 ---
 
@@ -21,8 +21,8 @@
    - `supportedProviders`: `["claude", "opencode"]`
    - `excludedProviders`: `["cursor", "windsurf", "copilot"]`
 3. Add `cli.unsupportedProviders` with one row per excluded provider:
-   - `importUsage`: `usage: clew import <claude|opencode> <json-file>`
-   - `exportUsage`: `usage: clew export <claude|opencode> <skill-id>`
+   - `importUsage`: `usage: clew-cli import <claude|opencode> <json-file>`
+   - `exportUsage`: `usage: clew-cli export <claude|opencode> <skill-id>`
    - `printsJson`: `false`
 4. Add `cli.malformedInput` rows for invalid field type and empty instructions/content:
    - `invalidIdError`: `claude field "id" must be a string`
@@ -44,7 +44,7 @@
 3. For each provider, run `main(["import", provider, inputPath])` and `main(["export", provider, "typescript-core"])`.
 4. Spy on `console.error` and `console.log`.
 5. Expect both commands to throw via `process.exit`, print the fixture usage strings to stderr, and print no JSON.
-6. Run: `corepack pnpm --filter @clew/cli test -- --runInBand`
+6. Run: `corepack pnpm --filter @clew-ops/cli test -- --runInBand`
 7. Expected red result before implementation if the current `process.exit` behavior is not test-friendly.
 
 ### Task 3: Write Failing CLI Malformed Input Tests
@@ -101,7 +101,7 @@
 
 **Steps:**
 1. Run targeted CLI tests:
-   - `corepack pnpm --filter @clew/cli test`
+   - `corepack pnpm --filter @clew-ops/cli test`
 2. Run full repo verification:
    - `corepack pnpm test`
    - `corepack pnpm check`

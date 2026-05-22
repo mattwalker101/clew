@@ -7,7 +7,7 @@ Directly importing implementation details from another package creates tight cou
 
 ```typescript
 // BAD: Reaching into internal modules
-import { InternalRegistryHelper } from "@clew/core/src/internal/helper.js";
+import { InternalRegistryHelper } from "@clew-ops/core/src/internal/helper.js";
 ```
 
 ## The Solution: Explicit Entry Points
@@ -16,7 +16,7 @@ import { InternalRegistryHelper } from "@clew/core/src/internal/helper.js";
 Logic that should not be exposed to other packages.
 
 ```typescript
-// Only used within @clew/core
+// Only used within @clew-ops/core
 export class InternalRegistryManager {
   // ...
 }
@@ -39,7 +39,7 @@ Callers must use the public interface via the workspace package.
 ```json
 {
   "dependencies": {
-    "@clew/core": "workspace:*"
+    "@clew-ops/core": "workspace:*"
   }
 }
 ```

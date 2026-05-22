@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { exportClaudeSkill, exportOpenCodeSkill, exportProviderSkill } from "./index.js";
-import { compatibilityWarningSchema, type CompatibilityWarning, type ExportResult, type SkillBundle } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning, type ExportResult, type SkillBundle } from "@clew-ops/schema";
 
 const bundle: SkillBundle = {
   manifest: {
@@ -110,7 +110,7 @@ function providerUnsupportedBoundaryContract(): ProviderUnsupportedBoundaryContr
   ) as ProviderUnsupportedBoundaryContract;
 }
 
-describe("@clew/exporters", () => {
+describe("@clew-ops/exporters", () => {
   it("exports Claude artifacts with explicit compatibility warnings", () => {
     const result = exportClaudeSkill(bundle);
     expect(result.artifacts[0]?.contents).toContain("/refactor-safely");

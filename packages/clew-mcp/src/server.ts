@@ -7,8 +7,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { createClewMcpBridge, type ClewMcpBridge } from "./index.js";
-import { SkillRegistry } from "@clew/core";
-import { coreCapabilities, type Capability } from "@clew/schema";
+import { SkillRegistry } from "@clew-ops/core";
+import { coreCapabilities, type Capability } from "@clew-ops/schema";
 
 const SearchInputSchema = z.object({
   query: z.string(),

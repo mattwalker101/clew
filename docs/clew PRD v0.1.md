@@ -496,14 +496,14 @@ clew is:
 
 ### **Discovery**
 
-clew search  
-clew recommend  
-clew explain
+clew-cli search  
+clew-cli recommend  
+clew-cli explain
 
 ### **Management**
 
-clew import  
-clew export  
+clew-cli import  
+clew-cli export  
 clew enable  
 clew disable
 

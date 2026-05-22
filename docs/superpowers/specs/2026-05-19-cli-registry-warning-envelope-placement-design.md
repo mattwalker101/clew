@@ -2,7 +2,7 @@
 
 ## Problem
 
-`public-envelope-contract.json` pins empty `warnings` arrays for all CLI read surfaces in the happy path. A separate standalone test proves `clew list` emits `skill_bundle_invalid` for an invalid filesystem bundle, but no documented fixture pins that warning's `code` and `origin` across every CLI read surface. Consumers have no contractual reference for how registry rebuild warnings propagate through `search`, `recommend`, `lookup`, `explain`, `overlaps`, `conflicts`, `telemetry`, or `doctor`.
+`public-envelope-contract.json` pins empty `warnings` arrays for all CLI read surfaces in the happy path. A separate standalone test proves `clew-cli list` emits `skill_bundle_invalid` for an invalid filesystem bundle, but no documented fixture pins that warning's `code` and `origin` across every CLI read surface. Consumers have no contractual reference for how registry rebuild warnings propagate through `search`, `recommend`, `lookup`, `explain`, `overlaps`, `conflicts`, `telemetry`, or `doctor`.
 
 ## Goal
 
@@ -102,6 +102,6 @@ Each surface: extract `warnings.map(w => w.code)` and `warnings.map(w => w.origi
 
 ## Verification
 
-- `corepack pnpm --filter @clew/cli test` green
+- `corepack pnpm --filter @clew-ops/cli test` green
 - `corepack pnpm test` green
 - `corepack pnpm check` clean

@@ -4,9 +4,9 @@
 
 **Goal:** Pin CLI `overlaps` and `conflicts` as default relationship read envelopes in the public envelope contract.
 
-**Architecture:** Keep relationship commands read-only and compatibility-shaped. `clew overlaps` returns `{ overlaps, warnings }`; `clew conflicts` returns `{ conflicts, warnings }`; registry rebuild warnings stay top-level and relationship rows remain advisory analysis data.
+**Architecture:** Keep relationship commands read-only and compatibility-shaped. `clew-cli overlaps` returns `{ overlaps, warnings }`; `clew-cli conflicts` returns `{ conflicts, warnings }`; registry rebuild warnings stay top-level and relationship rows remain advisory analysis data.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/cli`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/cli`.
 
 ---
 
@@ -47,7 +47,7 @@ warnings: {
 
 **Step 2: Run the focused CLI test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: FAIL because `public-envelope-contract.json` does not yet include relationship envelope fields.
 
@@ -69,13 +69,13 @@ Update `tests/fixtures/contracts/public-envelope-contract.json` with:
 Update `docs/public-envelope-contract.md` to list:
 
 ```md
-- CLI `clew overlaps` returns `{ overlaps, warnings }`.
-- CLI `clew conflicts` returns `{ conflicts, warnings }`.
+- CLI `clew-cli overlaps` returns `{ overlaps, warnings }`.
+- CLI `clew-cli conflicts` returns `{ conflicts, warnings }`.
 ```
 
 **Step 4: Run the focused CLI test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 
@@ -99,7 +99,7 @@ Keep relationship output read-only and top-level-warning shaped; do not persist 
 
 **Step 1: Run CLI tests**
 
-Run: `corepack pnpm --filter @clew/cli test`
+Run: `corepack pnpm --filter @clew-ops/cli test`
 
 Expected: PASS.
 

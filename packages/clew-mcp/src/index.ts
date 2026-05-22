@@ -7,7 +7,7 @@ import {
   type SkillSearchAnalysisResult,
   type SkillTelemetryAnalysisResult,
   type TelemetryRecord,
-} from "@clew/core";
+} from "@clew-ops/core";
 import type {
   ActivationContext,
   Capability,
@@ -15,7 +15,7 @@ import type {
   Recommendation,
   SkillBundle,
   SkillManifest,
-} from "@clew/schema";
+} from "@clew-ops/schema";
 
 export type ClewMcpBridge = {
   analyzeIndex(): ClewMcpIndexAnalysisResult;

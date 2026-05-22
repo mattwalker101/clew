@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SkillRegistry, type RegistryEntry } from "@clew/core";
-import type { CompatibilityWarning } from "@clew/schema";
+import { SkillRegistry, type RegistryEntry } from "@clew-ops/core";
+import type { CompatibilityWarning } from "@clew-ops/schema";
 import { createClewMcpBridge } from "./index.js";
 
-describe("@clew/mcp", () => {
+describe("@clew-ops/mcp", () => {
   it("exposes only read-oriented bridge methods", async () => {
     const bridge = await createClewMcpBridge(registryWith(entry("engineering-core")));
 

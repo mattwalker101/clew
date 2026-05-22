@@ -6,7 +6,7 @@
 
 **Architecture:** Keep MCP read envelopes compatibility-shaped and explicit analysis surfaces opt-in. `analyzeIndex()` should expose `{ analysis, warnings }`, reuse `SkillRegistry.analyzeIndex()`, and keep registry rebuild warnings at the top level without adding request or activation semantics.
 
-**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew/mcp`.
+**Tech Stack:** TypeScript, Vitest, fixture-backed JSON contracts, `@clew-ops/mcp`.
 
 ---
 
@@ -45,7 +45,7 @@ topLevelWarningCodes: {
 
 **Step 2: Run the focused MCP test to verify it fails**
 
-Run: `corepack pnpm --filter @clew/mcp test`
+Run: `corepack pnpm --filter @clew-ops/mcp test`
 
 Expected: FAIL because `public-envelope-contract.json` is missing the new MCP `analyzeIndex()` fields.
 
@@ -61,7 +61,7 @@ Update `tests/fixtures/contracts/public-envelope-contract.json` to include:
 
 **Step 4: Run the focused MCP test to verify it passes**
 
-Run: `corepack pnpm --filter @clew/mcp test`
+Run: `corepack pnpm --filter @clew-ops/mcp test`
 
 Expected: PASS.
 
@@ -94,7 +94,7 @@ Registry rebuild warnings remain top-level only.
 
 **Step 1: Run MCP tests**
 
-Run: `corepack pnpm --filter @clew/mcp test`
+Run: `corepack pnpm --filter @clew-ops/mcp test`
 
 Expected: PASS.
 

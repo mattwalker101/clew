@@ -9,7 +9,7 @@ The parsed result contains:
 
 `getAgentsMdDiagnostics(content, registry)` compares active skill references with the current registry and returns `agents_diagnostic` warnings for unknown or disabled active skills. Diagnostics remain warnings only; they do not alter registry state or activation scoring.
 
-`clew doctor` exposes AGENTS.md data as diagnostic context:
+`clew-cli doctor` exposes AGENTS.md data as diagnostic context:
 
 - `agentsDiagnostics` for AGENTS.md warning objects.
 - `agentsPreferences` for extracted preference lines.

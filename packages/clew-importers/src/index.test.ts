@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { importClaudeSkill, importOpenCodeSkill, importProviderSkill } from "./index.js";
 import type { ProviderSkillInput } from "./index.js";
-import { compatibilityWarningSchema, type CompatibilityWarning, type ImportResult } from "@clew/schema";
+import { compatibilityWarningSchema, type CompatibilityWarning, type ImportResult } from "@clew-ops/schema";
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures", "interop");
 const contractRoot = join(process.cwd(), "tests", "fixtures", "contracts");
@@ -99,7 +99,7 @@ function providerUnsupportedBoundaryContract(): ProviderUnsupportedBoundaryContr
   ) as ProviderUnsupportedBoundaryContract;
 }
 
-describe("@clew/importers", () => {
+describe("@clew-ops/importers", () => {
   it("imports Claude skills while preserving degraded provider fields", () => {
     const result = importClaudeSkill({
       id: "safe-refactor",
