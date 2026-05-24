@@ -1004,14 +1004,14 @@ function openSqliteDatabase(dbPath: string): SqliteDatabase {
   } catch (error) {
     const require = createRequire(import.meta.url);
     const sqlite = require("node:sqlite") as {
-      DatabaseSync: new (path: string) => {
+      DatabaseSync: new (path: string, options?: { allowExtension?: boolean }) => {
         exec(sql: string): void;
         prepare(sql: string): SqliteStatement;
         loadExtension?(path: string): void;
         close(): void;
       };
     };
-    const db = new sqlite.DatabaseSync(dbPath);
+    const db = new sqlite.DatabaseSync(dbPath, { allowExtension: true });
     return {
       exec(sql: string) {
         db.exec(sql);
