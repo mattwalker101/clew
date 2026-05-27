@@ -9,7 +9,10 @@ export type RegistryEntry = {
   disabled: boolean;
   favorite: boolean;
   tags: string[];
-  capabilities: string[];
+  capabilities: {
+    required?: string[];
+    optional?: string[];
+  };
 };
 
 export function RegistryTable({ entries, onSelectSkill }: { 
@@ -179,12 +182,25 @@ export function RegistryTable({ entries, onSelectSkill }: {
             </div>
 
             <div>
-              <h4 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">Capabilities</h4>
-              <div className="flex flex-wrap gap-1.5">
-                {(!selectedSkill.capabilities || selectedSkill.capabilities.length === 0) ? (
-                  <span className="text-sm text-gray-500 italic">No capabilities specified</span>
+              <h4 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">Required Capabilities</h4>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {(!selectedSkill.capabilities?.required || selectedSkill.capabilities.required.length === 0) ? (
+                  <span className="text-sm text-gray-500 italic">None</span>
                 ) : (
-                  selectedSkill.capabilities.map(c => (
+                  selectedSkill.capabilities.required.map(c => (
+                    <span key={c} className="px-2 py-0.5 bg-red-950/40 text-red-300 rounded text-xs border border-red-900/30">
+                      {c}
+                    </span>
+                  ))
+                )}
+              </div>
+
+              <h4 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">Optional Capabilities</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {(!selectedSkill.capabilities?.optional || selectedSkill.capabilities.optional.length === 0) ? (
+                  <span className="text-sm text-gray-500 italic">None</span>
+                ) : (
+                  selectedSkill.capabilities.optional.map(c => (
                     <span key={c} className="px-2 py-0.5 bg-blue-950/40 text-blue-300 rounded text-xs border border-blue-900/30">
                       {c}
                     </span>
