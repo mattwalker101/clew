@@ -26,8 +26,8 @@ export function RegistryTable({ entries, onSelectSkill }: {
     return entries.filter(e => {
       const matchSearch = 
         e.skillId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+        (e.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (e.tags || []).some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchLayer = selectedLayer === "all" || e.layer === selectedLayer;
       const matchStatus = 
@@ -166,7 +166,7 @@ export function RegistryTable({ entries, onSelectSkill }: {
             <div>
               <h4 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">Tags</h4>
               <div className="flex flex-wrap gap-1.5">
-                {selectedSkill.tags.length === 0 ? (
+                {(!selectedSkill.tags || selectedSkill.tags.length === 0) ? (
                   <span className="text-sm text-gray-500 italic">No tags specified</span>
                 ) : (
                   selectedSkill.tags.map(t => (
@@ -181,7 +181,7 @@ export function RegistryTable({ entries, onSelectSkill }: {
             <div>
               <h4 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">Capabilities</h4>
               <div className="flex flex-wrap gap-1.5">
-                {selectedSkill.capabilities.length === 0 ? (
+                {(!selectedSkill.capabilities || selectedSkill.capabilities.length === 0) ? (
                   <span className="text-sm text-gray-500 italic">No capabilities specified</span>
                 ) : (
                   selectedSkill.capabilities.map(c => (
