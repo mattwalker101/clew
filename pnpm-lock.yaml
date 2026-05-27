@@ -29,6 +29,9 @@ importers:
       '@clew-ops/core':
         specifier: workspace:*
         version: link:../clew-core
+      '@clew-ops/dashboard':
+        specifier: workspace:*
+        version: link:../clew-dashboard
       '@clew-ops/exporters':
         specifier: workspace:*
         version: link:../clew-exporters
