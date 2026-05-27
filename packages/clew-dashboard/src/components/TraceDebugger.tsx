@@ -1,28 +1,31 @@
 import React, { useState, useEffect } from "react";
 import { Terminal, Shield, Play, HelpCircle, Activity, ChevronRight, Sliders } from "lucide-react";
 
-export type Signal = {
-  type: string;
+export type ComponentSignal = {
+  kind: string;
   value: string;
-  score: number;
-  weight: number;
+  points: number;
+  reason: string;
 };
 
 export type Candidate = {
   skillId: string;
   name?: string;
   score: number;
-  active: boolean;
-  suppressed: boolean;
-  suppressionReason?: string;
-  signals: Signal[];
+  status: "included" | "suppressed" | "excluded";
+  components: ComponentSignal[];
+  suppression?: {
+    kind: string;
+    reason: string;
+    bySkillId?: string;
+  };
 };
 
 export type Recommendation = {
   skillId: string;
-  name: string;
+  name?: string;
   score: number;
-  signals: Signal[];
+  components: ComponentSignal[];
 };
 
 export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
@@ -61,6 +64,10 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
       setLoading(false);
     }
   }
+
+  const suppressedCandidates = traceResult 
+    ? traceResult.candidates.filter(c => c.status !== "included") 
+    : [];
 
   return (
     <div className="flex flex-col gap-8">
@@ -106,7 +113,7 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
       </div>
 
       {traceResult && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fadeIn">
           {/* Recommended active skills */}
           <div className="flex flex-col gap-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
@@ -139,12 +146,12 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
                     <Sliders className="h-3.5 w-3.5 text-blue-400" /> Signal Breakdown
                   </h5>
                   <div className="flex flex-col gap-2 bg-gray-950/40 rounded-lg p-3">
-                    {rec.signals.map((sig, idx) => (
+                    {(rec.components || []).map((comp, idx) => (
                       <div key={idx} className="flex justify-between items-center text-xs">
                         <span className="text-gray-400 font-mono flex items-center gap-1">
-                          <ChevronRight className="h-3 w-3 text-gray-500" /> {sig.type}: {sig.value}
+                          <ChevronRight className="h-3 w-3 text-gray-500" /> {comp.kind}: {comp.value}
                         </span>
-                        <span className="font-mono text-gray-300">+{sig.score.toFixed(1)}</span>
+                        <span className="font-mono text-gray-300">+{comp.points}</span>
                       </div>
                     ))}
                   </div>
@@ -156,50 +163,48 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
           {/* Suppressed / Inactive Candidates */}
           <div className="flex flex-col gap-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Activity className="h-5 w-5 text-gray-400" /> Candidate Pool & Suppressions
+              <Activity className="h-5 w-5 text-gray-400" /> Candidate Pool & Suppressions ({suppressedCandidates.length})
             </h3>
 
-            {traceResult.candidates.filter(c => !c.active).length === 0 ? (
+            {suppressedCandidates.length === 0 ? (
               <div className="bg-gray-900/20 border border-gray-800 border-dashed rounded-xl py-16 text-center text-gray-500 text-sm">
                 No skills were suppressed or filtered out.
               </div>
             ) : (
-              traceResult.candidates
-                .filter(c => !c.active)
-                .map((cand) => (
-                  <div 
-                    key={cand.skillId}
-                    className="bg-gray-900/30 border border-gray-800 rounded-xl p-6 text-gray-400"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h4 className="text-base font-semibold text-gray-300">{cand.name || cand.skillId}</h4>
-                        <span className="text-xs font-mono text-gray-600">{cand.skillId}</span>
-                      </div>
-                      <span className="px-2.5 py-0.5 bg-gray-800 text-gray-400 rounded text-xs font-mono">
-                        Score: {cand.score.toFixed(1)}
-                      </span>
+              suppressedCandidates.map((cand) => (
+                <div 
+                  key={cand.skillId}
+                  className="bg-gray-900/30 border border-gray-800 rounded-xl p-6 text-gray-400 animate-fadeIn"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-300">{cand.name || cand.skillId}</h4>
+                      <span className="text-xs font-mono text-gray-600">{cand.skillId}</span>
                     </div>
-
-                    {cand.suppressed && (
-                      <div className="mt-2 text-xs font-semibold px-3 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1.5">
-                        <HelpCircle className="h-3.5 w-3.5" />
-                        <span>Suppressed: {cand.suppressionReason || "Redundancy suppression"}</span>
-                      </div>
-                    )}
-
-                    <div className="border-t border-gray-800/80 my-3"></div>
-
-                    <div className="flex flex-col gap-1.5 bg-gray-950/20 rounded-lg p-2.5 text-xs text-gray-500 font-mono">
-                      {cand.signals.map((sig, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <span>{sig.type}: {sig.value}</span>
-                          <span>+{sig.score.toFixed(1)}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <span className="px-2.5 py-0.5 bg-gray-800 text-gray-400 rounded text-xs font-mono">
+                      Score: {cand.score.toFixed(1)}
+                    </span>
                   </div>
-                ))
+
+                  {cand.status === "suppressed" && cand.suppression && (
+                    <div className="mt-2 text-xs font-semibold px-3 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1.5">
+                      <HelpCircle className="h-3.5 w-3.5" />
+                      <span>{cand.suppression.reason}</span>
+                    </div>
+                  )}
+
+                  <div className="border-t border-gray-800/80 my-3"></div>
+
+                  <div className="flex flex-col gap-1.5 bg-gray-950/20 rounded-lg p-2.5 text-xs text-gray-500 font-mono">
+                    {(cand.components || []).map((comp, idx) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <span>{comp.kind}: {comp.value}</span>
+                        <span>+{comp.points}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
