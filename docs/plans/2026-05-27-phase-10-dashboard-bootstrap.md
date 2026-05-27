@@ -1,0 +1,167 @@
+# Phase 10: CLI Dashboard Command & Local API Bridge Implementation Plan
+
+**Goal:** Create a lightweight, dependency-free local HTTP server within the `clew` CLI that serves the compiled dashboard static files and exposes real-time API endpoints for registry, health (`doctor`), and activation trace data.
+
+## Proposed Architecture
+
+To keep `clew` lightweight and dependency-free, we will use Node.js's built-in `http`, `fs`, and `path` modules to implement the local server.
+
+### 1. Registry & API Contract
+We will add a local server in `packages/clew-cli/src/server.ts` containing:
+- **Static Asset Router**: Resolves and serves assets (HTML, JS, CSS) from `@clew-ops/dashboard/dist` by linking `@clew-ops/dashboard` as a workspace dependency.
+- **REST API Endpoints**:
+  - `GET /api/registry`: Returns the fully composed registry entries and active workspace warnings.
+  - `GET /api/doctor`: Exposes the structural and health diagnostic metrics.
+  - `POST /api/explain`: Evaluates a custom query and returns detailed activation scores, signal components, and suppressions.
+
+---
+
+## Proposed Changes
+
+### 1. packages/clew-cli
+
+#### [MODIFY] [package.json](file:///Users/matt/Workspace/active/clew/packages/clew-cli/package.json)
+Add `@clew-ops/dashboard` as a workspace dependency to ensure the CLI can reliably locate the compiled dashboard assets at runtime:
+```json
+  "dependencies": {
+    "@clew-ops/core": "workspace:*",
+    "@clew-ops/dashboard": "workspace:*",
+    ...
+  }
+```
+
+#### [NEW] [server.ts](file:///Users/matt/Workspace/active/clew/packages/clew-cli/src/server.ts)
+Implement the lightweight server:
+```typescript
+import http from "node:http";
+import fs from "node:fs";
+import { join } from "node:path";
+import { createRequire } from "node:module";
+import { 
+  rebuildRegistryIndex, 
+  SkillRegistry, 
+  ActivationEngine,
+  detectRepoSignals,
+  parseAgentsMd
+} from "@clew-ops/core";
+
+const require = createRequire(import.meta.url);
+
+function getDashboardDistPath(): string {
+  try {
+    const entryPath = require.resolve("@clew-ops/dashboard");
+    return join(entryPath, "..", "..", "dist");
+  } catch {
+    // Fallback for monorepo development paths
+    return join(process.cwd(), "packages", "clew-dashboard", "dist");
+  }
+}
+
+export async function startDashboardServer(port = 7708): Promise<void> {
+  const distPath = getDashboardDistPath();
+
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+    
+    // CORS headers for local frontend development
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // 1. API: GET /api/registry
+    if (url.pathname === "/api/registry" && req.method === "GET") {
+      try {
+        const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd() });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          entries: snapshot.entries.map((e) => ({
+            skillId: e.bundle.manifest.id,
+            layer: e.layer,
+            version: e.bundle.manifest.version,
+            name: e.bundle.manifest.name,
+            disabled: e.disabled,
+            favorite: e.favorite,
+            tags: e.bundle.manifest.tags,
+            capabilities: e.bundle.manifest.capabilities,
+          })),
+          warnings: snapshot.warnings,
+        }));
+      } catch (err: any) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 2. API: POST /api/explain
+    if (url.pathname === "/api/explain" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const payload = JSON.parse(body);
+          const { query = "" } = payload;
+          const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd() });
+          const registry = new SkillRegistry(snapshot);
+          const engine = new ActivationEngine(registry);
+          
+          let agentsMd = "";
+          try {
+            agentsMd = fs.readFileSync(join(process.cwd(), "AGENTS.md"), "utf8");
+          } catch {}
+
+          const context = {
+            query,
+            tags: [],
+            agentsMd,
+            repoSignals: detectRepoSignals(process.cwd()),
+            capabilities: [],
+            activeSkillIds: parseAgentsMd(agentsMd).activeSkillIds,
+          };
+
+          const analysis = await engine.analyzeRecommendations(context);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(analysis));
+        } catch (err: any) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // 3. Static Asset Serving
+    let filePath = join(distPath, url.pathname === "/" ? "index.html" : url.pathname);
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      filePath = join(distPath, "index.html");
+    }
+
+    const ext = filePath.split(".").pop();
+    const contentType = {
+      html: "text/html",
+      css: "text/css",
+      js: "application/javascript",
+      json: "application/json",
+      png: "image/png",
+    }[ext ?? ""] ?? "application/octet-stream";
+
+    try {
+      const data = fs.readFileSync(filePath);
+      res.writeHead(200, { "Content-Type": contentType });
+      res.end(data);
+    } catch {
+      res.writeHead(404);
+      res.end("Not Found");
+    }
+  });
+
+  server.listen(port, () => {
+    console.log(`🧵 clew Cockpit running at http://localhost:${port}`);
+  });
+}
