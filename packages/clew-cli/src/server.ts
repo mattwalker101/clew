@@ -7,7 +7,10 @@ import {
   SkillRegistry, 
   ActivationEngine,
   detectRepoSignals,
-  parseAgentsMd
+  parseAgentsMd,
+  findConflicts,
+  findOverlaps,
+  getAgentsMdDiagnostics
 } from "@clew-ops/core";
 
 const require = createRequire(import.meta.url);
@@ -57,6 +60,42 @@ export async function startDashboardServer(port = 7708): Promise<http.Server> {
             capabilities: e.bundle.manifest.capabilities,
           })),
           warnings: snapshot.warnings,
+        }));
+      } catch (err: any) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 1b. API: GET /api/doctor
+    if (url.pathname === "/api/doctor" && req.method === "GET") {
+      try {
+        const dbPath = join(process.cwd(), ".clew-registry.db");
+        const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath });
+        const registry = new SkillRegistry(snapshot);
+        const bundles = registry.list();
+        
+        let agentsMd = "";
+        try {
+          agentsMd = fs.readFileSync(join(process.cwd(), "AGENTS.md"), "utf8");
+        } catch {}
+        
+        const parsedAgents = parseAgentsMd(agentsMd);
+        const registryWarnings = snapshot.warnings;
+        const agentsDiagnostics = getAgentsMdDiagnostics(agentsMd, registry);
+        
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          skills: bundles.length,
+          dbPath,
+          repoSignals: detectRepoSignals(process.cwd()),
+          overlaps: findOverlaps(bundles).length,
+          conflicts: findConflicts(bundles),
+          registryWarnings,
+          agentsDiagnostics,
+          agentsPreferences: parsedAgents.preferences,
+          warnings: [...registryWarnings, ...agentsDiagnostics],
         }));
       } catch (err: any) {
         res.writeHead(500, { "Content-Type": "application/json" });

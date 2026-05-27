@@ -1,64 +1,253 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Layout } from "./layouts/Layout";
+import { RegistryTable, type RegistryEntry } from "./components/RegistryTable";
+import { TraceDebugger } from "./components/TraceDebugger";
+import { 
+  BookOpen, 
+  Activity, 
+  Settings, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Signal, 
+  Compass, 
+  RefreshCw 
+} from "lucide-react";
+
+type DoctorData = {
+  skills: number;
+  dbPath: string;
+  repoSignals: string[];
+  overlaps: number;
+  conflicts: any[];
+  registryWarnings: any[];
+  agentsDiagnostics: any[];
+  agentsPreferences: string[];
+  warnings: Array<{ skillId?: string; type: string; message: string }>;
+};
 
 function App() {
-  return (
-    <Layout>
-      <div className="flex flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-4xl font-bold tracking-tight text-white flex items-center gap-3">
-            <span className="text-blue-500">🧵</span> clew Cockpit
-          </h1>
-          <p className="text-gray-400 text-lg">
-            Portable operational knowledge for coding agents.
-          </p>
-        </header>
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [doctorData, setDoctorData] = useState<DoctorData | null>(null);
+  const [registryEntries, setRegistryEntries] = useState<RegistryEntry[]>([]);
+  const [selectedSkillId, setSelectedSkillId] = useState<string | undefined>(undefined);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-        <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <DashboardCard
-            title="Skill Registry"
-            description="Explore and manage your canonical operational knowledge bundles."
-            status="Operational"
-            icon="📚"
-          />
-          <DashboardCard
-            title="Activation Intelligence"
-            description="Inspect traces and signals driving current recommendations."
-            status="Active"
-            icon="🧠"
-          />
-          <DashboardCard
-            title="Ecosystem Interop"
-            description="Monitor Claude and OpenCode bridge health and round-trips."
-            status="Connected"
-            icon="🔌"
-          />
-        </main>
-      </div>
+  async function loadData() {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      // 1. Fetch Doctor diagnostic metrics
+      const docRes = await fetch("http://localhost:7708/api/doctor");
+      if (!docRes.ok) throw new Error("Failed to load doctor diagnostics");
+      const docJson = await docRes.json();
+      setDoctorData(docJson);
+
+      // 2. Fetch Registry entries
+      const regRes = await fetch("http://localhost:7708/api/registry");
+      if (!regRes.ok) throw new Error("Failed to load skill registry");
+      const regJson = await regRes.json();
+      setRegistryEntries(regJson.entries);
+    } catch (err: any) {
+      setFetchError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  return (
+    <Layout activeTab={activeTab} onTabChange={(tab) => {
+      setActiveTab(tab);
+      if (tab !== "trace") {
+        // Clear quick selection
+        setSelectedSkillId(undefined);
+      }
+    }}>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+          <p className="text-gray-400 font-medium text-sm">Querying local API bridge...</p>
+        </div>
+      ) : fetchError ? (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-8 max-w-xl mx-auto text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">Failed to Connect to local API</h3>
+          <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+            Ensure the local `clew` server is running. You can start it from your terminal using:
+            <code className="block bg-gray-950 px-3 py-2 rounded font-mono text-xs text-blue-400 mt-2">clew dashboard --port=7708</code>
+          </p>
+          <button 
+            onClick={loadData}
+            className="bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-all flex items-center gap-2 mx-auto"
+          >
+            <RefreshCw className="h-4 w-4" /> Try Reconnecting
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-10">
+          {/* Tab Content: Overview */}
+          {activeTab === "overview" && doctorData && (
+            <div className="flex flex-col gap-10 animate-fadeIn">
+              {/* Header */}
+              <div className="flex justify-between items-start">
+                <header className="flex flex-col gap-2">
+                  <h1 className="text-4xl font-bold tracking-tight text-white">
+                    🧵 clew Cockpit
+                  </h1>
+                  <p className="text-gray-400 text-lg">
+                    Real-time local registry health, diagnostics, and telemetry analysis.
+                  </p>
+                </header>
+                <button 
+                  onClick={loadData}
+                  className="bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 rounded-lg p-2.5 transition-colors cursor-pointer"
+                  title="Refresh Diagnostics"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* KPI Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <DashboardKpi
+                  title="Composed Skills"
+                  value={doctorData.skills}
+                  description="Loaded in active registry index"
+                  icon={<BookOpen className="h-6 w-6 text-blue-400" />}
+                />
+                <DashboardKpi
+                  title="Overlaps Detected"
+                  value={doctorData.overlaps}
+                  description="Potential redundant skill scopes"
+                  icon={<Settings className="h-6 w-6 text-purple-400" />}
+                  alert={doctorData.overlaps > 0}
+                />
+                <DashboardKpi
+                  title="Active Conflicts"
+                  value={doctorData.conflicts.length}
+                  description="Contradictory skill instructions"
+                  icon={<AlertTriangle className="h-6 w-6 text-red-400" />}
+                  alert={doctorData.conflicts.length > 0}
+                />
+                <DashboardKpi
+                  title="Workspace Signals"
+                  value={doctorData.repoSignals.length}
+                  description="Project signals detected"
+                  icon={<Signal className="h-6 w-6 text-green-400" />}
+                />
+              </div>
+
+              {/* Warnings and preferences row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Warnings Feed */}
+                <div className="lg:col-span-2 flex flex-col gap-4 bg-gray-900/40 border border-gray-800 rounded-xl p-6">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" /> Workspace Diagnostics
+                  </h3>
+                  
+                  {doctorData.warnings.length === 0 ? (
+                    <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-green-400 text-sm">
+                      <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      <span>All systems operational! No capability, validation, or workspace warnings found.</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {doctorData.warnings.map((warn, index) => (
+                        <div 
+                          key={index}
+                          className="flex gap-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-4 text-sm text-gray-300"
+                        >
+                          <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            {warn.skillId && <span className="font-semibold text-white mr-1.5">{warn.skillId}:</span>}
+                            <span className="text-gray-400">{warn.message}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Preferences */}
+                <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-6 flex flex-col gap-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Compass className="h-5 w-5 text-blue-400" /> Workspace Rules
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {doctorData.agentsPreferences.length === 0 ? (
+                      <span className="text-sm text-gray-500 italic">No rules parsed from AGENTS.md</span>
+                    ) : (
+                      doctorData.agentsPreferences.map((pref, idx) => (
+                        <div key={idx} className="flex gap-2 text-sm text-gray-300">
+                          <span className="text-blue-500">•</span>
+                          <span>{pref}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab Content: Registry */}
+          {activeTab === "registry" && (
+            <div className="animate-fadeIn">
+              <header className="flex flex-col gap-2 mb-8">
+                <h1 className="text-4xl font-bold tracking-tight text-white">Composed Registry</h1>
+                <p className="text-gray-400 text-lg">
+                  Explore and manage your local canonical skills, capabilities, and tags.
+                </p>
+              </header>
+              <RegistryTable 
+                entries={registryEntries} 
+                onSelectSkill={(id) => {
+                  setSelectedSkillId(id);
+                  setActiveTab("trace");
+                }}
+              />
+            </div>
+          )}
+
+          {/* Tab Content: Trace Debugger */}
+          {activeTab === "trace" && (
+            <div className="animate-fadeIn">
+              <header className="flex flex-col gap-2 mb-8">
+                <h1 className="text-4xl font-bold tracking-tight text-white">Activation Intelligence</h1>
+                <p className="text-gray-400 text-lg">
+                  Inspect query recommendation tracing, suppressions, and overlay metrics.
+                </p>
+              </header>
+              <TraceDebugger initialSkillId={selectedSkillId} />
+            </div>
+          )}
+        </div>
+      )}
     </Layout>
   );
 }
 
-function DashboardCard({ title, description, status, icon }: { 
-  title: string; 
-  description: string; 
-  status: string;
-  icon: string;
+function DashboardKpi({ title, value, description, icon, alert }: {
+  title: string;
+  value: number;
+  description: string;
+  icon: React.ReactNode;
+  alert?: boolean;
 }) {
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 hover:border-blue-500/50 transition-colors group">
-      <div className="flex justify-between items-start mb-4">
-        <span className="text-3xl">{icon}</span>
-        <span className="px-2 py-1 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-          {status}
-        </span>
+    <div className={`bg-gray-900/50 border rounded-xl p-6 transition-all hover:-translate-y-0.5 ${
+      alert ? "border-amber-500/20 hover:border-amber-500/40 shadow-lg shadow-amber-950/5" : "border-gray-800 hover:border-gray-700"
+    }`}>
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-gray-400 text-sm font-semibold uppercase tracking-wider">{title}</span>
+        {icon}
       </div>
-      <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-blue-400 transition-colors">
-        {title}
-      </h3>
-      <p className="text-gray-400 leading-relaxed">
-        {description}
-      </p>
+      <div className="text-4xl font-extrabold text-white mb-2 tracking-tight">{value}</div>
+      <div className="text-xs text-gray-500 leading-normal">{description}</div>
     </div>
   );
 }
