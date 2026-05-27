@@ -2413,6 +2413,88 @@ describe("@clew-ops/core", () => {
 
     expect(() => loadSkillBundle(skillRoot)).toThrow("manifest.kind [invalid_enum_value]");
   });
+
+  it("performs semantic search and analysis using local database", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-core-semantic-"));
+    const dbPath = join(projectRoot, "registry.db");
+    
+    const validRoot = join(projectRoot, ".clew", "engineering-core");
+    writeFilesystemBundle(validRoot, {
+      id: "engineering-core",
+      kind: "instruction_skill",
+      name: "Engineering Core",
+      instructions: "Perform rigorous engineering builds, testing, and validations of project code.",
+    });
+
+    const snapshot = await rebuildRegistryIndex({
+      projectRoot,
+      dbPath,
+      includeReferenceSkills: false,
+    });
+
+    const registry = new SkillRegistry(snapshot);
+    const searchResult = await registry.searchSemantic("validation testing");
+    expect(searchResult.map((b) => b.manifest.id)).toContain("engineering-core");
+
+    const analysisResult = await registry.analyzeSearchSemantic("validation testing");
+    expect(analysisResult.query).toBe("validation testing");
+    expect(analysisResult.matches.map((m) => m.skillId)).toContain("engineering-core");
+    const match = analysisResult.matches.find((m) => m.skillId === "engineering-core")!;
+    expect(match.distance).toBeGreaterThanOrEqual(0);
+    expect(match.score).toBeGreaterThan(0);
+    expect(match.reasons[0]).toContain("semantic similarity match");
+  });
+
+  it("explains why a redundant skill was suppressed", async () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core"),
+          layer: "global",
+          root: "global-skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("safe-editing", {
+            tags: ["editing"],
+            activation: { triggers: ["edit"], tags: ["editing"], weight: 1 },
+            capabilities: { required: ["filesystem", "terminal"], optional: [] },
+            extends: ["engineering-core"],
+          }),
+          layer: "global",
+          root: "global-skills",
+          disabled: false,
+          favorite: false,
+        },
+        {
+          bundle: bundle("specific-safe-editing", {
+            tags: ["safety", "editing"],
+            activation: { triggers: ["edit"], tags: ["editing"], weight: 1 },
+            capabilities: { required: ["filesystem", "terminal"], optional: [] },
+            extends: ["engineering-core"],
+          }),
+          layer: "project",
+          root: "project-skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const activation = new ActivationEngine(registry);
+    
+    // explain the suppressed "safe-editing" skill
+    const explanation = await activation.explain("safe-editing", { query: "edit" });
+    
+    expect(explanation).toBeDefined();
+    expect(explanation?.suppression).toMatchObject({
+      kind: "redundancy",
+      bySkillId: "specific-safe-editing",
+      reason: expect.stringContaining("redundant overlap"),
+    });
+  });
 });
 
 function summarizeSnapshot(snapshot: RegistrySnapshot, projectRoot: string): unknown {
