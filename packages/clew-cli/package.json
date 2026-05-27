@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@clew-ops/core": "workspace:*",
+    "@clew-ops/dashboard": "workspace:*",
     "@clew-ops/exporters": "workspace:*",
     "@clew-ops/importers": "workspace:*",
     "@clew-ops/mcp": "workspace:^",

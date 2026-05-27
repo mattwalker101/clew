@@ -19,6 +19,7 @@ import {
 import { exportProviderSkill } from "@clew-ops/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew-ops/importers";
 import { runClewMcpServer } from "@clew-ops/mcp";
+import { startDashboardServer } from "./server.js";
 import {
   formatValidationIssue,
   SkillBundleValidationError,
@@ -276,6 +277,12 @@ const commands: Record<string, Command> = {
       fail("usage: clew mcp [run|install]");
     }
   },
+  async dashboard(args) {
+    const portArg = args.find((a) => a.startsWith("--port="));
+    const port = portArg ? parseInt(portArg.split("=")[1]!, 10) : 7708;
+    await startDashboardServer(port);
+    await new Promise(() => {});
+  },
 };
 
 async function readRegistry() {
@@ -397,6 +404,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  telemetry --explain",
         "  doctor",
         "  mcp [run|install]",
+        "  dashboard [--port=<number>]",
       ].join("\n"),
     );
     return;
