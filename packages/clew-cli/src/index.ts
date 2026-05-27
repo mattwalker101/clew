@@ -38,10 +38,26 @@ const commands: Record<string, Command> = {
   },
   async search(args) {
     const explain = args.includes("--explain");
-    const query = args.filter((arg) => arg !== "--explain").join(" ");
-    if (!query) fail("usage: clew search <query> [--explain]");
+    const semantic = args.includes("--semantic");
+    const query = args.filter((arg) => arg !== "--explain" && arg !== "--semantic").join(" ");
+    if (!query) fail("usage: clew search <query> [--explain] [--semantic]");
     const current = await readRegistry();
-    if (explain) {
+    if (semantic) {
+      if (explain) {
+        printJsonEnvelope({
+          query,
+          analysis: await current.registry.analyzeSearchSemantic(query),
+          warnings: current.registry.warnings,
+        });
+      } else {
+        const skills = (await current.registry.searchSemantic(query)).map((b) => b.manifest);
+        printJsonEnvelope({
+          query,
+          skills,
+          warnings: current.registry.warnings,
+        });
+      }
+    } else if (explain) {
       printJsonEnvelope({
         query,
         analysis: current.registry.analyzeSearch(query),
@@ -365,6 +381,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  list",
         "  search <query>",
         "  search --explain <query>",
+        "  search --semantic <query>",
+        "  search --semantic --explain <query>",
         "  lookup <skill-id>",
         "  recommend <query>",
         "  recommend --explain <query>",
