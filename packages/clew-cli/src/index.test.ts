@@ -182,6 +182,26 @@ describe("@clew-ops/cli", () => {
     });
   });
 
+  it("supports semantic search CLI execution", async () => {
+    const projectRoot = createProject();
+    process.chdir(projectRoot);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["search", "--semantic", "typescript compiler"]);
+    await main(["search", "--semantic", "--explain", "typescript compiler"]);
+
+    const searchOutput = outputAt(log, 0) as { query: string; skills: Array<{ id: string }> };
+    expect(searchOutput.query).toBe("typescript compiler");
+    expect(searchOutput.skills.map((s) => s.id)).toContain("typescript-core");
+
+    const explainOutput = outputAt(log, 1) as { query: string; analysis: { matches: Array<{ skillId: string; distance: number; score: number; reasons: string[] }> } };
+    expect(explainOutput.query).toBe("typescript compiler");
+    const match = explainOutput.analysis.matches.find((m) => m.skillId === "typescript-core")!;
+    expect(match.distance).toBeGreaterThanOrEqual(0);
+    expect(match.score).toBeGreaterThan(0);
+    expect(match.reasons[0]).toContain("semantic similarity match");
+  });
+
   it("prints opt-in search analysis without changing default search", async () => {
     const projectRoot = createProject();
     process.chdir(projectRoot);
@@ -1414,6 +1434,134 @@ describe("@clew-ops/cli", () => {
         warningCodes: out.warnings.map((w) => w.code),
         warningOrigins: out.warnings.map((w) => w.origin),
       }).toEqual(fixture.warningMergeOrder);
+    }
+  });
+
+  it("CLI explains why a redundant skill was suppressed", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-suppress-"));
+    process.chdir(projectRoot);
+    
+    // Set up global skills root
+    const globalRoot = join(projectRoot, "global-skills");
+    mkdirSync(globalRoot, { recursive: true });
+    
+    // 1. global base skill
+    const globalBaseRoot = join(globalRoot, "engineering-core");
+    mkdirSync(globalBaseRoot, { recursive: true });
+    writeFileSync(
+      join(globalBaseRoot, "clew.yaml"),
+      [
+        "id: engineering-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Engineering Core",
+        "instructions:",
+        "  file: skill.md",
+      ].join("\n"),
+    );
+    writeFileSync(join(globalBaseRoot, "skill.md"), "Perform rigorous engineering builds.");
+
+    // 2. global redundant skill
+    const globalRedundantRoot = join(globalRoot, "safe-editing");
+    mkdirSync(globalRedundantRoot, { recursive: true });
+    writeFileSync(
+      join(globalRedundantRoot, "clew.yaml"),
+      [
+        "id: safe-editing",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Safe Editing",
+        "extends:",
+        "  - engineering-core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - editing",
+        "capabilities:",
+        "  required:",
+        "    - filesystem",
+        "    - terminal",
+        "activation:",
+        "  triggers:",
+        "    - edit",
+        "  tags:",
+        "    - editing",
+      ].join("\n"),
+    );
+    writeFileSync(join(globalRedundantRoot, "skill.md"), "Global safety guidelines.");
+
+    // Mock OS home for global discovery
+    const oldHome = process.env.HOME;
+    process.env.HOME = projectRoot;
+    
+    // Copy global skills to mock home path: ~/.clew/global
+    const mockGlobalRoot = join(projectRoot, ".clew", "global");
+    mkdirSync(mockGlobalRoot, { recursive: true });
+    
+    mkdirSync(join(mockGlobalRoot, "engineering-core"), { recursive: true });
+    writeFileSync(join(mockGlobalRoot, "engineering-core", "clew.yaml"), readFileSync(join(globalBaseRoot, "clew.yaml")));
+    writeFileSync(join(mockGlobalRoot, "engineering-core", "skill.md"), readFileSync(join(globalBaseRoot, "skill.md")));
+
+    mkdirSync(join(mockGlobalRoot, "safe-editing"), { recursive: true });
+    writeFileSync(join(mockGlobalRoot, "safe-editing", "clew.yaml"), readFileSync(join(globalRedundantRoot, "clew.yaml")));
+    writeFileSync(join(mockGlobalRoot, "safe-editing", "skill.md"), readFileSync(join(globalRedundantRoot, "skill.md")));
+
+    // 3. project specific skill under projectRoot/.clew/specific-safe-editing
+    const projectSkillsRoot = join(projectRoot, ".clew");
+    mkdirSync(join(projectSkillsRoot, "specific-safe-editing"), { recursive: true });
+    writeFileSync(
+      join(projectSkillsRoot, "specific-safe-editing", "clew.yaml"),
+      [
+        "id: specific-safe-editing",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Specific Safe Editing",
+        "extends:",
+        "  - engineering-core",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - safety",
+        "  - editing",
+        "capabilities:",
+        "  required:",
+        "    - filesystem",
+        "    - terminal",
+        "activation:",
+        "  triggers:",
+        "    - edit",
+        "  tags:",
+        "    - editing",
+      ].join("\n"),
+    );
+    writeFileSync(join(projectSkillsRoot, "specific-safe-editing", "skill.md"), "Project safety rules.");
+
+    // Write package.json and AGENTS.md in projectRoot
+    writeFileSync(join(projectRoot, "package.json"), JSON.stringify({}));
+    writeFileSync(
+      join(projectRoot, "AGENTS.md"),
+      [
+        "# Active Skills",
+        "- specific-safe-editing",
+        "- safe-editing",
+        "",
+        "## Runtime Preferences",
+        "- Prefer safety.",
+      ].join("\n")
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      await main(["explain", "safe-editing", "edit"]);
+      const output = outputAt(log, 0) as { skillId: string; recommendation: { suppression: { kind: string; bySkillId: string } } };
+      expect(output.skillId).toBe("safe-editing");
+      expect(output.recommendation?.suppression).toMatchObject({
+        kind: "redundancy",
+        bySkillId: "specific-safe-editing",
+      });
+    } finally {
+      process.env.HOME = oldHome;
     }
   });
 });

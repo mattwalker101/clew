@@ -289,6 +289,18 @@ export const recommendationSchema = z
     }
   });
 
+export const skillSearchSemanticMatchSchema = z.object({
+  skillId: z.string().min(1),
+  distance: z.number().finite(),
+  score: z.number().finite(),
+  reasons: z.array(z.string().min(1)).min(1),
+});
+
+export const skillSearchSemanticAnalysisResultSchema = z.object({
+  query: z.string().default(""),
+  matches: z.array(skillSearchSemanticMatchSchema).default([]),
+});
+
 export const validationIssueSchema = z.object({
   path: z.string(),
   code: z.string().min(1),
@@ -340,6 +352,8 @@ export type CompositionInput = z.infer<typeof compositionInputSchema>;
 export type CompositionResult = z.infer<typeof compositionResultSchema>;
 export type ActivationContext = z.infer<typeof activationContextSchema>;
 export type Recommendation = z.infer<typeof recommendationSchema>;
+export type SkillSearchSemanticMatch = z.infer<typeof skillSearchSemanticMatchSchema>;
+export type SkillSearchSemanticAnalysisResult = z.infer<typeof skillSearchSemanticAnalysisResultSchema>;
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 export type ValidationResult = z.infer<typeof validationResultSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;

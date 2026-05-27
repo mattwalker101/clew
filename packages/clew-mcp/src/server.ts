@@ -6,7 +6,7 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { createClewMcpBridge, type ClewMcpBridge } from "./index.js";
+import { createClewMcpBridge, type ClewMcpBridge } from "./bridge.js";
 import { SkillRegistry } from "@clew-ops/core";
 import { coreCapabilities, type Capability } from "@clew-ops/schema";
 

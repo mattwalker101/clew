@@ -24,6 +24,10 @@ import {
   parseSkillBundle,
   suppressionSchema,
   SkillBundleValidationError,
+  type SkillSearchSemanticMatch,
+  type SkillSearchSemanticAnalysisResult,
+  skillSearchSemanticMatchSchema,
+  skillSearchSemanticAnalysisResultSchema,
 } from "@clew-ops/schema";
 
 export type RegistryEntry = {
@@ -105,6 +109,8 @@ export type SkillSearchMatch = {
   evidence: SkillSearchEvidence[];
   reasons: string[];
 };
+
+export { type SkillSearchSemanticMatch, type SkillSearchSemanticAnalysisResult };
 
 export type SkillSearchAnalysisResult = {
   query: string;
@@ -1129,6 +1135,47 @@ export class SkillRegistry {
       return bundle ? [bundle] : [];
     });
   }
+
+  async searchSemantic(query: string, limit?: number): Promise<SkillBundle[]> {
+    if (!this.dbPath) return [];
+    const db = openRegistryDb(this.dbPath);
+    try {
+      const engine = new EmbeddingEngine();
+      const embedding = await engine.embed(query);
+      const matches = db.searchSemantic(embedding, limit);
+      const bySkillId = new Map(this.list().map((bundle) => [bundle.manifest.id, bundle]));
+      return matches.flatMap((match) => {
+        const bundle = bySkillId.get(match.skillId);
+        return bundle ? [bundle] : [];
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async analyzeSearchSemantic(query: string, limit?: number): Promise<SkillSearchSemanticAnalysisResult> {
+    if (!this.dbPath) return { query, matches: [] };
+    const db = openRegistryDb(this.dbPath);
+    try {
+      const engine = new EmbeddingEngine();
+      const embedding = await engine.embed(query);
+      const matches = db.searchSemantic(embedding, limit);
+      return {
+        query,
+        matches: matches.map((m) => {
+          const similarityScore = 1 / (1 + m.distance);
+          return {
+            skillId: m.skillId,
+            distance: m.distance,
+            score: Number(similarityScore.toFixed(4)),
+            reasons: [`semantic similarity match (distance: ${m.distance.toFixed(4)})`],
+          };
+        }),
+      };
+    } finally {
+      db.close();
+    }
+  }
 }
 
 export class ActivationEngine {
@@ -1219,7 +1266,17 @@ export class ActivationEngine {
   }
 
   async explain(skillId: string, input: Partial<ActivationContext>): Promise<Recommendation | undefined> {
-    return (await this.recommend(input)).find((recommendation) => recommendation.skillId === skillId);
+    const analysis = await this.analyzeRecommendations(input);
+    const candidate = analysis.candidates.find((c) => c.skillId === skillId);
+    if (!candidate || candidate.status === "excluded") return undefined;
+    return {
+      skillId: candidate.skillId,
+      score: candidate.score,
+      reasons: candidate.reasons,
+      signals: candidate.signals,
+      warnings: candidate.warnings,
+      suppression: candidate.suppression,
+    };
   }
 }
 
