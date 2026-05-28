@@ -283,6 +283,12 @@ const commands: Record<string, Command> = {
     await startDashboardServer(port);
     await new Promise(() => {});
   },
+  async run(args) {
+    const [subcommand] = args;
+    if (subcommand !== "start" && subcommand !== "status" && subcommand !== "verify") {
+      fail("usage: clew run <start|status|verify> [args]");
+    }
+  },
 };
 
 async function readRegistry() {
@@ -405,6 +411,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  doctor",
         "  mcp [run|install]",
         "  dashboard [--port=<number>]",
+        "  run <start|status|verify>",
       ].join("\n"),
     );
     return;

@@ -1564,4 +1564,24 @@ describe("@clew-ops/cli", () => {
       process.env.HOME = oldHome;
     }
   });
+
+  it("should print usage instructions when run without arguments or with invalid subcommand", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit called");
+    });
+
+    try {
+      await main(["run"]);
+    } catch (err: any) {
+      expect(err.message).toBe("process.exit called");
+    }
+
+    expect(errorSpy).toHaveBeenCalled();
+    expect(errorSpy.mock.calls[0][0]).toContain("usage: clew run <start|status|verify>");
+
+    errorSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
 });
+
