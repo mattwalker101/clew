@@ -50,7 +50,7 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:7708/api/explain", {
+      const res = await fetch("/api/explain", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchQuery }),
@@ -65,7 +65,7 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
     }
   }
 
-  const suppressedCandidates = traceResult 
+  const suppressedCandidates = traceResult?.candidates
     ? traceResult.candidates.filter(c => c.status !== "included") 
     : [];
 
@@ -117,61 +117,65 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
           {/* Recommended active skills */}
           <div className="flex flex-col gap-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Shield className="h-5 w-5 text-green-400" /> Active Recommendations ({traceResult.recommendations.length})
+              <Shield className="h-5 w-5 text-green-400" /> Active Recommendations ({traceResult?.recommendations?.length ?? 0})
             </h3>
 
-            {traceResult.recommendations.length === 0 ? (
+            {(traceResult?.recommendations || []).length === 0 ? (
               <div className="bg-gray-900/20 border border-gray-800 border-dashed rounded-xl py-16 text-center text-gray-500 text-sm">
                 No active skills met the recommendation threshold.
               </div>
             ) : (
-              traceResult.recommendations.map((rec) => (
-                <div 
-                  key={rec.skillId}
-                  className="bg-gray-900/50 border border-green-500/30 rounded-xl p-6 hover:border-green-500/50 transition-colors shadow-lg shadow-green-950/10"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="text-lg font-bold text-white">{rec.name || rec.skillId}</h4>
-                      <span className="text-xs font-mono text-gray-500">{rec.skillId}</span>
-                    </div>
-                    <span className="px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-xs font-mono font-semibold">
-                      Score: {rec.score.toFixed(1)}
-                    </span>
-                  </div>
-
-                  <div className="border-t border-gray-800/80 my-3"></div>
-
-                  <h5 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2 flex items-center gap-1.5">
-                    <Sliders className="h-3.5 w-3.5 text-blue-400" /> Signal Breakdown
-                  </h5>
-                  <div className="flex flex-col gap-2 bg-gray-950/40 rounded-lg p-3">
-                    {(rec.components || []).map((comp, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs">
-                        <span className="text-gray-400 font-mono flex items-center gap-1">
-                          <ChevronRight className="h-3 w-3 text-gray-500" /> {comp.kind}: {comp.value}
-                        </span>
-                        <span className="font-mono text-gray-300">+{comp.points}</span>
+              (traceResult?.recommendations || []).map((rec) => {
+                const cand = (traceResult?.candidates || []).find(c => c.skillId === rec.skillId);
+                const components = cand?.components || [];
+                return (
+                  <div 
+                    key={rec.skillId}
+                    className="bg-gray-900/50 border border-green-500/30 rounded-xl p-6 hover:border-green-500/50 transition-colors shadow-lg shadow-green-950/10"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-lg font-bold text-white">{rec.name || rec.skillId}</h4>
+                        <span className="text-xs font-mono text-gray-500">{rec.skillId}</span>
                       </div>
-                    ))}
+                      <span className="px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-xs font-mono font-semibold">
+                        Score: {rec.score?.toFixed(1) ?? "0.0"}
+                      </span>
+                    </div>
+
+                    <div className="border-t border-gray-800/80 my-3"></div>
+
+                    <h5 className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2 flex items-center gap-1.5">
+                      <Sliders className="h-3.5 w-3.5 text-blue-400" /> Signal Breakdown
+                    </h5>
+                    <div className="flex flex-col gap-2 bg-gray-950/40 rounded-lg p-3">
+                      {(components || []).map((comp, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="text-gray-400 font-mono flex items-center gap-1">
+                            <ChevronRight className="h-3 w-3 text-gray-500" /> {comp.kind}: {comp.value}
+                          </span>
+                          <span className="font-mono text-gray-300">+{comp.points ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
           {/* Suppressed / Inactive Candidates */}
           <div className="flex flex-col gap-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-gray-800 pb-3">
-              <Activity className="h-5 w-5 text-gray-400" /> Candidate Pool & Suppressions ({suppressedCandidates.length})
+              <Activity className="h-5 w-5 text-gray-400" /> Candidate Pool & Suppressions ({suppressedCandidates?.length ?? 0})
             </h3>
 
-            {suppressedCandidates.length === 0 ? (
+            {(suppressedCandidates || []).length === 0 ? (
               <div className="bg-gray-900/20 border border-gray-800 border-dashed rounded-xl py-16 text-center text-gray-500 text-sm">
                 No skills were suppressed or filtered out.
               </div>
             ) : (
-              suppressedCandidates.map((cand) => (
+              (suppressedCandidates || []).map((cand) => (
                 <div 
                   key={cand.skillId}
                   className="bg-gray-900/30 border border-gray-800 rounded-xl p-6 text-gray-400 animate-fadeIn"
@@ -182,7 +186,7 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
                       <span className="text-xs font-mono text-gray-600">{cand.skillId}</span>
                     </div>
                     <span className="px-2.5 py-0.5 bg-gray-800 text-gray-400 rounded text-xs font-mono">
-                      Score: {cand.score.toFixed(1)}
+                      Score: {cand.score?.toFixed(1) ?? "0.0"}
                     </span>
                   </div>
 
@@ -199,7 +203,7 @@ export function TraceDebugger({ initialSkillId }: { initialSkillId?: string }) {
                     {(cand.components || []).map((comp, idx) => (
                       <div key={idx} className="flex justify-between items-center">
                         <span>{comp.kind}: {comp.value}</span>
-                        <span>+{comp.points}</span>
+                        <span>+{comp.points ?? 0}</span>
                       </div>
                     ))}
                   </div>
