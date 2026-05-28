@@ -16,6 +16,7 @@ import {
   getAgentsMdDiagnostics,
   loadSkillBundle,
   openRegistryDb,
+  openSessionDatabase,
   parseAgentsMd,
   rebuildRegistry,
   rebuildRegistryIndex,
@@ -2615,3 +2616,18 @@ function openNodeSqliteDatabase(dbPath: string): {
   };
   return new sqlite.DatabaseSync(dbPath);
 }
+
+describe("Session DB Initializer", () => {
+  it("should initialize session_runs and session_step_states tables correctly", () => {
+    const dbPath = ":memory:";
+    // Import/use openSessionDatabase from your index.ts
+    const db = openSessionDatabase(dbPath);
+    
+    const runsTable = db.prepare("PRAGMA table_info(session_runs)").all();
+    expect(runsTable.length).toBeGreaterThan(0);
+    
+    const statesTable = db.prepare("PRAGMA table_info(session_step_states)").all();
+    expect(statesTable.length).toBeGreaterThan(0);
+  });
+});
+

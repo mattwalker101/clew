@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
@@ -743,6 +744,37 @@ export function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnapshot): 
 export function openRegistryDb(dbPath: string): RegistryDb {
   return new RegistryDb(dbPath);
 }
+
+export function openSessionDatabase(dbPath: string): DatabaseSync {
+  const db = new DatabaseSync(dbPath);
+  
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_runs (
+      id TEXT PRIMARY KEY,
+      skill_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active', 'completed', 'failed')),
+      current_step_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_step_states (
+      session_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'failed')),
+      attempts INTEGER DEFAULT 0,
+      last_verified_at TEXT,
+      error_log TEXT,
+      PRIMARY KEY (session_id, step_id),
+      FOREIGN KEY (session_id) REFERENCES session_runs(id) ON DELETE CASCADE
+    );
+  `);
+  
+  return db;
+}
+
 
 export class EmbeddingEngine {
   private static extractor: any | undefined = undefined;
