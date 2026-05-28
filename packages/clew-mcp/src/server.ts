@@ -15,6 +15,12 @@ const SearchInputSchema = z.object({
   limit: z.number().optional(),
 });
 
+const SearchSemanticInputSchema = z.object({
+  query: z.string(),
+  limit: z.number().optional(),
+  explain: z.boolean().optional(),
+});
+
 const RecommendInputSchema = z.object({
   query: z.string(),
   context: z
@@ -91,6 +97,19 @@ export async function runClewMcpServer(projectRoot = process.cwd()) {
       },
     },
     {
+      name: "clew_search_semantic",
+      description: "Perform a local-first semantic vector search over all registered skills by meaning, returning similarity scores.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query to match by meaning." },
+          limit: { type: "integer", description: "Optional maximum number of skills to return." },
+          explain: { type: "boolean", description: "If true, returns similarity distances and matching reasons." },
+        },
+        required: ["query"],
+      },
+    },
+    {
       name: "clew_recommend",
       description: "Get explainable skill recommendations for a specific query or task.",
       inputSchema: {
@@ -154,6 +173,13 @@ export async function runClewMcpServer(projectRoot = process.cwd()) {
         case "clew_search": {
           const parsed = SearchInputSchema.parse(args);
           return { content: [{ type: "text", text: JSON.stringify(bridge.search(parsed), null, 2) }] };
+        }
+        case "clew_search_semantic": {
+          const parsed = SearchSemanticInputSchema.parse(args);
+          const result = parsed.explain
+            ? await bridge.analyzeSearchSemantic({ query: parsed.query, limit: parsed.limit })
+            : await bridge.searchSemantic({ query: parsed.query, limit: parsed.limit });
+          return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         }
         case "clew_recommend": {
           const parsed = RecommendInputSchema.parse(args);
