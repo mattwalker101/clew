@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1758,12 +1758,15 @@ describe("@clew-ops/cli", () => {
       
       const output = outputAt(log, 0) as { skillId: string; recommendation: { suppression: { kind: string; reason: string } } };
       expect(output.skillId).toBe("safe-editing");
+      expect(output.recommendation).not.toBeNull();
       expect(output.recommendation?.suppression).toMatchObject({
         kind: "preference_violation",
         reason: expect.stringContaining("violates project preference"),
       });
     } finally {
       log.mockRestore();
+      process.chdir(originalCwd);
+      rmSync(projectRoot, { recursive: true, force: true });
     }
   });
 });
