@@ -262,10 +262,41 @@ describe("@clew-ops/core", () => {
     const result = await activation.analyzeRecommendations(context);
     const candidate = result.candidates.find((c) => c.skillId === "recursive-skill")!;
 
-    expect(candidate.status).toBe("excluded");
-    expect(candidate.exclusions).toContainEqual({
+    expect(candidate.status).toBe("suppressed");
+    expect(candidate.suppression).toMatchObject({
       kind: "preference_violation",
       reason: 'violates project preference "- avoid recursion"',
+    });
+    expect(result.recommendations).toHaveLength(0);
+    });
+
+    it("suppresses skills using exact Skill ID matching in project preferences", async () => {
+    const registry = new SkillRegistry({
+      entries: [
+        {
+          bundle: bundle("engineering-core", { tags: ["eng"] }),
+          layer: "project",
+          root: "skills",
+          disabled: false,
+          favorite: false,
+        },
+      ],
+      warnings: [],
+    });
+
+    const activation = new ActivationEngine(registry);
+    const context = {
+      query: "build",
+      agentsMd: "# Rules\n- never: engineering-core",
+    };
+
+    const result = await activation.analyzeRecommendations(context);
+    const candidate = result.candidates.find((c) => c.skillId === "engineering-core")!;
+
+    expect(candidate.status).toBe("suppressed");
+    expect(candidate.suppression).toMatchObject({
+      kind: "preference_violation",
+      reason: 'violates project preference "- never: engineering-core"',
     });
     expect(result.recommendations).toHaveLength(0);
     });

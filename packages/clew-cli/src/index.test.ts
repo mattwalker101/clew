@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1724,6 +1724,50 @@ describe("@clew-ops/cli", () => {
     expect(allLogs).toContain("🏆 Dynamic verification check passed! Runbook successfully completed!");
 
     logSpy.mockRestore();
+  });
+
+  it("CLI explains why a skill was suppressed due to project preferences", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-pref-suppress-"));
+    process.chdir(projectRoot);
+    
+    const projectSkillsRoot = join(projectRoot, ".clew");
+    mkdirSync(join(projectSkillsRoot, "safe-editing"), { recursive: true });
+    writeFileSync(
+      join(projectSkillsRoot, "safe-editing", "clew.yaml"),
+      [
+        "id: safe-editing",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Safe Editing",
+        "instructions:",
+        "  file: skill.md",
+        "tags:",
+        "  - editing",
+        "activation:",
+        "  triggers:",
+        "    - edit",
+      ].join("\n"),
+    );
+    writeFileSync(join(projectSkillsRoot, "safe-editing", "skill.md"), "Guidelines.");
+    writeFileSync(join(projectRoot, "AGENTS.md"), "# Rules\n- never: safe-editing\n");
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      await main(["explain", "safe-editing", "edit"]);
+      
+      const output = outputAt(log, 0) as { skillId: string; recommendation: { suppression: { kind: string; reason: string } } };
+      expect(output.skillId).toBe("safe-editing");
+      expect(output.recommendation).not.toBeNull();
+      expect(output.recommendation?.suppression).toMatchObject({
+        kind: "preference_violation",
+        reason: expect.stringContaining("violates project preference"),
+      });
+    } finally {
+      log.mockRestore();
+      process.chdir(originalCwd);
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
 
