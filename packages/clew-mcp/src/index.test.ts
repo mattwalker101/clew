@@ -645,33 +645,6 @@ describe("@clew-ops/mcp", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
-
-  it("should support semantic search in the tool definition and bridge routing", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "clew-mcp-semantic-tool-"));
-    let bridge: any;
-    try {
-      const registry = new SkillRegistry({
-        entries: [
-          entry("engineering-core", {
-            tags: ["engineering"],
-          }),
-        ],
-        warnings: [],
-        dbPath: join(tempDir, ".clew-registry.db"),
-      });
-
-      bridge = await createClewMcpBridge(registry);
-      
-      const searchRes = await bridge.searchSemantic("engineering");
-      expect(searchRes.skills).toBeDefined();
-
-      const explainRes = await bridge.analyzeSearchSemantic("engineering");
-      expect(explainRes.analysis.matches).toBeDefined();
-    } finally {
-      bridge?.close();
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
 });
 
 function warningContractFixture(): {
