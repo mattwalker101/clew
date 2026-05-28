@@ -8,7 +8,7 @@ You are in strict TDD mode. You must follow the Red-Green-Refactor cycle meticul
    - Identify the minimal unit of functionality to implement next.
    - Author a test that asserts this behavior.
    - Run the test suite and confirm it fails for the expected reason.
-   
+
 2. **Green (Minimal Pass)**:
    - Write the simplest, most direct code that makes the new test pass.
    - Do not design ahead or add extraneous parameters/optimizations ("YAGNI").
