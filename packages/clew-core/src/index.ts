@@ -1446,7 +1446,10 @@ export class ActivationEngine {
       return result;
     });
 
-    const suppressed = processedIncluded.filter((c) => c.status === "suppressed");
+    const suppressed = [
+      ...processedIncluded.filter((c) => c.status === "suppressed"),
+      ...candidates.filter((c) => c.status === "suppressed"),
+    ];
     const finalIncluded = processedIncluded.filter((c) => c.status === "included");
 
     const excluded = candidates
@@ -1492,6 +1495,7 @@ function analyzeActivationCandidate(
   const enabled = !entry.disabled;
   const exclusions: SkillActivationExclusion[] = [];
   let status: SkillActivationCandidateStatus = "included";
+  let suppression: Suppression | undefined = undefined;
 
   if (!enabled) {
     exclusions.push({ kind: "disabled", reason: "skill is disabled" });
@@ -1538,14 +1542,15 @@ function analyzeActivationCandidate(
     );
     const matchesTag = bundle.manifest.tags.some((t) => prefLower.includes(t.toLowerCase()));
     const matchesName = prefLower.includes(bundle.manifest.name.toLowerCase());
+    const matchesId = prefLower.includes(bundle.manifest.id.toLowerCase());
 
-    if (matchesPolicy || matchesTag || matchesName) {
+    if (matchesPolicy || matchesTag || matchesName || matchesId) {
       if (/avoid|never/i.test(preference)) {
-        exclusions.push({
+        status = "suppressed";
+        suppression = {
           kind: "preference_violation",
           reason: `violates project preference "${preference}"`,
-        });
-        status = "excluded";
+        };
       } else {
         components.push({
           kind: "project_preference",
@@ -1587,7 +1592,7 @@ function analyzeActivationCandidate(
     }
   }
 
-  const score = components.reduce((sum, component) => sum + component.points, 0);
+  const score = status === "suppressed" ? 0 : components.reduce((sum, component) => sum + component.points, 0);
   const reasons = unique(components.map((component) => component.reason));
   const warnings: CompatibilityWarning[] = status === "included" ? [...bundle.manifest.compatibility.warnings] : [];
 
@@ -1613,6 +1618,7 @@ function analyzeActivationCandidate(
     signals: uniqueSignals(components.map(componentSignal)),
     warnings,
     exclusions,
+    suppression,
   };
 }
 
