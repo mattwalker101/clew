@@ -1,4 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import * as fs from "node:fs";
+import { exec } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
@@ -743,6 +747,176 @@ export function rebuildSqliteIndex(dbPath: string, snapshot: RegistrySnapshot): 
 export function openRegistryDb(dbPath: string): RegistryDb {
   return new RegistryDb(dbPath);
 }
+
+export function openSessionDatabase(dbPath: string): DatabaseSync {
+  const db = new DatabaseSync(dbPath);
+  
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_runs (
+      id TEXT PRIMARY KEY,
+      skill_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active', 'completed', 'failed')),
+      current_step_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_step_states (
+      session_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'failed')),
+      attempts INTEGER DEFAULT 0,
+      last_verified_at TEXT,
+      error_log TEXT,
+      PRIMARY KEY (session_id, step_id),
+      FOREIGN KEY (session_id) REFERENCES session_runs(id) ON DELETE CASCADE
+    );
+  `);
+  
+  return db;
+}
+
+export interface VerificationResult {
+  success: boolean;
+  gates: {
+    type: "file" | "grep" | "command";
+    success: boolean;
+    message?: string;
+    error?: string;
+  }[];
+}
+
+export class SessionManager {
+  constructor(
+    private db: DatabaseSync,
+    private registry: { getSkill: (id: string) => Promise<any> }
+  ) {}
+
+  async createSession(skillId: string) {
+    const skill = await this.registry.getSkill(skillId);
+    if (!skill || !skill.steps || skill.steps.length === 0) {
+      throw new Error(`Skill ${skillId} has no runbook steps.`);
+    }
+
+    const sessionId = randomBytes(9).toString("base64url");
+    const now = new Date().toISOString();
+    const firstStep = skill.steps[0].id;
+
+    this.db.prepare(`
+      INSERT INTO session_runs (id, skill_id, status, current_step_id, created_at, updated_at)
+      VALUES (?, ?, 'active', ?, ?, ?)
+    `).run(sessionId, skillId, firstStep, now, now);
+
+    for (const step of skill.steps) {
+      this.db.prepare(`
+        INSERT INTO session_step_states (session_id, step_id, status)
+        VALUES (?, ?, ?)
+      `).run(sessionId, step.id, step.id === firstStep ? 'active' : 'pending');
+    }
+
+    return { id: sessionId, status: "active", current_step_id: firstStep };
+  }
+
+  async getCurrentStep(sessionId: string) {
+    const run: any = this.db.prepare("SELECT * FROM session_runs WHERE id = ?").get(sessionId);
+    if (!run || run.status !== "active" || !run.current_step_id) {
+      return null;
+    }
+    const skill = await this.registry.getSkill(run.skill_id);
+    return skill.steps.find((s: any) => s.id === run.current_step_id) || null;
+  }
+
+  async verifyCurrentStep(sessionId: string): Promise<VerificationResult> {
+    const step = await this.getCurrentStep(sessionId);
+    if (!step) {
+      return { success: false, gates: [{ type: "file", success: false, error: "No active step found" }] };
+    }
+
+    const gateResults: VerificationResult["gates"] = [];
+    let allPassed = true;
+
+    for (const gate of step.gates) {
+      let passed = false;
+      let errorMsg: string | undefined;
+
+      try {
+        if (gate.type === "file") {
+          passed = fs.existsSync(gate.path) && fs.statSync(gate.path).isFile();
+          if (!passed) errorMsg = `File not found: ${gate.path}`;
+        } else if (gate.type === "grep") {
+          if (fs.existsSync(gate.path)) {
+            const content = fs.readFileSync(gate.path, "utf-8");
+            passed = new RegExp(gate.pattern).test(content);
+            if (!passed) errorMsg = `Pattern /${gate.pattern}/ not found in ${gate.path}`;
+          } else {
+            errorMsg = `File not found: ${gate.path}`;
+          }
+        } else if (gate.type === "command") {
+          passed = await new Promise<boolean>((resolve) => {
+            const cp = exec(gate.command, { timeout: gate.timeoutMs || 15000 }, (error) => {
+              if (error) {
+                errorMsg = error.message;
+                resolve(false);
+              } else {
+                resolve(true);
+              }
+            });
+          });
+        }
+      } catch (err: any) {
+        errorMsg = err.message;
+        passed = false;
+      }
+
+      gateResults.push({
+        type: gate.type as any,
+        success: passed,
+        ...(errorMsg !== undefined ? { error: errorMsg } : {})
+      });
+      if (!passed) allPassed = false;
+    }
+
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE session_step_states
+      SET status = ?, attempts = attempts + 1, last_verified_at = ?, error_log = ?
+      WHERE session_id = ? AND step_id = ?
+    `).run(
+      allPassed ? "completed" : "failed",
+      now,
+      allPassed ? null : JSON.stringify(gateResults),
+      sessionId,
+      step.id
+    );
+
+    if (allPassed) {
+      const run: any = this.db.prepare("SELECT * FROM session_runs WHERE id = ?").get(sessionId);
+      const skill = await this.registry.getSkill(run.skill_id);
+      const currentIndex = skill.steps.findIndex((s: any) => s.id === step.id);
+      const nextStep = skill.steps[currentIndex + 1];
+
+      if (nextStep) {
+        this.db.prepare(`
+          UPDATE session_runs SET current_step_id = ?, updated_at = ? WHERE id = ?
+        `).run(nextStep.id, now, sessionId);
+
+        this.db.prepare(`
+          UPDATE session_step_states SET status = 'active' WHERE session_id = ? AND step_id = ?
+        `).run(sessionId, nextStep.id);
+      } else {
+        this.db.prepare(`
+          UPDATE session_runs SET status = 'completed', current_step_id = NULL, updated_at = ? WHERE id = ?
+        `).run(now, sessionId);
+      }
+    }
+
+    return { success: allPassed, gates: gateResults };
+  }
+}
+
+
 
 export class EmbeddingEngine {
   private static extractor: any | undefined = undefined;
