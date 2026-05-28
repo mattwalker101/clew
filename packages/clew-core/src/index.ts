@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import * as fs from "node:fs";
 import { exec } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -799,7 +800,7 @@ export class SessionManager {
       throw new Error(`Skill ${skillId} has no runbook steps.`);
     }
 
-    const sessionId = Math.random().toString(36).substring(2, 11);
+    const sessionId = randomBytes(9).toString("base64url");
     const now = new Date().toISOString();
     const firstStep = skill.steps[0].id;
 
