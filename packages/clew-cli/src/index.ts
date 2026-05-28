@@ -397,7 +397,75 @@ const commands: Record<string, Command> = {
       } finally {
         db.close();
       }
+    } else if (subcommand === "verify") {
+      const db = openSessionDatabase(sessionDbPath());
+      try {
+        const run = db.prepare("SELECT * FROM session_runs WHERE status = 'active' ORDER BY created_at DESC LIMIT 1").get() as any;
+        if (!run) {
+          console.log("No active runbook session found");
+          return;
+        }
+
+        const manager = new SessionManager(db, {
+          getSkill: async (id) => {
+            const current = await registry();
+            const bundle = current.lookup(id);
+            return bundle ? bundle.manifest : null;
+          },
+        });
+
+        const step = await manager.getCurrentStep(run.id);
+        if (!step) {
+          console.log("Runbook is already fully completed!");
+          return;
+        }
+
+        console.log(`Verifying Step: ${step.title}...`);
+
+        const result = await manager.verifyCurrentStep(run.id);
+        if (result.success) {
+          console.log("🎉 Step verified successfully!");
+          const nextStep = await manager.getCurrentStep(run.id);
+          if (nextStep) {
+            const currentRegistry = await registry();
+            const bundle = currentRegistry.lookup(run.skill_id);
+            const steps = bundle?.manifest.steps || [];
+            const stepIndex = steps.findIndex((s) => s.id === nextStep.id);
+
+            console.log(`[Step ${stepIndex + 1}/${steps.length}]: ${nextStep.title}`);
+            console.log(`Instruction: ${nextStep.instruction}`);
+            for (const gate of nextStep.gates || []) {
+              let gateDetails = "";
+              if (gate.type === "file") {
+                gateDetails = `File path: ${gate.path}`;
+              } else if (gate.type === "grep") {
+                gateDetails = `File path: ${gate.path}, Pattern: ${gate.pattern}`;
+              } else if (gate.type === "command") {
+                gateDetails = `Command: ${gate.command}`;
+              }
+              const desc = gate.description ? ` (${gate.description})` : "";
+              console.log(`• [${gate.type}] ${gateDetails}${desc}`);
+            }
+          } else {
+            console.log("🏆 Dynamic verification check passed! Runbook successfully completed!");
+          }
+        } else {
+          console.log("❌ Verification failed.");
+          for (const res of result.gates) {
+            if (!res) continue;
+            const symbol = res.success ? "✔" : "✖";
+            console.log(`${symbol} [${res.type}] ${res.success ? "Check passed" : "Check failed"}`);
+            if (!res.success && res.error) {
+              console.log(`  ↳ Error: ${res.error}`);
+            }
+          }
+          console.log("⚠️ Please resolve the gates above and run 'clew run verify' again.");
+        }
+      } finally {
+        db.close();
+      }
     }
+
   },
 };
 

@@ -1674,5 +1674,57 @@ describe("@clew-ops/cli", () => {
 
     logSpy.mockRestore();
   });
+
+  it("should trigger verify, show failure details, pass validation, and auto-advance or complete", async () => {
+    const projectRoot = createProject();
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Start session
+    await main(["run", "start", "typescript-core"]);
+    logSpy.mockClear();
+
+    // Verify when file test.txt does not exist yet (should fail)
+    await main(["run", "verify"]);
+    let allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Verifying Step: First Step...");
+    expect(allLogs).toContain("Verification failed");
+    expect(allLogs).toContain("✖ [file] Check failed");
+    logSpy.mockClear();
+
+    // Create file and verify again (should pass and complete)
+    writeFileSync(join(projectRoot, "test.txt"), "Done");
+    await main(["run", "verify"]);
+    allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("🎉 Step verified successfully!");
+    expect(allLogs).toContain("🏆 Dynamic verification check passed! Runbook successfully completed!");
+
+    logSpy.mockRestore();
+  });
 });
+
 
