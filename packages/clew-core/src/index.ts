@@ -392,8 +392,31 @@ export function parseYaml(input: string): unknown {
 
     if (trimmed.startsWith("- ")) {
       if (!Array.isArray(parent)) throw new Error(`YAML list item has no list parent: ${trimmed}`);
-      parent.push(parseScalar(trimmed.slice(2).trim()));
-      continue;
+      const remainder = trimmed.slice(2).trim();
+      const firstChar = remainder[0];
+      const hasColon = remainder.includes(":");
+      const isMapping = hasColon && firstChar !== '"' && firstChar !== "'";
+
+      if (isMapping) {
+        const item: Record<string, unknown> = {};
+        parent.push(item);
+        const separator = remainder.indexOf(":");
+        const key = remainder.slice(0, separator).trim();
+        const rawValue = remainder.slice(separator + 1).trim();
+        if (rawValue) {
+          item[key] = parseScalar(rawValue);
+        } else {
+          const next = nextContentLine(lines, lines.indexOf(rawLine) + 1);
+          const child = next?.trim().startsWith("- ") ? [] : {};
+          item[key] = child;
+          stack.push({ indent, value: child });
+        }
+        stack.push({ indent, value: item });
+        continue;
+      } else {
+        parent.push(parseScalar(remainder));
+        continue;
+      }
     }
 
     const separator = trimmed.indexOf(":");
@@ -425,6 +448,7 @@ function nextContentLine(lines: string[], start: number): string | undefined {
 }
 
 function parseScalar(value: string): unknown {
+  if (value === "[]") return [];
   if (value === "true") return true;
   if (value === "false") return false;
   if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);

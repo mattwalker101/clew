@@ -1565,6 +1565,48 @@ describe("@clew-ops/cli", () => {
     }
   });
 
+  it("should start a runbook session and display step details", async () => {
+    const projectRoot = createProject();
+    // Overwrite the skill with steps
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["run", "start", "typescript-core"]);
+
+    expect(logSpy).toHaveBeenCalled();
+    const allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Started runbook session");
+    expect(allLogs).toContain("[Step 1/1]: First Step");
+    expect(allLogs).toContain("Instruction: Make a file named test.txt");
+    expect(allLogs).toContain("• [file] File path: test.txt (Check for test.txt)");
+
+    logSpy.mockRestore();
+  });
+
   it("should print usage instructions when run without arguments or with invalid subcommand", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
@@ -1578,7 +1620,7 @@ describe("@clew-ops/cli", () => {
     }
 
     expect(errorSpy).toHaveBeenCalled();
-    expect(errorSpy.mock.calls[0][0]).toContain("usage: clew run <start|status|verify>");
+    expect(errorSpy.mock.calls[0]?.[0]).toContain("usage: clew run <start|status|verify>");
 
     errorSpy.mockRestore();
     exitSpy.mockRestore();

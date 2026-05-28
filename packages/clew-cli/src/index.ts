@@ -10,9 +10,11 @@ import {
   findOverlaps,
   getAgentsMdDiagnostics,
   openRegistryDb,
+  openSessionDatabase,
   parseAgentsMd,
   rebuildRegistry,
   rebuildRegistryIndex,
+  SessionManager,
   SkillRegistry,
   stringifyYaml,
 } from "@clew-ops/core";
@@ -287,6 +289,50 @@ const commands: Record<string, Command> = {
     const [subcommand] = args;
     if (subcommand !== "start" && subcommand !== "status" && subcommand !== "verify") {
       fail("usage: clew run <start|status|verify> [args]");
+    }
+
+    if (subcommand === "start") {
+      const skillId = args[1];
+      if (!skillId) fail("usage: clew run start <skill-id>");
+      const db = openSessionDatabase(registryDbPath());
+      try {
+        db.prepare("UPDATE session_runs SET status = 'completed' WHERE status = 'active'").run();
+
+        const manager = new SessionManager(db, {
+          getSkill: async (id) => {
+            const current = await registry();
+            const bundle = current.lookup(id);
+            return bundle ? bundle.manifest : null;
+          },
+        });
+
+        const run = await manager.createSession(skillId);
+        console.log(`Started runbook session ${run.id} for skill ${skillId}`);
+
+        const currentRegistry = await registry();
+        const bundle = currentRegistry.lookup(skillId);
+        const steps = bundle?.manifest.steps || [];
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i];
+          if (!step) continue;
+          console.log(`[Step ${i + 1}/${steps.length}]: ${step.title}`);
+          console.log(`Instruction: ${step.instruction}`);
+          for (const gate of step.gates || []) {
+            let gateDetails = "";
+            if (gate.type === "file") {
+              gateDetails = `File path: ${gate.path}`;
+            } else if (gate.type === "grep") {
+              gateDetails = `File path: ${gate.path}, Pattern: ${gate.pattern}`;
+            } else if (gate.type === "command") {
+              gateDetails = `Command: ${gate.command}`;
+            }
+            const desc = gate.description ? ` (${gate.description})` : "";
+            console.log(`• [${gate.type}] ${gateDetails}${desc}`);
+          }
+        }
+      } finally {
+        db.close();
+      }
     }
   },
 };
