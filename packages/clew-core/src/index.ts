@@ -1,6 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { exec } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
