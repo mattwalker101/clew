@@ -1,4 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { exec } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -774,6 +777,141 @@ export function openSessionDatabase(dbPath: string): DatabaseSync {
   
   return db;
 }
+
+export interface VerificationResult {
+  success: boolean;
+  gates: {
+    type: "file" | "grep" | "command";
+    success: boolean;
+    message?: string;
+    error?: string;
+  }[];
+}
+
+export class SessionManager {
+  constructor(
+    private db: DatabaseSync,
+    private registry: { getSkill: (id: string) => Promise<any> }
+  ) {}
+
+  async createSession(skillId: string) {
+    const skill = await this.registry.getSkill(skillId);
+    if (!skill || !skill.steps || skill.steps.length === 0) {
+      throw new Error(`Skill ${skillId} has no runbook steps.`);
+    }
+
+    const sessionId = Math.random().toString(36).substring(2, 11);
+    const now = new Date().toISOString();
+    const firstStep = skill.steps[0].id;
+
+    this.db.prepare(`
+      INSERT INTO session_runs (id, skill_id, status, current_step_id, created_at, updated_at)
+      VALUES (?, ?, 'active', ?, ?, ?)
+    `).run(sessionId, skillId, firstStep, now, now);
+
+    for (const step of skill.steps) {
+      this.db.prepare(`
+        INSERT INTO session_step_states (session_id, step_id, status)
+        VALUES (?, ?, ?)
+      `).run(sessionId, step.id, step.id === firstStep ? 'active' : 'pending');
+    }
+
+    return { id: sessionId, status: "active", current_step_id: firstStep };
+  }
+
+  async getCurrentStep(sessionId: string) {
+    const run: any = this.db.prepare("SELECT * FROM session_runs WHERE id = ?").get(sessionId);
+    if (!run || run.status !== "active" || !run.current_step_id) {
+      return null;
+    }
+    const skill = await this.registry.getSkill(run.skill_id);
+    return skill.steps.find((s: any) => s.id === run.current_step_id) || null;
+  }
+
+  async verifyCurrentStep(sessionId: string): Promise<VerificationResult> {
+    const step = await this.getCurrentStep(sessionId);
+    if (!step) {
+      return { success: false, gates: [{ type: "file", success: false, error: "No active step found" }] };
+    }
+
+    const gateResults: VerificationResult["gates"] = [];
+    let allPassed = true;
+
+    for (const gate of step.gates) {
+      let passed = false;
+      let errorMsg: string | undefined;
+
+      try {
+        if (gate.type === "file") {
+          passed = fs.existsSync(gate.path) && fs.statSync(gate.path).isFile();
+          if (!passed) errorMsg = `File not found: ${gate.path}`;
+        } else if (gate.type === "grep") {
+          if (fs.existsSync(gate.path)) {
+            const content = fs.readFileSync(gate.path, "utf-8");
+            passed = new RegExp(gate.pattern).test(content);
+            if (!passed) errorMsg = `Pattern /${gate.pattern}/ not found in ${gate.path}`;
+          } else {
+            errorMsg = `File not found: ${gate.path}`;
+          }
+        } else if (gate.type === "command") {
+          passed = await new Promise<boolean>((resolve) => {
+            const cp = exec(gate.command, { timeout: gate.timeoutMs || 15000 }, (error) => {
+              if (error) {
+                errorMsg = error.message;
+                resolve(false);
+              } else {
+                resolve(true);
+              }
+            });
+          });
+        }
+      } catch (err: any) {
+        errorMsg = err.message;
+        passed = false;
+      }
+
+      gateResults.push({ type: gate.type as any, success: passed, error: errorMsg });
+      if (!passed) allPassed = false;
+    }
+
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE session_step_states
+      SET status = ?, attempts = attempts + 1, last_verified_at = ?, error_log = ?
+      WHERE session_id = ? AND step_id = ?
+    `).run(
+      allPassed ? "completed" : "failed",
+      now,
+      allPassed ? null : JSON.stringify(gateResults),
+      sessionId,
+      step.id
+    );
+
+    if (allPassed) {
+      const run: any = this.db.prepare("SELECT * FROM session_runs WHERE id = ?").get(sessionId);
+      const skill = await this.registry.getSkill(run.skill_id);
+      const currentIndex = skill.steps.findIndex((s: any) => s.id === step.id);
+      const nextStep = skill.steps[currentIndex + 1];
+
+      if (nextStep) {
+        this.db.prepare(`
+          UPDATE session_runs SET current_step_id = ?, updated_at = ? WHERE id = ?
+        `).run(nextStep.id, now, sessionId);
+
+        this.db.prepare(`
+          UPDATE session_step_states SET status = 'active' WHERE session_id = ? AND step_id = ?
+        `).run(sessionId, nextStep.id);
+      } else {
+        this.db.prepare(`
+          UPDATE session_runs SET status = 'completed', current_step_id = NULL, updated_at = ? WHERE id = ?
+        `).run(now, sessionId);
+      }
+    }
+
+    return { success: allPassed, gates: gateResults };
+  }
+}
+
 
 
 export class EmbeddingEngine {

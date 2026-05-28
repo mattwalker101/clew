@@ -24,6 +24,7 @@ import {
   type RegistrySnapshot,
   registryPrecedence,
   SkillRegistry,
+  SessionManager,
 } from "./index.js";
 import {
   compositionResultSchema,
@@ -2630,4 +2631,55 @@ describe("Session DB Initializer", () => {
     expect(statesTable.length).toBeGreaterThan(0);
   });
 });
+
+describe("SessionManager Execution Gating", () => {
+  it("should initialize runbook session, verify file existence gate, and auto-advance to next step", async () => {
+    const mockSkill = {
+      id: "test-skill",
+      version: "0.1.0",
+      kind: "instruction_skill" as const,
+      name: "Test Skill",
+      instructions: { file: "test.md" },
+      tags: [],
+      capabilities: { required: [], optional: [] },
+      extends: [],
+      policies: [],
+      steps: [
+        {
+          id: "step-1",
+          title: "Verify workspace file",
+          instruction: "Ensure readme exists",
+          gates: [{ type: "file", path: "README.md" }]
+        }
+      ]
+    };
+
+    const sessionDb = openSessionDatabase(":memory:");
+    const manager = new SessionManager(sessionDb, { getSkill: async () => mockSkill });
+    
+    const run = await manager.createSession("test-skill");
+    expect(run.status).toBe("active");
+    expect(run.current_step_id).toBe("step-1");
+    
+    // Create actual test file in workspace mock
+    const fs = require("node:fs");
+    const hadReadme = fs.existsSync("README.md");
+    const originalContent = hadReadme ? fs.readFileSync("README.md") : null;
+    fs.writeFileSync("README.md", "Hello Test");
+    
+    const result = await manager.verifyCurrentStep(run.id);
+    expect(result.success).toBe(true);
+    
+    const updated = await manager.getCurrentStep(run.id);
+    expect(updated).toBeNull(); // Last step completed, run is complete
+    
+    // Cleanup mock file safely
+    if (hadReadme && originalContent !== null) {
+      fs.writeFileSync("README.md", originalContent);
+    } else {
+      try { fs.unlinkSync("README.md"); } catch (e) {}
+    }
+  });
+});
+
 
