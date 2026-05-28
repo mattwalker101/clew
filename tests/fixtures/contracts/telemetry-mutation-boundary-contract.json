@@ -60,9 +60,12 @@
         "analyzeTelemetry",
         "close",
         "explain",
+        "getRunbookStatus",
         "lookup",
         "recommend",
-        "search"
+        "search",
+        "startRunbook",
+        "verifyRunbookStep"
       ],
       "forbiddenMutationMethodNames": [
         "recordRecommendation",
