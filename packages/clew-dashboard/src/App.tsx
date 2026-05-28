@@ -4,6 +4,7 @@ import { RegistryTable, type RegistryEntry } from "./components/RegistryTable";
 import { TraceDebugger } from "./components/TraceDebugger";
 import { HealthGauge } from "./components/HealthGauge";
 import { KnowledgeMap } from "./components/KnowledgeMap";
+import { RunbookStepper } from "./components/RunbookStepper";
 import { 
   BookOpen, 
   Activity, 
@@ -345,6 +346,19 @@ function App() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Tab Content: Runbooks */}
+          {activeTab === "runbook" && (
+            <div className="animate-fadeIn">
+              <header className="flex flex-col gap-2 mb-8">
+                <h1 className="text-4xl font-bold tracking-tight text-white">Interactive Runbook Stepper</h1>
+                <p className="text-gray-400 text-lg">
+                  Launch, track, and verify sequential operational steps for composed skills.
+                </p>
+              </header>
+              <RunbookStepper registryEntries={registryEntries} />
             </div>
           )}
 

@@ -13,6 +13,7 @@ export type RegistryEntry = {
     required?: string[];
     optional?: string[];
   };
+  hasSteps?: boolean;
 };
 
 export function RegistryTable({ entries, onSelectSkill }: { 
