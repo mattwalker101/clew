@@ -11,3 +11,5 @@ coverage/
 .clew/
 sandbox/
 *.tsbuildinfo
+.clew-session.db
+.clew-session.db-*

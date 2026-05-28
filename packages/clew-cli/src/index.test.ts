@@ -1564,4 +1564,167 @@ describe("@clew-ops/cli", () => {
       process.env.HOME = oldHome;
     }
   });
+
+  it("should start a runbook session and display step details", async () => {
+    const projectRoot = createProject();
+    // Overwrite the skill with steps
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["run", "start", "typescript-core"]);
+
+    expect(logSpy).toHaveBeenCalled();
+    const allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Started runbook session");
+    expect(allLogs).toContain("[Step 1/1]: First Step");
+    expect(allLogs).toContain("Instruction: Make a file named test.txt");
+    expect(allLogs).toContain("• [file] File path: test.txt (Check for test.txt)");
+
+    logSpy.mockRestore();
+  });
+
+  it("should print usage instructions when run without arguments or with invalid subcommand", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit called");
+    });
+
+    try {
+      await main(["run"]);
+    } catch (err: any) {
+      expect(err.message).toBe("process.exit called");
+    }
+
+    expect(errorSpy).toHaveBeenCalled();
+    expect(errorSpy.mock.calls[0]?.[0]).toContain("usage: clew run <start|status|verify>");
+
+    errorSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it("should show status for active vs no active runbook session", async () => {
+    const projectRoot = createProject();
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // 1. Status when no active session
+    await main(["run", "status"]);
+    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy.mock.calls[0]?.[0]).toContain("No active runbook session found");
+    logSpy.mockClear();
+
+    // 2. Start session and check status
+    await main(["run", "start", "typescript-core"]);
+    logSpy.mockClear();
+
+    await main(["run", "status"]);
+    const allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Active Session:");
+    expect(allLogs).toContain("[Step 1/1]: First Step");
+    expect(allLogs).toContain("Instruction: Make a file named test.txt");
+    expect(allLogs).toContain("• [file] test.txt");
+
+    logSpy.mockRestore();
+  });
+
+  it("should trigger verify, show failure details, pass validation, and auto-advance or complete", async () => {
+    const projectRoot = createProject();
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Start session
+    await main(["run", "start", "typescript-core"]);
+    logSpy.mockClear();
+
+    // Verify when file test.txt does not exist yet (should fail)
+    await main(["run", "verify"]);
+    let allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Verifying Step: First Step...");
+    expect(allLogs).toContain("Verification failed");
+    expect(allLogs).toContain("✖ [file] Check failed");
+    logSpy.mockClear();
+
+    // Create file and verify again (should pass and complete)
+    writeFileSync(join(projectRoot, "test.txt"), "Done");
+    await main(["run", "verify"]);
+    allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("🎉 Step verified successfully!");
+    expect(allLogs).toContain("🏆 Dynamic verification check passed! Runbook successfully completed!");
+
+    logSpy.mockRestore();
+  });
 });
+
+
