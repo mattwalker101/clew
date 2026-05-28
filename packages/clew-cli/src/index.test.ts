@@ -1625,5 +1625,54 @@ describe("@clew-ops/cli", () => {
     errorSpy.mockRestore();
     exitSpy.mockRestore();
   });
+
+  it("should show status for active vs no active runbook session", async () => {
+    const projectRoot = createProject();
+    const skillRoot = join(projectRoot, "skills", "typescript-core");
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: typescript-core",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: TypeScript Core",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: First Step",
+        "    instruction: Make a file named test.txt",
+        "    gates:",
+        "      - type: file",
+        "        path: test.txt",
+        "        description: Check for test.txt",
+      ].join("\n"),
+    );
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // 1. Status when no active session
+    await main(["run", "status"]);
+    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy.mock.calls[0]?.[0]).toContain("No active runbook session found");
+    logSpy.mockClear();
+
+    // 2. Start session and check status
+    await main(["run", "start", "typescript-core"]);
+    logSpy.mockClear();
+
+    await main(["run", "status"]);
+    const allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("Active Session:");
+    expect(allLogs).toContain("[Step 1/1]: First Step");
+    expect(allLogs).toContain("Instruction: Make a file named test.txt");
+    expect(allLogs).toContain("• [file] test.txt");
+
+    logSpy.mockRestore();
+  });
 });
 

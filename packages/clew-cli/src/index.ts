@@ -294,7 +294,7 @@ const commands: Record<string, Command> = {
     if (subcommand === "start") {
       const skillId = args[1];
       if (!skillId) fail("usage: clew run start <skill-id>");
-      const db = openSessionDatabase(registryDbPath());
+      const db = openSessionDatabase(sessionDbPath());
       try {
         db.prepare("UPDATE session_runs SET status = 'completed' WHERE status = 'active'").run();
 
@@ -333,6 +333,70 @@ const commands: Record<string, Command> = {
       } finally {
         db.close();
       }
+    } else if (subcommand === "status") {
+      const db = openSessionDatabase(sessionDbPath());
+      try {
+        const run = db.prepare("SELECT * FROM session_runs WHERE status = 'active' ORDER BY created_at DESC LIMIT 1").get() as any;
+        if (!run) {
+          console.log("No active runbook session found");
+          return;
+        }
+
+        const manager = new SessionManager(db, {
+          getSkill: async (id) => {
+            const current = await registry();
+            const bundle = current.lookup(id);
+            return bundle ? bundle.manifest : null;
+          },
+        });
+
+        const step = await manager.getCurrentStep(run.id);
+        if (!step) {
+          console.log("No active step found");
+          return;
+        }
+
+        const currentRegistry = await registry();
+        const bundle = currentRegistry.lookup(run.skill_id);
+        const steps = bundle?.manifest.steps || [];
+        const stepIndex = steps.findIndex((s) => s.id === step.id);
+
+        console.log(`Active Session: ${run.id}`);
+        console.log(`[Step ${stepIndex + 1}/${steps.length}]: ${step.title}`);
+        console.log(`Instruction: ${step.instruction}`);
+
+        const stepState = db.prepare("SELECT * FROM session_step_states WHERE session_id = ? AND step_id = ?").get(run.id, step.id) as any;
+        const gateResults = stepState?.error_log ? JSON.parse(stepState.error_log) : [];
+
+        for (let i = 0; i < (step.gates || []).length; i++) {
+          const gate = step.gates[i];
+          let symbol = "•";
+          let gateError = "";
+
+          if (stepState?.status === "completed") {
+            symbol = "✔";
+          } else if (stepState?.status === "failed") {
+            const res = gateResults[i];
+            if (res) {
+              symbol = res.success ? "✔" : "✖";
+              if (!res.success && res.error) {
+                gateError = ` (Error: ${res.error})`;
+              }
+            }
+          }
+
+          let gateDetails = "";
+          if (gate.type === "file" || gate.type === "grep") {
+            gateDetails = gate.path;
+          } else if (gate.type === "command") {
+            gateDetails = gate.command;
+          }
+
+          console.log(`${symbol} [${gate.type}] ${gateDetails}${gateError}`);
+        }
+      } finally {
+        db.close();
+      }
     }
   },
 };
@@ -348,6 +412,10 @@ async function registry() {
 
 function registryDbPath() {
   return join(process.cwd(), ".clew-registry.db");
+}
+
+function sessionDbPath() {
+  return join(process.cwd(), ".clew-session.db");
 }
 
 function buildActivationContext(query: string): Partial<ActivationContext> {
