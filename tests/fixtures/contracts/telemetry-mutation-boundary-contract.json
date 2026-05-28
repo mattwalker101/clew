@@ -61,10 +61,13 @@
         "analyzeTelemetry",
         "close",
         "explain",
+        "getRunbookStatus",
         "lookup",
         "recommend",
         "search",
-        "searchSemantic"
+        "searchSemantic",
+        "startRunbook",
+        "verifyRunbookStep"
       ],
       "forbiddenMutationMethodNames": [
         "recordRecommendation",

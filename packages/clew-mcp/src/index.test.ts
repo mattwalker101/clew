@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { SkillRegistry, type RegistryEntry } from "@clew-ops/core";
 import type { CompatibilityWarning } from "@clew-ops/schema";
 import { createClewMcpBridge } from "./index.js";
@@ -18,10 +18,13 @@ describe("@clew-ops/mcp", () => {
       "analyzeTelemetry",
       "close",
       "explain",
+      "getRunbookStatus",
       "lookup",
       "recommend",
       "search",
       "searchSemantic",
+      "startRunbook",
+      "verifyRunbookStep",
     ]);
     expect("execute" in bridge).toBe(false);
     expect("activate" in bridge).toBe(false);
@@ -645,6 +648,106 @@ describe("@clew-ops/mcp", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  describe("guided runbooks integration", () => {
+    it("should start, get status, verify gates, and complete a runbook session", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "clew-mcp-runbook-"));
+      try {
+        const steps = [
+          {
+            id: "step-1",
+            title: "First Step",
+            instruction: "Make a file named test.txt",
+            gates: [
+              {
+                type: "file",
+                path: "test.txt",
+                description: "Check for test.txt",
+              },
+            ],
+          },
+          {
+            id: "step-2",
+            title: "Second Step",
+            instruction: "Grep for Done in test.txt",
+            gates: [
+              {
+                type: "grep",
+                path: "test.txt",
+                pattern: "Done",
+                description: "Check for Done",
+              },
+            ],
+          },
+        ];
+
+        const registry = new SkillRegistry({
+          entries: [
+            entry("typescript-core", {
+              steps,
+            }),
+          ],
+          warnings: [],
+          dbPath: join(tempDir, ".clew-registry.db"),
+        });
+
+        const bridge = await createClewMcpBridge(registry);
+
+        // 1. Get status before runbook started
+        const initialStatus = await bridge.getRunbookStatus();
+        expect(initialStatus.active).toBe(false);
+
+        // 2. Start runbook
+        const startResult = await bridge.startRunbook("typescript-core");
+        expect(startResult.skillId).toBe("typescript-core");
+        expect(startResult.status).toBe("active");
+        expect(startResult.currentStep?.id).toBe("step-1");
+        expect(startResult.currentStep?.gates).toHaveLength(1);
+
+        const sessionId = startResult.sessionId;
+
+        // 3. Get status of active session
+        const activeStatus = await bridge.getRunbookStatus(sessionId);
+        expect(activeStatus.active).toBe(true);
+        expect(activeStatus.skillId).toBe("typescript-core");
+        expect(activeStatus.currentStep?.id).toBe("step-1");
+
+        // 4. Verify step when file test.txt does not exist (should fail)
+        const verifyFailResult = await bridge.verifyRunbookStep(sessionId);
+        expect(verifyFailResult.success).toBe(false);
+        expect(verifyFailResult.completed).toBe(false);
+        expect(verifyFailResult.gates[0].success).toBe(false);
+
+        // 5. Create test.txt and verify step-1 (should pass and advance to step-2)
+        writeFileSync(join(tempDir, "test.txt"), "Hello");
+        // We need to change cwd to tempDir so that the file verification check (which looks at process.cwd()) finds it.
+        const originalCwd = process.cwd();
+        process.chdir(tempDir);
+        try {
+          const verifyPassResult = await bridge.verifyRunbookStep(sessionId);
+          expect(verifyPassResult.success).toBe(true);
+          expect(verifyPassResult.completed).toBe(false);
+          expect(verifyPassResult.nextStep?.id).toBe("step-2");
+
+          // 6. Verify step-2 when pattern Done is not in test.txt (should fail)
+          const verifyFailStep2Result = await bridge.verifyRunbookStep(sessionId);
+          expect(verifyFailStep2Result.success).toBe(false);
+          expect(verifyFailStep2Result.completed).toBe(false);
+
+          // 7. Write Done in test.txt and verify step-2 (should pass and complete)
+          writeFileSync(join(tempDir, "test.txt"), "Done");
+          const verifyPassStep2Result = await bridge.verifyRunbookStep(sessionId);
+          expect(verifyPassStep2Result.success).toBe(true);
+          expect(verifyPassStep2Result.completed).toBe(true);
+          expect(verifyPassStep2Result.nextStep).toBeNull();
+        } finally {
+          process.chdir(originalCwd);
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
 
 function warningContractFixture(): {
@@ -703,6 +806,7 @@ function entry(
     requiredCapabilities?: Array<"filesystem" | "terminal" | "internet" | "git" | "mcp">;
     extends?: string[];
     incompatibleWith?: string[];
+    steps?: any[];
   } = {},
 ): RegistryEntry {
   return {
@@ -722,7 +826,8 @@ function entry(
         policies: [],
         provenance: {},
         extensions: {},
-      },
+        steps: options.steps,
+      } as any,
       instructions: `${id} instructions.`,
       assets: [],
       examples: [],

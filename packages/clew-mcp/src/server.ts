@@ -67,6 +67,18 @@ const TelemetryInputSchema = z.object({
     .optional(),
 });
 
+const StartRunbookInputSchema = z.object({
+  skillId: z.string(),
+});
+
+const GetRunbookStatusInputSchema = z.object({
+  sessionId: z.string().optional(),
+});
+
+const VerifyRunbookStepInputSchema = z.object({
+  sessionId: z.string().optional(),
+});
+
 export async function runClewMcpServer(projectRoot = process.cwd()) {
   const registry = await SkillRegistry.fromProject(projectRoot);
   const bridge = await createClewMcpBridge(registry);
@@ -159,6 +171,37 @@ export async function runClewMcpServer(projectRoot = process.cwd()) {
       description: "Get a comprehensive analysis of all skills currently in the registry index.",
       inputSchema: { type: "object", properties: {} },
     },
+    {
+      name: "clew_start_runbook",
+      description: "Initialize a new guided runbook execution session for a skill with steps.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          skillId: { type: "string", description: "The ID of the skill to start a runbook for" },
+        },
+        required: ["skillId"],
+      },
+    },
+    {
+      name: "clew_get_runbook_status",
+      description: "Get the progress, status, and active step instructions for the current or specified runbook session.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", description: "Optional session ID to query. If omitted, returns the most recent active session status." },
+        },
+      },
+    },
+    {
+      name: "clew_verify_runbook_step",
+      description: "Evaluate/verify the active step's gates. If they pass, advances the runbook session and returns the next step instructions.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", description: "Optional session ID to verify. If omitted, verifies the most recent active session step." },
+        },
+      },
+    },
   ];
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -195,6 +238,18 @@ export async function runClewMcpServer(projectRoot = process.cwd()) {
         }
         case "clew_analyze_index": {
           return { content: [{ type: "text", text: JSON.stringify(bridge.analyzeIndex(), null, 2) }] };
+        }
+        case "clew_start_runbook": {
+          const parsed = StartRunbookInputSchema.parse(args);
+          return { content: [{ type: "text", text: JSON.stringify(await bridge.startRunbook(parsed.skillId), null, 2) }] };
+        }
+        case "clew_get_runbook_status": {
+          const parsed = GetRunbookStatusInputSchema.parse(args);
+          return { content: [{ type: "text", text: JSON.stringify(await bridge.getRunbookStatus(parsed.sessionId), null, 2) }] };
+        }
+        case "clew_verify_runbook_step": {
+          const parsed = VerifyRunbookStepInputSchema.parse(args);
+          return { content: [{ type: "text", text: JSON.stringify(await bridge.verifyRunbookStep(parsed.sessionId), null, 2) }] };
         }
         default:
           throw new Error(`Unknown tool: ${name}`);
