@@ -57,6 +57,7 @@
         "analyzeIndex",
         "analyzeRecommendations",
         "analyzeSearch",
+        "analyzeSearchSemantic",
         "analyzeTelemetry",
         "close",
         "explain",
@@ -64,6 +65,7 @@
         "lookup",
         "recommend",
         "search",
+        "searchSemantic",
         "startRunbook",
         "verifyRunbookStep"
       ],

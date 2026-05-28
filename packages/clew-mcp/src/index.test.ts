@@ -14,6 +14,7 @@ describe("@clew-ops/mcp", () => {
       "analyzeIndex",
       "analyzeRecommendations",
       "analyzeSearch",
+      "analyzeSearchSemantic",
       "analyzeTelemetry",
       "close",
       "explain",
@@ -21,6 +22,7 @@ describe("@clew-ops/mcp", () => {
       "lookup",
       "recommend",
       "search",
+      "searchSemantic",
       "startRunbook",
       "verifyRunbookStep",
     ]);
@@ -613,6 +615,38 @@ describe("@clew-ops/mcp", () => {
         ),
       },
     }).toEqual(fixture);
+  });
+
+  it("should expose semantic search on the bridge", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "clew-mcp-semantic-search-"));
+    let bridge: any;
+    try {
+      const registry = new SkillRegistry({
+        entries: [
+          entry("engineering-core", {
+            tags: ["engineering"],
+          }),
+        ],
+        warnings: [],
+        dbPath: join(tempDir, ".clew-registry.db"),
+      });
+
+      bridge = await createClewMcpBridge(registry);
+      
+      expect(typeof bridge.searchSemantic).toBe("function");
+      expect(typeof bridge.analyzeSearchSemantic).toBe("function");
+
+      const result = await bridge.searchSemantic("engineering");
+      expect(result.query).toBe("engineering");
+      expect(result.skills).toBeDefined();
+
+      const analysis = await bridge.analyzeSearchSemantic("engineering");
+      expect(analysis.query).toBe("engineering");
+      expect(analysis.analysis.matches).toBeDefined();
+    } finally {
+      bridge?.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   describe("guided runbooks integration", () => {
