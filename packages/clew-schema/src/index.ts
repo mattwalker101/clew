@@ -142,6 +142,33 @@ export const extensionNamespacesSchema = z
   })
   .default({});
 
+export const VerificationGateSchema = z.union([
+  z.object({
+    type: z.literal("file"),
+    path: z.string().min(1),
+    description: z.string().optional()
+  }),
+  z.object({
+    type: z.literal("grep"),
+    path: z.string().min(1),
+    pattern: z.string().min(1),
+    description: z.string().optional()
+  }),
+  z.object({
+    type: z.literal("command"),
+    command: z.string().min(1),
+    timeoutMs: z.number().default(15000).optional(),
+    description: z.string().optional()
+  })
+]);
+
+export const RunbookStepSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  instruction: z.string().min(1),
+  gates: z.array(VerificationGateSchema).default([])
+});
+
 export const skillManifestSchema = z
   .object({
     id: z.string().min(1),
@@ -159,6 +186,7 @@ export const skillManifestSchema = z
     policies: stringArraySchema,
     provenance: provenanceSchema,
     extensions: extensionNamespacesSchema,
+    steps: z.array(RunbookStepSchema).optional(),
   })
   .superRefine((value, ctx) => {
     const sourceType = value.provenance.source?.type;
@@ -361,6 +389,8 @@ export type ExportResult = z.infer<typeof exportResultSchema>;
 export type Suppression = z.infer<typeof suppressionSchema>;
 export type ExtensionNamespaces = z.infer<typeof extensionNamespacesSchema>;
 export type Provenance = z.infer<typeof provenanceSchema>;
+export type VerificationGate = z.infer<typeof VerificationGateSchema>;
+export type RunbookStep = z.infer<typeof RunbookStepSchema>;
 
 export class SkillBundleValidationError extends Error {
   readonly issues: ValidationIssue[];

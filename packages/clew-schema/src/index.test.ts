@@ -509,3 +509,34 @@ describe("@clew-ops/schema", () => {
     });
   });
 });
+
+describe("Runbook Steps Schema Verification", () => {
+  it("should successfully parse valid steps with file, grep, and command gates", () => {
+    const rawManifest = {
+      id: "run-harness-skill",
+      version: "0.1.0",
+      kind: "instruction_skill",
+      name: "Run Harness",
+      instructions: { file: "skill.md" },
+      tags: [],
+      capabilities: { required: [], optional: [] },
+      extends: [],
+      policies: [],
+      steps: [
+        {
+          id: "step-1",
+          title: "Install Dependencies",
+          instruction: "Run npm install",
+          gates: [
+            { type: "file", path: "package.json" },
+            { type: "grep", path: "package.json", pattern: '"vitest"' },
+            { type: "command", command: "npm test", timeoutMs: 10000 }
+          ]
+        }
+      ]
+    };
+    
+    const result = skillManifestSchema.safeParse(rawManifest);
+    expect(result.success).toBe(true);
+  });
+});
