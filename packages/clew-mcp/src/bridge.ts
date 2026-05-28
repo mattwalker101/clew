@@ -5,6 +5,7 @@ import {
   type SkillActivationAnalysisResult,
   type SkillIndexAnalysisResult,
   type SkillSearchAnalysisResult,
+  type SkillSearchSemanticAnalysisResult,
   type SkillTelemetryAnalysisResult,
   type TelemetryRecord,
 } from "@clew-ops/core";
@@ -21,6 +22,8 @@ export type ClewMcpBridge = {
   analyzeIndex(): ClewMcpIndexAnalysisResult;
   search(input: string | ClewMcpSearchInput): ClewMcpSearchResult;
   analyzeSearch(input: string | ClewMcpSearchInput): ClewMcpSearchAnalysisResult;
+  searchSemantic(input: string | ClewMcpSearchInput): Promise<ClewMcpSearchResult>;
+  analyzeSearchSemantic(input: string | ClewMcpSearchInput): Promise<ClewMcpSearchSemanticAnalysisResult>;
   analyzeTelemetry(records?: TelemetryRecord[]): ClewMcpTelemetryAnalysisResult;
   analyzeRecommendations(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendationAnalysisResult>;
   recommend(input: string | ClewMcpRecommendInput): Promise<ClewMcpRecommendResult>;
@@ -79,6 +82,12 @@ export type ClewMcpIndexAnalysisResult = {
 export type ClewMcpSearchAnalysisResult = {
   query: string;
   analysis: SkillSearchAnalysisResult;
+  warnings: CompatibilityWarning[];
+};
+
+export type ClewMcpSearchSemanticAnalysisResult = {
+  query: string;
+  analysis: SkillSearchSemanticAnalysisResult;
   warnings: CompatibilityWarning[];
 };
 
@@ -148,6 +157,26 @@ export async function createClewMcpBridge(
           ...analysis,
           matches: applyLimit(analysis.matches, request.limit ?? options.defaultLimit),
         },
+        warnings: registryWarnings,
+      };
+    },
+    async searchSemantic(input: string | ClewMcpSearchInput): Promise<ClewMcpSearchResult> {
+      const request = typeof input === "string" ? { query: input } : input;
+      const skills = (await registry.searchSemantic(request.query, request.limit ?? options.defaultLimit)).map(
+        (bundle) => bundle.manifest,
+      );
+      return {
+        query: request.query,
+        skills,
+        warnings: registryWarnings,
+      };
+    },
+    async analyzeSearchSemantic(input: string | ClewMcpSearchInput): Promise<ClewMcpSearchSemanticAnalysisResult> {
+      const request = typeof input === "string" ? { query: input } : input;
+      const analysis = await registry.analyzeSearchSemantic(request.query, request.limit ?? options.defaultLimit);
+      return {
+        query: request.query,
+        analysis,
         warnings: registryWarnings,
       };
     },

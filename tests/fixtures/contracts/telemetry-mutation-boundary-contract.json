@@ -57,12 +57,14 @@
         "analyzeIndex",
         "analyzeRecommendations",
         "analyzeSearch",
+        "analyzeSearchSemantic",
         "analyzeTelemetry",
         "close",
         "explain",
         "lookup",
         "recommend",
-        "search"
+        "search",
+        "searchSemantic"
       ],
       "forbiddenMutationMethodNames": [
         "recordRecommendation",
