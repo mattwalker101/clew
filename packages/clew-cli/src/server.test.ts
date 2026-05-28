@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { startDashboardServer } from "./server.js";
 
 describe("clew Dashboard API Server", () => {
@@ -44,4 +47,121 @@ describe("clew Dashboard API Server", () => {
     expect(body).toHaveProperty("conflicts");
     expect(body).toHaveProperty("warnings");
   });
+
+  describe("Cockpit API Runbook Endpoints", () => {
+    let projectRoot: string;
+    const originalCwd = process.cwd();
+
+    beforeAll(() => {
+      projectRoot = mkdtempSync(join(tmpdir(), "clew-server-runbook-"));
+      const skillRoot = join(projectRoot, "skills", "typescript-core");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        join(skillRoot, "clew.yaml"),
+        [
+          "id: typescript-core",
+          "version: 1.0.0",
+          "kind: instruction_skill",
+          "name: TypeScript Core",
+          "instructions:",
+          "  file: skill.md",
+          "tags: []",
+          "activation:",
+          "  triggers: []",
+          "steps:",
+          "  - id: step-1",
+          "    title: First Step",
+          "    instruction: Make a file named test.txt",
+          "    gates:",
+          "      - type: file",
+          "        path: test.txt",
+          "        description: Check for test.txt",
+        ].join("\n"),
+      );
+      writeFileSync(join(skillRoot, "skill.md"), "# TypeScript Core\n");
+      writeFileSync(join(projectRoot, "package.json"), JSON.stringify({}));
+      writeFileSync(join(projectRoot, "AGENTS.md"), "# Active Skills\n- typescript-core\n");
+      
+      process.chdir(projectRoot);
+    });
+
+    afterAll(() => {
+      process.chdir(originalCwd);
+    });
+
+    it("GET /api/run/status should return active: false when no session exists", async () => {
+      const res = await fetch("http://localhost:7709/api/run/status");
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body).toEqual({ active: false });
+    });
+
+    it("POST /api/run/start should fail with invalid skill", async () => {
+      const res = await fetch("http://localhost:7709/api/run/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId: "non-existent" }),
+      });
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(400);
+      expect(body).toHaveProperty("error");
+    });
+
+    it("POST /api/run/start should start a new session", async () => {
+      const res = await fetch("http://localhost:7709/api/run/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId: "typescript-core" }),
+      });
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body.active).toBe(true);
+      expect(body.skillId).toBe("typescript-core");
+      expect(body.sessionId).toBeDefined();
+      expect(body.currentStep.id).toBe("step-1");
+      expect(body.currentStep.gates[0].type).toBe("file");
+      expect(body.currentStep.gates[0].status).toBe("pending");
+    });
+
+    it("GET /api/run/status should now return the active session", async () => {
+      const res = await fetch("http://localhost:7709/api/run/status");
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body.active).toBe(true);
+      expect(body.skillId).toBe("typescript-core");
+      expect(body.currentStep.id).toBe("step-1");
+    });
+
+    it("POST /api/run/verify should fail if verification gates are not satisfied", async () => {
+      const res = await fetch("http://localhost:7709/api/run/verify", {
+        method: "POST",
+      });
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(false);
+      expect(body.completed).toBe(false);
+      expect(body.gates[0].success).toBe(false);
+      expect(body.gates[0].error).toContain("File not found");
+    });
+
+    it("POST /api/run/verify should succeed when verification gates are satisfied", async () => {
+      writeFileSync(join(projectRoot, "test.txt"), "hello world");
+
+      const res = await fetch("http://localhost:7709/api/run/verify", {
+        method: "POST",
+      });
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.completed).toBe(true);
+    });
+
+    it("GET /api/run/status should return active: false after success", async () => {
+      const res = await fetch("http://localhost:7709/api/run/status");
+      const body = (await res.json()) as any;
+      expect(res.status).toBe(200);
+      expect(body).toEqual({ active: false });
+    });
+  });
 });
+
