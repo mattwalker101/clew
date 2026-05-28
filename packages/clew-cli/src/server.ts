@@ -60,6 +60,7 @@ export async function startDashboardServer(port = 7708): Promise<http.Server> {
             favorite: e.favorite,
             tags: e.bundle.manifest.tags,
             capabilities: e.bundle.manifest.capabilities,
+            hasSteps: !!(e.bundle.manifest.steps && e.bundle.manifest.steps.length > 0),
           })),
           warnings: snapshot.warnings,
         }));

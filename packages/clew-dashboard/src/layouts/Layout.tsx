@@ -27,6 +27,12 @@ export function Layout({ children, activeTab, onTabChange }: {
                 Registry
               </button>
               <button 
+                onClick={() => onTabChange("runbook")}
+                className={`transition-colors cursor-pointer ${activeTab === "runbook" ? "text-blue-400 font-semibold" : "text-gray-400 hover:text-white"}`}
+              >
+                Runbooks
+              </button>
+              <button 
                 onClick={() => onTabChange("trace")}
                 className={`transition-colors cursor-pointer ${activeTab === "trace" ? "text-blue-400 font-semibold" : "text-gray-400 hover:text-white"}`}
               >
