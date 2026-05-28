@@ -870,7 +870,11 @@ export class SessionManager {
         passed = false;
       }
 
-      gateResults.push({ type: gate.type as any, success: passed, error: errorMsg });
+      gateResults.push({
+        type: gate.type as any,
+        success: passed,
+        ...(errorMsg !== undefined ? { error: errorMsg } : {})
+      });
       if (!passed) allPassed = false;
     }
 
