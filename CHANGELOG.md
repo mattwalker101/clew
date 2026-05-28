@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.0 (2026-05-27)
+
+### Added
+- **Interactive Concentric Knowledge Map**: Added a responsive, high-performance SVG visual skill relationship network to the cockpit, distributing skills by layered inheritance (System, Project, User) and coloring links for suppression and conflicts.
+- **Glassmorphic Registry Health Gauge**: Integrated an Apple Watch-style circular progress hero gauge with dynamic warning deductions (-15% conflict, -5% overlap, -3% warning) and dynamic glowing states.
+- **Explainable Activation & Debug Trace**: A fully-fledged Activation Trace Debugger with comprehensive trigger breakdown mapping, redundant candidate pools, and relative endpoint routing.
+- **Local Semantic Indexing**: Local-first semantic indexing using `@huggingface/transformers` and `sqlite-vec` in SQLite (Phase 8).
+- **Smart Redundancy Suppression**: Automated overlay resolution that prioritizes and keeps the most relevant skill while cleanly explaining why others were suppressed.
+- **Workspace Diagnostics Endpoint**: Added a new `/api/doctor` endpoint returning diagnostic metrics identical to the `doctor` command.
+
+### Changed
+- **Relative Endpoint Routing**: Upgraded all frontend dashboard requests to relative paths (`/api/doctor`, `/api/registry`, `/api/explain`), ensuring full compatibility with custom server ports.
+- **Defensive UI Hardening**: Integrated comprehensive defensive rendering guards (optional chaining, fallback arrays, custom default values) across all cockpit visual components.
+
 ## v0.1.0 (2026-05-20)
 
 ### Added
