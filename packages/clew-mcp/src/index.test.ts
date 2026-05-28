@@ -616,6 +616,7 @@ describe("@clew-ops/mcp", () => {
 
   it("should expose semantic search on the bridge", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "clew-mcp-semantic-search-"));
+    let bridge: any;
     try {
       const registry = new SkillRegistry({
         entries: [
@@ -627,7 +628,7 @@ describe("@clew-ops/mcp", () => {
         dbPath: join(tempDir, ".clew-registry.db"),
       });
 
-      const bridge = await createClewMcpBridge(registry);
+      bridge = await createClewMcpBridge(registry);
       
       expect(typeof bridge.searchSemantic).toBe("function");
       expect(typeof bridge.analyzeSearchSemantic).toBe("function");
@@ -640,6 +641,7 @@ describe("@clew-ops/mcp", () => {
       expect(analysis.query).toBe("engineering");
       expect(analysis.analysis.matches).toBeDefined();
     } finally {
+      bridge?.close();
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
