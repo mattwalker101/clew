@@ -2778,6 +2778,72 @@ describe("parseToml", () => {
     expect(parsed.tool.ruff.lint.ignore).toEqual(["S101", "S102"]);
     expect(parsed.tool.ruff.lint["extend-select"]).toEqual(["S", "B"]);
   });
+
+  it("should parse inline trailing comments on section headers", () => {
+    const toml = `
+      [tool.ruff.lint] # settings
+      ignore = ["S101"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.tool.ruff.lint.ignore).toEqual(["S101"]);
+  });
+
+  it("should throw on overwrite redefinitions", () => {
+    const tomlDuplicateKey = `
+      key = "value1"
+      key = "value2"
+    `;
+    expect(() => parseToml(tomlDuplicateKey)).toThrow("Duplicate key or redefinition in TOML: key");
+
+    const tomlRedefinePrimitiveAsTable = `
+      key = "value"
+      [key.nested]
+      other = 1
+    `;
+    expect(() => parseToml(tomlRedefinePrimitiveAsTable)).toThrow("Duplicate key or redefinition in TOML: key");
+
+    const tomlRedefineTableAsPrimitive = `
+      [key.nested]
+      other = 1
+      key = "value"
+    `;
+    expect(() => parseToml(tomlRedefineTableAsPrimitive)).toThrow("Duplicate key or redefinition in TOML: key");
+  });
+
+  it("should parse array elements containing commas inside quotes", () => {
+    const toml = `
+      paths = ["src/a,b.ts", "src/c.ts"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.paths).toEqual(["src/a,b.ts", "src/c.ts"]);
+  });
+
+  it("should parse arrays with inline comments", () => {
+    const toml = `
+      ignore = [
+        "S101", # disable s101
+        "S102"
+      ]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.ignore).toEqual(["S101", "S102"]);
+  });
+
+  it("should parse booleans and numbers correctly", () => {
+    const toml = `
+      enabled = true
+      disabled = false
+      count = 42
+      pi = 3.14
+      str = "true"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.enabled).toBe(true);
+    expect(parsed.disabled).toBe(false);
+    expect(parsed.count).toBe(42);
+    expect(parsed.pi).toBe(3.14);
+    expect(parsed.str).toBe("true");
+  });
 });
 
 

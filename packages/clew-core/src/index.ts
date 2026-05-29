@@ -1994,14 +1994,81 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function stripComments(line: string): string {
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    } else if ((char === "#" || char === ";") && !inDoubleQuote && !inSingleQuote) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+function parseValue(valStr: string): any {
+  const s = valStr.trim();
+  if (s === "true") return true;
+  if (s === "false") return false;
+  if (!isNaN(Number(s)) && s !== "") return Number(s);
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function parseArray(valStr: string): any[] {
+  const result: any[] = [];
+  let currentToken = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  for (let i = 0; i < valStr.length; i++) {
+    const char = valStr[i];
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (inDoubleQuote || inSingleQuote) {
+      currentToken += char;
+      continue;
+    }
+    if (char === "#" || char === ";") {
+      break;
+    }
+    if (char === ",") {
+      const trimmed = currentToken.trim();
+      if (trimmed) {
+        result.push(parseValue(trimmed));
+      }
+      currentToken = "";
+    } else {
+      currentToken += char;
+    }
+  }
+  const trimmed = currentToken.trim();
+  if (trimmed) {
+    result.push(parseValue(trimmed));
+  }
+  return result;
+}
+
 export function parseToml(content: string): any {
   const result: any = {};
   let currentSection: any = result;
+  let currentSectionParts: string[] = [];
   const lines = content.split(/\r?\n/);
   
   let i = 0;
   while (i < lines.length) {
-    let line = lines[i]!.trim();
+    let line = stripComments(lines[i]!).trim();
     if (!line || line.startsWith("#") || line.startsWith(";")) {
       i++;
       continue;
@@ -2010,10 +2077,14 @@ export function parseToml(content: string): any {
     if (line.startsWith("[") && line.endsWith("]")) {
       const sectionName = line.slice(1, -1).trim();
       const parts = sectionName.split(".");
+      currentSectionParts = parts.map(p => p.trim());
       let temp = result;
       for (const part of parts) {
         const p = part.trim();
-        if (!temp[p] || typeof temp[p] !== "object") {
+        if (temp[p] !== undefined && typeof temp[p] !== "object") {
+          throw new Error(`Duplicate key or redefinition in TOML: ${p}`);
+        }
+        if (!temp[p]) {
           temp[p] = {};
         }
         temp = temp[p];
@@ -2026,36 +2097,33 @@ export function parseToml(content: string): any {
     const eqIdx = line.indexOf("=");
     if (eqIdx !== -1) {
       const key = line.slice(0, eqIdx).trim();
+      if (currentSection[key] !== undefined || currentSectionParts.includes(key)) {
+        throw new Error(`Duplicate key or redefinition in TOML: ${key}`);
+      }
+      
       let valuePart = line.slice(eqIdx + 1).trim();
       
       if (valuePart.startsWith("[")) {
         let arrayStr = valuePart;
         while (!arrayStr.includes("]") && i + 1 < lines.length) {
           i++;
-          arrayStr += " " + lines[i]!.trim();
+          const nextLine = stripComments(lines[i]!).trim();
+          arrayStr += " " + nextLine;
         }
-        const items = arrayStr
-          .slice(1, arrayStr.lastIndexOf("]"))
-          .split(",")
-          .map(item => {
-            const trimmed = item.trim();
-            if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-              return trimmed.slice(1, -1);
-            }
-            return trimmed;
-          })
-          .filter(item => item !== "");
         
+        const firstBracket = arrayStr.indexOf("[");
+        const lastBracket = arrayStr.lastIndexOf("]");
+        const innerArrayStr = arrayStr.slice(firstBracket + 1, lastBracket);
+        
+        const items = parseArray(innerArrayStr);
         currentSection[key] = items;
       } else {
-        if ((valuePart.startsWith('"') && valuePart.endsWith('"')) || (valuePart.startsWith("'") && valuePart.endsWith("'"))) {
-          valuePart = valuePart.slice(1, -1);
-        }
-        currentSection[key] = valuePart;
+        currentSection[key] = parseValue(valuePart);
       }
     }
     i++;
   }
   return result;
 }
+
 
