@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -487,7 +488,8 @@ const commands: Record<string, Command> = {
   },
   async "check-security"(args) {
     const cached = args.includes("--cached");
-    const result = await checkSecuritySettings(process.cwd(), { cached });
+    const repoRoot = findRepoRoot() || process.cwd();
+    const result = await checkSecuritySettings(repoRoot, { cached });
     if (!result.valid) {
       console.error("\x1b[31m✖ [clew security] VETO: Security configuration degraded!\x1b[0m");
       console.error("  -------------------------------------------------------------");
@@ -508,30 +510,11 @@ const commands: Record<string, Command> = {
       fail("usage: clew security install");
     }
     
-    // Find the actual git directory dynamically (supporting subdirectories)
-    let gitDir = "";
-    try {
-      const { execSync } = await import("node:child_process");
-      const gitCommonDir = execSync("git rev-parse --git-common-dir", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-      gitDir = join(process.cwd(), gitCommonDir);
-    } catch {
-      // Fallback recursive parent search
-      let current = process.cwd();
-      while (current !== join(current, "..")) {
-        const testDir = join(current, ".git");
-        if (existsSync(testDir)) {
-          gitDir = testDir;
-          break;
-        }
-        current = join(current, "..");
-      }
-    }
-    
-    if (!gitDir) {
+    const hookDir = findHooksDir();
+    if (!hookDir) {
       fail("❌ Not a git repository.");
     }
     
-    const hookDir = join(gitDir, "hooks");
     if (!existsSync(hookDir)) {
       mkdirSync(hookDir, { recursive: true });
     }
@@ -551,10 +534,11 @@ const commands: Record<string, Command> = {
       writeFileSync(`${hookPath}.bak`, existing);
       
       let updated = existing;
-      if (existing.includes("#!/bin/sh")) {
-        updated = existing.replace("#!/bin/sh", `#!/bin/sh\n\n# clew constitutional security gate\n${clewHookLine}\n`);
+      const shebangRegex = /^#!.*\r?\n/;
+      if (shebangRegex.test(existing)) {
+        updated = existing.replace(shebangRegex, (match) => `${match}\n# clew constitutional security gate\n${clewHookLine}\n`);
       } else {
-        updated = `${existing}\n\n# clew constitutional security gate\n${clewHookLine}\n`;
+        updated = `#!/bin/sh\n\n# clew constitutional security gate\n${clewHookLine}\n\n${existing}`;
       }
       writeFileSync(hookPath, updated, { mode: 0o755 });
       console.log("🎉 Successfully appended clew security gate to existing pre-commit hook (backed up original to pre-commit.bak)!");
@@ -564,6 +548,43 @@ const commands: Record<string, Command> = {
     }
   },
 };
+
+function findRepoRoot(): string {
+  try {
+    const { execSync } = createRequire(import.meta.url)("node:child_process");
+    return execSync("git rev-parse --show-toplevel", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    // Fallback recursive parent search
+    let current = process.cwd();
+    while (current !== join(current, "..")) {
+      const testDir = join(current, ".git");
+      if (existsSync(testDir)) {
+        return current;
+      }
+      current = join(current, "..");
+    }
+  }
+  return "";
+}
+
+function findHooksDir(): string {
+  try {
+    const { execSync } = createRequire(import.meta.url)("node:child_process");
+    const hooksPath = execSync("git rev-parse --git-path hooks", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return join(process.cwd(), hooksPath);
+  } catch {
+    // Fallback recursive parent search
+    let current = process.cwd();
+    while (current !== join(current, "..")) {
+      const testDir = join(current, ".git");
+      if (existsSync(testDir) && statSync(testDir).isDirectory()) {
+        return join(testDir, "hooks");
+      }
+      current = join(current, "..");
+    }
+  }
+  return "";
+}
 
 async function readRegistry() {
   const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });

@@ -1869,6 +1869,43 @@ describe("@clew-ops/cli", () => {
         exitSpy.mockRestore();
       }
     });
+
+    it("should fail check-security when executed from a subdirectory if root config is degraded", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-subdir-"));
+      const subDir = join(projectRoot, "packages", "some-pkg");
+      mkdirSync(subDir, { recursive: true });
+
+      // Degraded config in root
+      writeFileSync(
+        join(projectRoot, "pyproject.toml"),
+        `
+        [tool.ruff.lint]
+        ignore = ["S101"]
+        `
+      );
+
+      // Initialize mock .git folder so findRepoRoot resolves it
+      mkdirSync(join(projectRoot, ".git"), { recursive: true });
+
+      const originalCwd = process.cwd();
+      process.chdir(subDir);
+
+      try {
+        await expect(main(["check-security"])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Security configuration degraded!");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
   });
 
   describe("clew security install", () => {
