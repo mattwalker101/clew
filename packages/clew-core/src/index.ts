@@ -1997,8 +1997,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function stripComments(line: string): string {
   let inDoubleQuote = false;
   let inSingleQuote = false;
+  let escaped = false;
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
     if (char === '"' && !inSingleQuote) {
       inDoubleQuote = !inDoubleQuote;
     } else if (char === "'" && !inDoubleQuote) {
@@ -2012,12 +2021,12 @@ function stripComments(line: string): string {
 
 function parseValue(valStr: string): any {
   const s = valStr.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1).replace(/\\"/g, '"');
+  }
   if (s === "true") return true;
   if (s === "false") return false;
   if (!isNaN(Number(s)) && s !== "") return Number(s);
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
-  }
   return s;
 }
 
@@ -2030,10 +2039,12 @@ function parseArray(valStr: string): any[] {
     const char = valStr[i];
     if (char === '"' && !inSingleQuote) {
       inDoubleQuote = !inDoubleQuote;
+      currentToken += char;
       continue;
     }
     if (char === "'" && !inDoubleQuote) {
       inSingleQuote = !inSingleQuote;
+      currentToken += char;
       continue;
     }
     if (inDoubleQuote || inSingleQuote) {
@@ -2063,7 +2074,6 @@ function parseArray(valStr: string): any[] {
 export function parseToml(content: string): any {
   const result: any = {};
   let currentSection: any = result;
-  let currentSectionParts: string[] = [];
   const lines = content.split(/\r?\n/);
   
   let i = 0;
@@ -2077,7 +2087,6 @@ export function parseToml(content: string): any {
     if (line.startsWith("[") && line.endsWith("]")) {
       const sectionName = line.slice(1, -1).trim();
       const parts = sectionName.split(".");
-      currentSectionParts = parts.map(p => p.trim());
       let temp = result;
       for (const part of parts) {
         const p = part.trim();
@@ -2097,7 +2106,7 @@ export function parseToml(content: string): any {
     const eqIdx = line.indexOf("=");
     if (eqIdx !== -1) {
       const key = line.slice(0, eqIdx).trim();
-      if (currentSection[key] !== undefined || currentSectionParts.includes(key)) {
+      if (currentSection[key] !== undefined) {
         throw new Error(`Duplicate key or redefinition in TOML: ${key}`);
       }
       

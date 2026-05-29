@@ -2801,13 +2801,6 @@ describe("parseToml", () => {
       other = 1
     `;
     expect(() => parseToml(tomlRedefinePrimitiveAsTable)).toThrow("Duplicate key or redefinition in TOML: key");
-
-    const tomlRedefineTableAsPrimitive = `
-      [key.nested]
-      other = 1
-      key = "value"
-    `;
-    expect(() => parseToml(tomlRedefineTableAsPrimitive)).toThrow("Duplicate key or redefinition in TOML: key");
   });
 
   it("should parse array elements containing commas inside quotes", () => {
@@ -2843,6 +2836,31 @@ describe("parseToml", () => {
     expect(parsed.count).toBe(42);
     expect(parsed.pi).toBe(3.14);
     expect(parsed.str).toBe("true");
+  });
+
+  it("should parse array strings resembling primitives as strings", () => {
+    const toml = `
+      values = ["true", "false", "123", "3.14"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.values).toEqual(["true", "false", "123", "3.14"]);
+  });
+
+  it("should allow keys named the same as segments of section headers", () => {
+    const toml = `
+      [tool.ruff]
+      tool = "value"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.tool.ruff.tool).toBe("value");
+  });
+
+  it("should parse escaped quotes correctly", () => {
+    const toml = `
+      key = "val\\\"ue"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.key).toBe('val"ue');
   });
 });
 
