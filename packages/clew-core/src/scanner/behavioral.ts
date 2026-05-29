@@ -61,24 +61,37 @@ function getLiteralOrTemplateString(node: unknown): string | null {
   return null;
 }
 
-function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
+function isPropertyOrParameter(
+  node: ASTNode,
+  parent: ASTNode | null,
+  grandparent: ASTNode | null
+): boolean {
   if (!parent) return false;
 
+  // 1. Member property key (e.g. obj.fetch)
   if (parent.type === "MemberExpression" && parent.property === node && !parent.computed) {
     if (node.name === "require") {
-      return false;
+      return false; // Never whitelist require on MemberExpression (blocks module.require)
     }
     return true;
   }
+
+  // 2. Object property key (e.g. { fetch: 1 })
   if (parent.type === "Property" && parent.key === node && !parent.computed) {
     return true;
   }
+
+  // 3. Class/object method key (e.g. class A { Function() {} })
   if (parent.type === "MethodDefinition" && parent.key === node && !parent.computed) {
     return true;
   }
+
+  // 4. Class property key (e.g. class A { Function = 1 })
   if (parent.type === "PropertyDefinition" && parent.key === node && !parent.computed) {
     return true;
   }
+
+  // 5. Standard function parameter definitions (e.g. function f(fetch) {})
   if (
     ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(parent.type)
   ) {
@@ -87,6 +100,53 @@ function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
       return true;
     }
   }
+
+  // 6. Object pattern destructuring value binding (e.g. const { x: fetch } = obj; or const { fetch } = obj;)
+  if (parent.type === "Property" && parent.value === node && grandparent?.type === "ObjectPattern") {
+    return true;
+  }
+
+  // 7. Array pattern destructuring element binding (e.g. const [fetch] = arr;)
+  if (parent.type === "ArrayPattern") {
+    return true;
+  }
+
+  // 8. RestElement inside patterns (e.g. const { ...fetch } = obj;)
+  if (parent.type === "RestElement" && parent.argument === node) {
+    return true;
+  }
+
+  // 9. Assignment pattern left-hand side (e.g. const { fetch = defaultFetch } = obj;)
+  if (parent.type === "AssignmentPattern" && parent.left === node) {
+    return true;
+  }
+
+  // 10. Variable declaration assignment target (e.g. const fetch = 123;)
+  if (parent.type === "VariableDeclarator" && parent.id === node) {
+    return true;
+  }
+
+  // 11. Function/Class name declarations
+  if (parent.type === "FunctionDeclaration" && parent.id === node) {
+    return true;
+  }
+  if (parent.type === "ClassDeclaration" && parent.id === node) {
+    return true;
+  }
+
+  // 12. Imports
+  if (
+    ["ImportSpecifier", "ImportDefaultSpecifier", "ImportNamespaceSpecifier"].includes(parent.type) &&
+    parent.local === node
+  ) {
+    return true;
+  }
+
+  // 13. CatchClause parameter (e.g. catch (fetch))
+  if (parent.type === "CatchClause" && parent.param === node) {
+    return true;
+  }
+
   return false;
 }
 
@@ -162,7 +222,7 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
 
     const ast = acorn.parse(transpiledCode, { ecmaVersion: "latest", sourceType: "module" });
     
-    const walk = (node: unknown, parent: ASTNode | null = null): void => {
+    const walk = (node: unknown, parent: ASTNode | null = null, grandparent: ASTNode | null = null): void => {
       if (!isASTNode(node)) return;
 
       if (node.type === "Identifier") {
@@ -170,7 +230,7 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         if (
           typeof name === "string" && 
           ["eval", "fetch", "Function", "require"].includes(name) &&
-          !isPropertyOrParameter(node, parent)
+          !isPropertyOrParameter(node, parent, grandparent)
         ) {
           errors.push({
             type: "behavioral",
@@ -271,10 +331,10 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         const child = node[key];
         if (Array.isArray(child)) {
           for (const item of child) {
-            walk(item, node);
+            walk(item, node, parent);
           }
         } else if (isASTNode(child)) {
-          walk(child, node);
+          walk(child, node, parent);
         }
       }
     };

@@ -367,5 +367,53 @@ describe("Script Behavioral Scanner", () => {
         expect(result.errors.some(e => e.message.includes("curl"))).toBe(true);
       });
     });
+
+    it("should not flag fetch/eval/Function/require when destructured from safe local objects or shadowed in local declarations", () => {
+      // 1. Shorthand and nested destructuring from safe local objects
+      const code1 = `
+        const responseData = { fetch: "fetchData" };
+        const { fetch } = responseData;
+        
+        const props = { require: "someValue" };
+        const { require } = props;
+        
+        const myArr = ["first", "second"];
+        const [Function] = myArr;
+        
+        const { ...customRequire } = responseData;
+      `;
+      const result1 = scanScriptSafety("script.js", code1);
+      expect(result1.valid).toBe(true);
+      expect(result1.errors).toHaveLength(0);
+
+      // 2. Variable/Function shadowing of global names
+      const code2 = `
+        const fetch = 123;
+        let myEval = "hello";
+        
+        function Function() {
+          return "test";
+        }
+        
+        try {
+          throw new Error("error");
+        } catch (require) {
+          // shadowed parameter require is whitelisted!
+        }
+      `;
+      const result2 = scanScriptSafety("script.js", code2);
+      expect(result2.valid).toBe(true);
+      expect(result2.errors).toHaveLength(0);
+
+      // 3. Import shadowing
+      const code3 = `
+        import { custom as fetch } from "module";
+        import Function from "another-module";
+        import * as require from "namespace";
+      `;
+      const result3 = scanScriptSafety("script.js", code3);
+      expect(result3.valid).toBe(true);
+      expect(result3.errors).toHaveLength(0);
+    });
   });
 });
