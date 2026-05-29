@@ -1,4 +1,5 @@
 import * as acorn from "acorn";
+import ts from "typescript";
 import { ScanError } from "./static.js";
 
 export interface ScriptScanResult {
@@ -20,16 +21,89 @@ function isASTNode(node: unknown): node is ASTNode {
   );
 }
 
+function preprocessTypeScript(code: string): string {
+  try {
+    return ts.transpileModule(code, {
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext
+      }
+    }).outputText;
+  } catch {
+    return code;
+  }
+}
+
+function getLiteralOrTemplateString(node: unknown): string | null {
+  if (!isASTNode(node)) return null;
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral") {
+    const expressions = node.expressions;
+    const quasis = node.quasis;
+    if (
+      Array.isArray(expressions) &&
+      expressions.length === 0 &&
+      Array.isArray(quasis) &&
+      quasis.length === 1
+    ) {
+      const quasi = quasis[0];
+      if (isASTNode(quasi) && typeof quasi.value === "object" && quasi.value !== null) {
+        const valObj = quasi.value as Record<string, unknown>;
+        if (typeof valObj.cooked === "string") {
+          return valObj.cooked;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
+  if (!parent) return false;
+
+  if (parent.type === "MemberExpression" && parent.property === node && !parent.computed) {
+    return true;
+  }
+  if (parent.type === "Property" && parent.key === node && !parent.computed) {
+    return true;
+  }
+  if (parent.type === "MethodDefinition" && parent.key === node && !parent.computed) {
+    return true;
+  }
+  if (parent.type === "PropertyDefinition" && parent.key === node && !parent.computed) {
+    return true;
+  }
+  if (
+    ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(parent.type)
+  ) {
+    const params = parent.params;
+    if (Array.isArray(params) && params.includes(node)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
   try {
-    const ast = acorn.parse(code, { ecmaVersion: "latest", sourceType: "module" });
-    const walk = (node: unknown): void => {
+    const isTypeScript = filename.toLowerCase().endsWith(".ts") || filename.toLowerCase().endsWith(".tsx");
+    const transpiledCode = isTypeScript ? preprocessTypeScript(code) : code;
+
+    const ast = acorn.parse(transpiledCode, { ecmaVersion: "latest", sourceType: "module" });
+    
+    const walk = (node: unknown, parent: ASTNode | null = null): void => {
       if (!isASTNode(node)) return;
 
       if (node.type === "Identifier") {
         const name = node.name;
-        if (typeof name === "string" && ["eval", "fetch", "Function"].includes(name)) {
+        if (
+          typeof name === "string" && 
+          ["eval", "fetch", "Function"].includes(name) &&
+          !isPropertyOrParameter(node, parent)
+        ) {
           errors.push({
             type: "behavioral",
             file: filename,
@@ -45,18 +119,16 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
           const args = node.arguments;
           if (Array.isArray(args) && args.length > 0) {
             const firstArg = args[0];
-            if (isASTNode(firstArg) && firstArg.type === "Literal") {
-              const value = firstArg.value;
-              if (typeof value === "string") {
-                const forbidden = ["child_process", "net", "http", "https", "dgram"];
-                if (forbidden.includes(value)) {
-                  errors.push({
-                    type: "behavioral",
-                    file: filename,
-                    message: `Unauthorized import of system module: '${value}'`,
-                    severity: "error"
-                  });
-                }
+            const value = getLiteralOrTemplateString(firstArg);
+            if (value) {
+              const forbidden = ["child_process", "net", "http", "https", "dgram"];
+              if (forbidden.includes(value)) {
+                errors.push({
+                  type: "behavioral",
+                  file: filename,
+                  message: `Unauthorized import of system module: '${value}'`,
+                  severity: "error"
+                });
               }
             }
           }
@@ -65,18 +137,16 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
 
       if (node.type === "ImportDeclaration" || node.type === "ImportExpression") {
         const source = node.source;
-        if (isASTNode(source) && source.type === "Literal") {
-          const value = source.value;
-          if (typeof value === "string") {
-            const forbidden = ["child_process", "net", "http", "https", "dgram"];
-            if (forbidden.includes(value)) {
-              errors.push({
-                type: "behavioral",
-                file: filename,
-                message: `Unauthorized import of system module: '${value}'`,
-                severity: "error"
-              });
-            }
+        const value = getLiteralOrTemplateString(source);
+        if (value) {
+          const forbidden = ["child_process", "net", "http", "https", "dgram"];
+          if (forbidden.includes(value)) {
+            errors.push({
+              type: "behavioral",
+              file: filename,
+              message: `Unauthorized import of system module: '${value}'`,
+              severity: "error"
+            });
           }
         }
       }
@@ -85,10 +155,10 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         const child = node[key];
         if (Array.isArray(child)) {
           for (const item of child) {
-            walk(item);
+            walk(item, node);
           }
         } else if (isASTNode(child)) {
-          walk(child);
+          walk(child, node);
         }
       }
     };
@@ -105,22 +175,42 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   return errors;
 }
 
+function cleanPythonComments(code: string): string {
+  return code
+    .split("\n")
+    .map(line => {
+      const hashIdx = line.indexOf("#");
+      if (hashIdx !== -1) {
+        return line.slice(0, hashIdx);
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 function scanPythonHeuristics(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
+  const cleanCode = cleanPythonComments(code);
+
   const rules = [
-    { pattern: /\bsubprocess\b/, msg: "subprocess" },
-    { pattern: /\burllib\b/, msg: "urllib" },
-    { pattern: /\brequests\b/, msg: "requests" },
-    { pattern: /\bsocket\b/, msg: "socket" },
-    { pattern: /os\.system\s*\(/, msg: "os.system(" },
-    { pattern: /os\.popen\s*\(/, msg: "os.popen(" },
+    { pattern: /\bimport\s+subprocess\b/i, msg: "subprocess" },
+    { pattern: /\bfrom\s+subprocess\s+import\b/i, msg: "subprocess" },
+    { pattern: /\bimport\s+urllib\b/i, msg: "urllib" },
+    { pattern: /\bfrom\s+urllib\s+import\b/i, msg: "urllib" },
+    { pattern: /\bimport\s+requests\b/i, msg: "requests" },
+    { pattern: /\bfrom\s+requests\s+import\b/i, msg: "requests" },
+    { pattern: /\bimport\s+socket\b/i, msg: "socket" },
+    { pattern: /\bfrom\s+socket\s+import\b/i, msg: "socket" },
+    { pattern: /\bos\.system\s*\(/, msg: "os.system(" },
+    { pattern: /\bos\.popen\s*\(/, msg: "os.popen(" },
+    { pattern: /\bsubprocess\./, msg: "subprocess usage" },
     { pattern: /\beval\s*\(/, msg: "eval(" },
     { pattern: /\bexec\s*\(/, msg: "exec(" },
-    { pattern: /pty\.spawn\s*\(/, msg: "pty.spawn(" }
+    { pattern: /\bpty\.spawn\s*\(/, msg: "pty.spawn(" }
   ];
 
   for (const rule of rules) {
-    if (rule.pattern.test(code)) {
+    if (rule.pattern.test(cleanCode)) {
       errors.push({
         type: "behavioral",
         file: filename,
@@ -164,13 +254,56 @@ function scanShellHeuristics(filename: string, code: string): ScanError[] {
   return errors;
 }
 
+function detectLanguageFromShebang(code: string): string | null {
+  const firstLine = code.split("\n", 1)[0]?.trim();
+  if (firstLine && firstLine.startsWith("#!")) {
+    const interpreter = firstLine.toLowerCase();
+    if (interpreter.includes("python")) {
+      return ".py";
+    }
+    if (
+      interpreter.includes("sh") ||
+      interpreter.includes("bash") ||
+      interpreter.includes("zsh") ||
+      interpreter.includes("dash") ||
+      interpreter.includes("ksh")
+    ) {
+      return ".sh";
+    }
+    if (
+      interpreter.includes("node") ||
+      interpreter.includes("deno") ||
+      interpreter.includes("bun")
+    ) {
+      return ".js";
+    }
+  }
+  return null;
+}
+
 export function scanScriptSafety(filename: string, code: string): ScriptScanResult {
   let errors: ScanError[] = [];
-  if (filename.endsWith(".js") || filename.endsWith(".ts")) {
+  const lowerName = filename.toLowerCase();
+
+  let detectedExt = "";
+  if (lowerName.endsWith(".js") || lowerName.endsWith(".ts")) {
+    detectedExt = ".js";
+  } else if (lowerName.endsWith(".py")) {
+    detectedExt = ".py";
+  } else if (lowerName.endsWith(".sh")) {
+    detectedExt = ".sh";
+  } else {
+    const shebangExt = detectLanguageFromShebang(code);
+    if (shebangExt) {
+      detectedExt = shebangExt;
+    }
+  }
+
+  if (detectedExt === ".js") {
     errors = scanJavaScriptAST(filename, code);
-  } else if (filename.endsWith(".py")) {
+  } else if (detectedExt === ".py") {
     errors = scanPythonHeuristics(filename, code);
-  } else if (filename.endsWith(".sh")) {
+  } else if (detectedExt === ".sh") {
     errors = scanShellHeuristics(filename, code);
   }
 
