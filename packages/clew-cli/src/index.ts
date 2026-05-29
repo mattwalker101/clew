@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   ActivationEngine,
+  checkSecuritySettings,
   detectRepoSignals,
   findConflicts,
   findOverlaps,
@@ -484,6 +485,42 @@ const commands: Record<string, Command> = {
     }
 
   },
+  async "check-security"(args) {
+    const cached = args.includes("--cached");
+    const result = await checkSecuritySettings(process.cwd(), { cached });
+    if (!result.valid) {
+      console.error("\x1b[31m✖ [clew security] VETO: Security configuration degraded!\x1b[0m");
+      console.error("  -------------------------------------------------------------");
+      for (const err of result.errors) {
+        console.error(`  Violation:    ${err}`);
+      }
+      console.error("\n  Rationale:    Deactivating AST-based security rules is prohibited by the");
+      console.error("                project's security constitution.");
+      console.error("  -------------------------------------------------------------");
+      console.error("  ⚠️ Commit aborted. Please restore the security rules and try again.");
+      process.exit(1);
+    }
+    console.log("✔ [clew security] Constitution review passed successfully!");
+  },
+  async security(args) {
+    const [subcommand] = args;
+    if (subcommand !== "install") {
+      fail("usage: clew security install");
+    }
+    const gitDir = join(process.cwd(), ".git");
+    const fs = await import("node:fs");
+    if (!fs.existsSync(gitDir)) {
+      fail("❌ Not a git repository.");
+    }
+    const hookDir = join(gitDir, "hooks");
+    if (!fs.existsSync(hookDir)) {
+      fs.mkdirSync(hookDir, { recursive: true });
+    }
+    const hookPath = join(hookDir, "pre-commit");
+    const hookContent = `#!/bin/sh\n# clew constitutional security gate\nnpx clew check-security --cached\n`;
+    fs.writeFileSync(hookPath, hookContent, { mode: 0o755 });
+    console.log("🎉 Successfully installed constitutional pre-commit hook!");
+  },
 };
 
 async function readRegistry() {
@@ -611,6 +648,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  mcp [run|install]",
         "  dashboard [--port=<number>]",
         "  run <start|status|verify>",
+        "  check-security",
+        "  security install",
       ].join("\n"),
     );
     return;

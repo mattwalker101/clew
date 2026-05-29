@@ -1813,6 +1813,58 @@ describe("@clew-ops/cli", () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  describe("clew check-security", () => {
+    it("should run check-security and pass if clean", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("process.exit called");
+      });
+
+      try {
+        await main(["check-security"]);
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Constitution review passed");
+      } finally {
+        errorSpy.mockRestore();
+        logSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should fail check-security and print veto details on configuration degradation", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      // Mock project path and inject mock pyproject.toml
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-"));
+      writeFileSync(
+        join(projectRoot, "pyproject.toml"),
+        `
+        [tool.ruff.lint]
+        ignore = ["S101"]
+        `
+      );
+
+      const originalCwd = process.cwd();
+      process.chdir(projectRoot);
+
+      try {
+        await expect(main(["check-security"])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Security configuration degraded!");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+  });
 });
+
 
 
