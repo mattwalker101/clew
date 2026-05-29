@@ -2711,6 +2711,51 @@ describe("SessionManager Execution Gating", () => {
       try { fs.unlinkSync("README.md"); } catch (e) {}
     }
   });
+
+  it("should enforce command confirmation checks when confirmCommand option is supplied", async () => {
+    const mockSkill = {
+      id: "test-cmd-skill",
+      version: "0.1.0",
+      kind: "instruction_skill" as const,
+      name: "Test Command Skill",
+      instructions: { file: "test.md" },
+      tags: [],
+      capabilities: { required: [], optional: [] },
+      extends: [],
+      policies: [],
+      steps: [
+        {
+          id: "step-cmd-1",
+          title: "Run secure command",
+          instruction: "Run echo ok",
+          gates: [{ type: "command", command: "echo 'ok'" }]
+        }
+      ]
+    };
+
+    const sessionDb = openSessionDatabase(":memory:");
+    
+    // 1. Verification denied by confirmCommand returning false
+    const managerDenied = new SessionManager(sessionDb, {
+      getSkill: async () => mockSkill,
+    }, {
+      confirmCommand: async () => false,
+    });
+    const run1 = await managerDenied.createSession("test-cmd-skill");
+    const resultDenied = await managerDenied.verifyCurrentStep(run1.id);
+    expect(resultDenied.success).toBe(false);
+    expect(resultDenied.gates[0]!.error).toBe("Command execution verification denied by user.");
+
+    // 2. Verification approved by confirmCommand returning true
+    const managerApproved = new SessionManager(sessionDb, {
+      getSkill: async () => mockSkill,
+    }, {
+      confirmCommand: async () => true,
+    });
+    const run2 = await managerApproved.createSession("test-cmd-skill");
+    const resultApproved = await managerApproved.verifyCurrentStep(run2.id);
+    expect(resultApproved.success).toBe(true);
+  });
 });
 
 

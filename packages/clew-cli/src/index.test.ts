@@ -1726,6 +1726,50 @@ describe("@clew-ops/cli", () => {
     logSpy.mockRestore();
   });
 
+  it("should verify step and execute command when --yes flag is passed to bypass CLI confirmation", async () => {
+    const projectRoot = createProject();
+    const skillRoot = join(projectRoot, "skills", "cmd-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      join(skillRoot, "clew.yaml"),
+      [
+        "id: cmd-skill",
+        "version: 1.0.0",
+        "kind: instruction_skill",
+        "name: Command Skill",
+        "instructions:",
+        "  file: skill.md",
+        "tags: []",
+        "activation:",
+        "  triggers: []",
+        "steps:",
+        "  - id: step-1",
+        "    title: Execute Command",
+        "    instruction: Run simple echo",
+        "    gates:",
+        "      - type: command",
+        "        command: echo 'hello world'",
+        "        description: Check echo command",
+      ].join("\n"),
+    );
+    writeFileSync(join(skillRoot, "skill.md"), "# Command Skill\n");
+
+    process.chdir(projectRoot);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Start session
+    await main(["run", "start", "cmd-skill"]);
+    logSpy.mockClear();
+
+    // Verify step using --yes (to bypass prompt)
+    await main(["run", "verify", "--yes"]);
+    const allLogs = logSpy.mock.calls.map(c => c.join(" ")).join("\n");
+    expect(allLogs).toContain("🎉 Step verified successfully!");
+    expect(allLogs).toContain("🏆 Dynamic verification check passed!");
+
+    logSpy.mockRestore();
+  });
+
   it("CLI explains why a skill was suppressed due to project preferences", async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-pref-suppress-"));
     process.chdir(projectRoot);

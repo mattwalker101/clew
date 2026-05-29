@@ -815,7 +815,10 @@ export interface VerificationResult {
 export class SessionManager {
   constructor(
     private db: DatabaseSync,
-    private registry: { getSkill: (id: string) => Promise<any> }
+    private registry: { getSkill: (id: string) => Promise<any> },
+    private options?: {
+      confirmCommand?: (command: string, description?: string) => Promise<boolean>;
+    }
   ) {}
 
   async createSession(skillId: string) {
@@ -878,16 +881,25 @@ export class SessionManager {
             errorMsg = `File not found: ${gate.path}`;
           }
         } else if (gate.type === "command") {
-          passed = await new Promise<boolean>((resolve) => {
-            const cp = exec(gate.command, { timeout: gate.timeoutMs || 15000 }, (error) => {
-              if (error) {
-                errorMsg = error.message;
-                resolve(false);
-              } else {
-                resolve(true);
-              }
+          let allowed = true;
+          if (this.options?.confirmCommand) {
+            allowed = await this.options.confirmCommand(gate.command, gate.description);
+          }
+          if (allowed) {
+            passed = await new Promise<boolean>((resolve) => {
+              const cp = exec(gate.command, { timeout: gate.timeoutMs || 15000 }, (error) => {
+                if (error) {
+                  errorMsg = error.message;
+                  resolve(false);
+                } else {
+                  resolve(true);
+                }
+              });
             });
-          });
+          } else {
+            passed = false;
+            errorMsg = "Command execution verification denied by user.";
+          }
         }
       } catch (err: any) {
         errorMsg = err.message;

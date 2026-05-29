@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -398,6 +399,7 @@ const commands: Record<string, Command> = {
         db.close();
       }
     } else if (subcommand === "verify") {
+      const skipConfirm = args.includes("--yes") || args.includes("--force");
       const db = openSessionDatabase(sessionDbPath());
       try {
         const run = db.prepare("SELECT * FROM session_runs WHERE status = 'active' ORDER BY created_at DESC LIMIT 1").get() as any;
@@ -412,6 +414,21 @@ const commands: Record<string, Command> = {
             const bundle = current.lookup(id);
             return bundle ? bundle.manifest : null;
           },
+        }, {
+          confirmCommand: async (command, description) => {
+            if (skipConfirm) return true;
+            const rl = createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+            try {
+              const desc = description ? ` (${description})` : "";
+              const answer = await rl.question(`⚠️  Verification gate requests executing shell command:\n   > ${command}${desc}\nConfirm execution? (y/N): `);
+              return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
+            } finally {
+              rl.close();
+            }
+          }
         });
 
         const step = await manager.getCurrentStep(run.id);
