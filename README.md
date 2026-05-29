@@ -1,7 +1,7 @@
 # clew — the thread for agentic navigation
 
 [![CI](https://github.com/mattwalker101/clew/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mattwalker101/clew/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/mattwalker101/clew/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/mattwalker101/clew/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **clew** is a portable operational knowledge system for coding agents. It is a runtime-agnostic, local-first layer for reusable skills, registry intelligence, capability-aware activation, ecosystem interoperability, and explainable orchestration guidance.
