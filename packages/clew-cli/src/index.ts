@@ -520,12 +520,12 @@ const commands: Record<string, Command> = {
     }
     
     const hookPath = join(hookDir, "pre-commit");
-    const clewHookLine = "npx clew check-security --cached || exit 1";
+    const clewHookLine = "node packages/clew-cli/dist/index.js check-security --cached || exit 1";
     const hookContent = `#!/bin/sh\n# clew constitutional security gate\n${clewHookLine}\n`;
     
     if (existsSync(hookPath)) {
       const existing = readFileSync(hookPath, "utf-8");
-      if (existing.includes("clew check-security")) {
+      if (existing.includes("check-security")) {
         console.log("🎉 Constitutional pre-commit hook is already installed!");
         return;
       }
