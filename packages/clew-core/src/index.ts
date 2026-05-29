@@ -2169,8 +2169,56 @@ export function parseToml(content: string): any {
 }
 
 function stripJsonComments(jsonStr: string): string {
-  // Strips single-line and multi-line comments from JSON string
-  return jsonStr.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+  let result = "";
+  let inDoubleQuote = false;
+  let escaped = false;
+  let i = 0;
+  while (i < jsonStr.length) {
+    const char = jsonStr[i]!;
+    if (escaped) {
+      result += char;
+      escaped = false;
+      i++;
+      continue;
+    }
+    if (char === '\\') {
+      result += char;
+      if (inDoubleQuote) {
+        escaped = true;
+      }
+      i++;
+      continue;
+    }
+    if (char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+      i++;
+      continue;
+    }
+    if (!inDoubleQuote) {
+      if (char === '/' && jsonStr[i + 1] === '*') {
+        i += 2;
+        while (i < jsonStr.length) {
+          if (jsonStr[i] === '*' && jsonStr[i + 1] === '/') {
+            i += 2;
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      if (char === '/' && jsonStr[i + 1] === '/') {
+        i += 2;
+        while (i < jsonStr.length && jsonStr[i] !== '\n' && jsonStr[i] !== '\r') {
+          i++;
+        }
+        continue;
+      }
+    }
+    result += char;
+    i++;
+  }
+  return result;
 }
 
 export interface SecurityCheckResult {
