@@ -2117,6 +2117,9 @@ export function parseToml(content: string): any {
       let temp = result;
       for (const part of parts) {
         const p = part.trim();
+        if (p === "__proto__" || p === "constructor" || p === "prototype") {
+          throw new Error(`Prototype pollution attempt detected: ${p}`);
+        }
         if (temp[p] !== undefined && typeof temp[p] !== "object") {
           throw new Error(`Duplicate key or redefinition in TOML: ${p}`);
         }
@@ -2133,6 +2136,9 @@ export function parseToml(content: string): any {
     const eqIdx = line.indexOf("=");
     if (eqIdx !== -1) {
       const key = line.slice(0, eqIdx).trim();
+      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+        throw new Error(`Prototype pollution attempt detected: ${key}`);
+      }
       if (currentSection[key] !== undefined) {
         throw new Error(`Duplicate key or redefinition in TOML: ${key}`);
       }

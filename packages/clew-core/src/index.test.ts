@@ -2955,6 +2955,19 @@ describe("parseToml", () => {
     expect(parsed.path).toBe('C:\\\\Users\\\\admin');
     expect(parsed.escaped_single).toBe('val\\\"ue');
   });
+
+  it("should throw an error on prototype pollution attempts", () => {
+    const tomlSection = `
+      [__proto__.polluted]
+      key = "value"
+    `;
+    expect(() => parseToml(tomlSection)).toThrow("Prototype pollution attempt detected");
+
+    const tomlKey = `
+      __proto__ = "polluted"
+    `;
+    expect(() => parseToml(tomlKey)).toThrow("Prototype pollution attempt detected");
+  });
 });
 
 import { checkSecuritySettings } from "./index.js";
