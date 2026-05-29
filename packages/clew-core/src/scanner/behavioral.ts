@@ -26,7 +26,8 @@ function preprocessTypeScript(code: string): string {
     return ts.transpileModule(code, {
       compilerOptions: {
         target: ts.ScriptTarget.ESNext,
-        module: ts.ModuleKind.ESNext
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.React
       }
     }).outputText;
   } catch {
@@ -89,7 +90,8 @@ function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
 function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
   try {
-    const isTypeScript = filename.toLowerCase().endsWith(".ts") || filename.toLowerCase().endsWith(".tsx");
+    const lowerFn = filename.toLowerCase();
+    const isTypeScript = lowerFn.endsWith(".ts") || lowerFn.endsWith(".tsx") || lowerFn.endsWith(".jsx");
     const transpiledCode = isTypeScript ? preprocessTypeScript(code) : code;
 
     const ast = acorn.parse(transpiledCode, { ecmaVersion: "latest", sourceType: "module" });
@@ -222,8 +224,25 @@ function scanPythonHeuristics(filename: string, code: string): ScanError[] {
   return errors;
 }
 
+function cleanShellComments(code: string): string {
+  return code
+    .split("\n")
+    .map((line, idx) => {
+      if (idx === 0 && line.trim().startsWith("#!")) {
+        return line;
+      }
+      const hashIdx = line.indexOf("#");
+      if (hashIdx !== -1) {
+        return line.slice(0, hashIdx);
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 function scanShellHeuristics(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
+  const cleanCode = cleanShellComments(code);
   const rules = [
     { pattern: /\bcurl\b/, msg: "curl" },
     { pattern: /\bwget\b/, msg: "wget" },
@@ -242,7 +261,7 @@ function scanShellHeuristics(filename: string, code: string): ScanError[] {
   ];
 
   for (const rule of rules) {
-    if (rule.pattern.test(code)) {
+    if (rule.pattern.test(cleanCode)) {
       errors.push({
         type: "behavioral",
         file: filename,
@@ -286,7 +305,14 @@ export function scanScriptSafety(filename: string, code: string): ScriptScanResu
   const lowerName = filename.toLowerCase();
 
   let detectedExt = "";
-  if (lowerName.endsWith(".js") || lowerName.endsWith(".ts")) {
+  if (
+    lowerName.endsWith(".js") ||
+    lowerName.endsWith(".ts") ||
+    lowerName.endsWith(".tsx") ||
+    lowerName.endsWith(".jsx") ||
+    lowerName.endsWith(".mjs") ||
+    lowerName.endsWith(".cjs")
+  ) {
     detectedExt = ".js";
   } else if (lowerName.endsWith(".py")) {
     detectedExt = ".py";

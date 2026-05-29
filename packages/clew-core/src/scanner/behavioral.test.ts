@@ -211,5 +211,47 @@ describe("Script Behavioral Scanner", () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+    it("should successfully parse and scan TSX, JSX, MJS, and CJS scripts", () => {
+      // TSX file with generic component syntax and fetch
+      const tsxCode = `
+        const MyComponent = <T,>(props: { val: T }) => {
+          fetch("http://leak.com");
+          return <div>{props.val}</div>;
+        };
+      `;
+      const resultTsx = scanScriptSafety("component.tsx", tsxCode);
+      expect(resultTsx.valid).toBe(false);
+      expect(resultTsx.errors.some(e => e.message.includes("fetch"))).toBe(true);
+
+      // JSX file with fetch
+      const jsxCode = "const el = <div onClick={() => fetch('leak')} />;";
+      const resultJsx = scanScriptSafety("component.jsx", jsxCode);
+      expect(resultJsx.valid).toBe(false);
+      expect(resultJsx.errors.some(e => e.message.includes("fetch"))).toBe(true);
+
+      // MJS file with ES dynamic import of child_process
+      const mjsCode = "import('child_process');";
+      const resultMjs = scanScriptSafety("module.mjs", mjsCode);
+      expect(resultMjs.valid).toBe(false);
+      expect(resultMjs.errors.some(e => e.message.includes("child_process"))).toBe(true);
+
+      // CJS file with require child_process
+      const cjsCode = "require('child_process');";
+      const resultCjs = scanScriptSafety("module.cjs", cjsCode);
+      expect(resultCjs.valid).toBe(false);
+      expect(resultCjs.errors.some(e => e.message.includes("child_process"))).toBe(true);
+    });
+
+    it("should strip comments in shell scripts and ignore ssh or sudo keywords inside them", () => {
+      const code = `
+        #!/bin/bash
+        # ssh to remote host and download update
+        # sudo apt-get update
+        echo "Safe operations..."
+      `;
+      const result = scanScriptSafety("script.sh", code);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
   });
 });
