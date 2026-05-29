@@ -69,12 +69,12 @@ While the current codebase is extremely healthy, the following gaps have been id
 To finalize the **v0.2.0 (Explainable Registry)** and **v0.3.0 (Guided Runbooks)** releases, the following steps are required:
 
 ### Phase A: CLI Shell Execution Safety (v0.3.0 Release Gate)
-*   [ ] Implement a command verification confirmation prompt in the CLI when running untrusted or arbitrary shell commands inside `command` gates.
-*   [ ] Provide a `--yes` or `--force` flag in `clew run verify` to bypass manual verification confirmations in headless CI environments.
+*   [x] Implement a command verification confirmation prompt in the CLI when running untrusted or arbitrary shell commands inside `command` gates.
+*   [x] Provide a `--yes` or `--force` flag in `clew run verify` to bypass manual verification confirmations in headless CI environments.
 
 ### Phase B: Writable Cockpit Control Points (v0.2.0 Release Gate)
-*   [ ] Add `POST /api/telemetry/favorite` and `POST /api/telemetry/disable` endpoints to the Cockpit API server.
-*   [ ] Integrate "Favorite" and "Disable/Enable" toggle buttons into the Dashboard `RegistryTable` UI component.
+*   [x] Add `POST /api/telemetry/favorite` and `POST /api/telemetry/disable` endpoints to the Cockpit API server.
+*   [x] Integrate "Favorite" and "Disable/Enable" toggle buttons into the Dashboard `RegistryTable` UI component.
 
 ### Phase C: Package Publishing & Diagnostics
 *   [ ] Run a workspace-wide build audit using `pnpm -r publish --dry-run` to verify that all monorepo package bundles are packed with proper relative import directories.
