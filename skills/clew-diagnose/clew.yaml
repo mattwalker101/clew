@@ -1,0 +1,65 @@
+id: clew-diagnose
+version: 1.0.0
+kind: instruction_skill
+name: Systematic Debugging (Diagnose)
+description: Reproduce, isolate, hypothesize, fix, and verify defects systematically.
+instructions:
+  file: skill.md
+tags:
+  - debugging
+  - testing
+  - quality
+capabilities:
+  required:
+    - filesystem
+    - terminal
+  optional:
+    - git
+compatibility:
+  providers:
+    - claude
+    - codex
+    - opencode
+activation:
+  triggers:
+    - bug
+    - fix
+    - error
+    - crash
+    - debug
+    - fails
+    - diagnose
+policies:
+  - always reproduce the defect with a minimal test or script first
+  - isolate the minimal code that produces the failure
+  - verify that the reproduction case goes from red to green
+  - clean up temporary reproduction files after verification
+steps:
+  - id: debug-reproduce
+    title: "Debugging Phase 1: Reproduce"
+    instruction: "Create a new reproduction file containing the word 'reproduce' (e.g. 'reproduce.js', 'reproduce.ts', or 'reproduce.test.ts'). Write code that fails and exposes the bug. Run it and verify that it exits with a non-zero code."
+    gates:
+      - type: command
+        command: "REPRO_FILE=$(git status --porcelain | awk '{print $2}' | grep -E 'reproduce' | head -n 1); if [ -z \"$REPRO_FILE\" ]; then echo 'No active reproduction file found in git status!' >&2; exit 1; fi; if echo \"$REPRO_FILE\" | grep -qE '\\.test\\.(ts|tsx|js)$'; then npx vitest run \"$REPRO_FILE\"; elif echo \"$REPRO_FILE\" | grep -qE '\\.ts$'; then npx tsx \"$REPRO_FILE\"; else node \"$REPRO_FILE\"; fi; [ $? -ne 0 ]"
+        description: "Verify that the reproduction file is found and that it fails (returns a non-zero exit code) to isolate the defect."
+
+  - id: debug-fix
+    title: "Debugging Phase 2: Hypothesize and Fix"
+    instruction: "Analyze the defect, locate the root cause in the source files, and apply the minimal fix to solve the issue."
+    gates: []
+
+  - id: debug-verify
+    title: "Debugging Phase 3: Verify Fix"
+    instruction: "Execute the reproduction file again. The same case that previously failed must now execute and pass cleanly (exit with code 0)."
+    gates:
+      - type: command
+        command: "REPRO_FILE=$(git status --porcelain | awk '{print $2}' | grep -E 'reproduce' | head -n 1); if [ -z \"$REPRO_FILE\" ]; then echo 'No active reproduction file found in git status!' >&2; exit 1; fi; if echo \"$REPRO_FILE\" | grep -qE '\\.test\\.(ts|tsx|js)$'; then npx vitest run \"$REPRO_FILE\"; elif echo \"$REPRO_FILE\" | grep -qE '\\.ts$'; then npx tsx \"$REPRO_FILE\"; else node \"$REPRO_FILE\"; fi"
+        description: "Assert that the bug is resolved by verifying that the reproduction case now passes cleanly."
+
+  - id: debug-cleanup
+    title: "Debugging Phase 4: Clean Up"
+    instruction: "Delete the temporary reproduction file and restore the git status to a pristine state before completing."
+    gates:
+      - type: command
+        command: "REPRO_FILE=$(find . -maxdepth 4 -name '*reproduce*' | head -n 1); if [ -n \"$REPRO_FILE\" ]; then rm -f \"$REPRO_FILE\"; fi; git status --porcelain | grep -v 'reproduce' | wc -l"
+        description: "Ensure that any temporary reproduction files are removed and all edits have been finalized."
