@@ -63,6 +63,24 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         }
       }
 
+      if (node.type === "ImportDeclaration" || node.type === "ImportExpression") {
+        const source = node.source;
+        if (isASTNode(source) && source.type === "Literal") {
+          const value = source.value;
+          if (typeof value === "string") {
+            const forbidden = ["child_process", "net", "http", "https", "dgram"];
+            if (forbidden.includes(value)) {
+              errors.push({
+                type: "behavioral",
+                file: filename,
+                message: `Unauthorized import of system module: '${value}'`,
+                severity: "error"
+              });
+            }
+          }
+        }
+      }
+
       for (const key of Object.keys(node)) {
         const child = node[key];
         if (Array.isArray(child)) {

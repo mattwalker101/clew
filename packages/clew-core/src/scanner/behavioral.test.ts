@@ -48,6 +48,20 @@ describe("Script Behavioral Scanner", () => {
       }
     });
 
+    it("should fail JS scripts importing forbidden modules via static ES import", () => {
+      const code = "import * as cp from 'child_process';";
+      const result = scanScriptSafety("script.js", code);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.message.includes("child_process"))).toBe(true);
+    });
+
+    it("should fail JS scripts importing forbidden modules via dynamic ES import", () => {
+      const code = "const cpPromise = import('child_process');";
+      const result = scanScriptSafety("script.js", code);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.message.includes("child_process"))).toBe(true);
+    });
+
     it("should handle AST syntax errors gracefully", () => {
       const code = "const a = ;";
       const result = scanScriptSafety("script.js", code);
