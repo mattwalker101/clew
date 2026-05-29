@@ -2862,7 +2862,74 @@ describe("parseToml", () => {
     const parsed = parseToml(toml);
     expect(parsed.key).toBe('val"ue');
   });
+
+  it("should parse escaped quotes inside an array correctly", () => {
+    const toml = `
+      paths = ["src/a\\\"b,c.ts", "src/d.ts"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.paths).toEqual(["src/a\"b,c.ts", "src/d.ts"]);
+  });
+
+  it("should not process escape sequences in single-quoted strings", () => {
+    const toml = `
+      path = 'C:\\\\Users\\\\admin'
+      escaped_single = 'val\\\"ue'
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.path).toBe('C:\\\\Users\\\\admin');
+    expect(parsed.escaped_single).toBe('val\\\"ue');
+  });
 });
+
+import { checkSecuritySettings } from "./index.js";
+
+describe("checkSecuritySettings", () => {
+  it("should fail when Ruff security rules are added to ignore list", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "pyproject.toml": `
+          [tool.ruff.lint]
+          ignore = ["S101"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S101' added to ignore list");
+  });
+
+  it("should fail when Biome security linter rules are set to off", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.json": JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: "off"
+              }
+            }
+          }
+        })
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+  });
+
+  it("should fail when .gitleaks.toml allowlist contains unsafe generic path", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".gitleaks.toml": `
+          [allowlist]
+          paths = ["*"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain(".gitleaks.toml allowlist contains unsafe generic path: '*'");
+  });
+});
+
 
 
 

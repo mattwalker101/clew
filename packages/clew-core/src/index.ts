@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import * as fs from "node:fs";
-import { exec } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
@@ -2004,7 +2004,7 @@ function stripComments(line: string): string {
       escaped = false;
       continue;
     }
-    if (char === '\\') {
+    if (char === '\\' && inDoubleQuote) {
       escaped = true;
       continue;
     }
@@ -2021,8 +2021,11 @@ function stripComments(line: string): string {
 
 function parseValue(valStr: string): any {
   const s = valStr.trim();
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+  if (s.startsWith('"') && s.endsWith('"')) {
     return s.slice(1, -1).replace(/\\"/g, '"');
+  }
+  if (s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1);
   }
   if (s === "true") return true;
   if (s === "false") return false;
@@ -2035,8 +2038,19 @@ function parseArray(valStr: string): any[] {
   let currentToken = "";
   let inDoubleQuote = false;
   let inSingleQuote = false;
+  let escaped = false;
   for (let i = 0; i < valStr.length; i++) {
     const char = valStr[i];
+    if (escaped) {
+      escaped = false;
+      currentToken += char;
+      continue;
+    }
+    if (char === '\\' && inDoubleQuote) {
+      escaped = true;
+      currentToken += char;
+      continue;
+    }
     if (char === '"' && !inSingleQuote) {
       inDoubleQuote = !inDoubleQuote;
       currentToken += char;
@@ -2134,5 +2148,88 @@ export function parseToml(content: string): any {
   }
   return result;
 }
+
+export interface SecurityCheckResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export async function checkSecuritySettings(
+  workspacePath: string,
+  options?: { cached?: boolean; mockFiles?: Record<string, string> }
+): Promise<SecurityCheckResult> {
+  const errors: string[] = [];
+  
+  const getFileContent = (relPath: string): string | null => {
+    if (options?.mockFiles && relPath in options.mockFiles) {
+      return options.mockFiles[relPath] ?? null;
+    }
+    const fullPath = join(workspacePath, relPath);
+    if (!fs.existsSync(fullPath)) return null;
+    
+    if (options?.cached) {
+      try {
+        return execSync(`git show :${relPath}`, { cwd: workspacePath, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
+      } catch {
+        return fs.readFileSync(fullPath, "utf-8");
+      }
+    }
+    return fs.readFileSync(fullPath, "utf-8");
+  };
+
+  // 1. Pyproject TOML Checker
+  const ruffContent = getFileContent("pyproject.toml");
+  if (ruffContent) {
+    try {
+      const parsed = parseToml(ruffContent);
+      const lintIgnore = parsed.tool?.ruff?.lint?.ignore || [];
+      const lintExtendIgnore = parsed.tool?.ruff?.lint?.["extend-ignore"] || [];
+      
+      const sIgnore = [...lintIgnore, ...lintExtendIgnore].filter((rule: any) => typeof rule === "string" && rule.startsWith("S"));
+      if (sIgnore.length > 0) {
+        errors.push(`Ruff security rule '${sIgnore.join(", ")}' added to ignore list in pyproject.toml!`);
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse pyproject.toml: ${e.message}`);
+    }
+  }
+
+  // 2. Biome Checker
+  const biomeContent = getFileContent("biome.json");
+  if (biomeContent) {
+    try {
+      const parsed = JSON.parse(biomeContent);
+      const secRules = parsed.linter?.rules?.security || {};
+      for (const [rule, status] of Object.entries(secRules)) {
+        if (status === "off") {
+          errors.push(`Biome linter rule '${rule}' was disabled (set to 'off') in biome.json!`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse biome.json: ${e.message}`);
+    }
+  }
+
+  // 3. Gitleaks Checker
+  const gitleaksContent = getFileContent(".gitleaks.toml");
+  if (gitleaksContent) {
+    try {
+      const parsed = parseToml(gitleaksContent);
+      const allowlistPaths = parsed.allowlist?.paths || [];
+      const suspicious = allowlistPaths.filter((p: string) => p === "*" || p === "/" || p === "src" || p === "src/" || p.startsWith("../"));
+      if (suspicious.length > 0) {
+        errors.push(`.gitleaks.toml allowlist contains unsafe generic path: '${suspicious.join(", ")}'!`);
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse .gitleaks.toml: ${e.message}`);
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
 
 
