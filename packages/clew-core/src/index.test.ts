@@ -2758,4 +2758,27 @@ describe("SessionManager Execution Gating", () => {
   });
 });
 
+import { parseToml } from "./index.js";
+
+describe("parseToml", () => {
+  it("should parse simple key-values, sections, and arrays", () => {
+    const toml = `
+      # Comment
+      global_key = "global_value"
+
+      [tool.ruff.lint]
+      ignore = ["S101", "S102"]
+      extend-select = [
+        "S",
+        "B"
+      ]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.global_key).toBe("global_value");
+    expect(parsed.tool.ruff.lint.ignore).toEqual(["S101", "S102"]);
+    expect(parsed.tool.ruff.lint["extend-select"]).toEqual(["S", "B"]);
+  });
+});
+
+
 

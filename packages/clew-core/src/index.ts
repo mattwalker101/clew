@@ -1993,3 +1993,69 @@ function sortWarnings(warnings: CompatibilityWarning[]): CompatibilityWarning[] 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+export function parseToml(content: string): any {
+  const result: any = {};
+  let currentSection: any = result;
+  const lines = content.split(/\r?\n/);
+  
+  let i = 0;
+  while (i < lines.length) {
+    let line = lines[i]!.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) {
+      i++;
+      continue;
+    }
+    
+    if (line.startsWith("[") && line.endsWith("]")) {
+      const sectionName = line.slice(1, -1).trim();
+      const parts = sectionName.split(".");
+      let temp = result;
+      for (const part of parts) {
+        const p = part.trim();
+        if (!temp[p] || typeof temp[p] !== "object") {
+          temp[p] = {};
+        }
+        temp = temp[p];
+      }
+      currentSection = temp;
+      i++;
+      continue;
+    }
+    
+    const eqIdx = line.indexOf("=");
+    if (eqIdx !== -1) {
+      const key = line.slice(0, eqIdx).trim();
+      let valuePart = line.slice(eqIdx + 1).trim();
+      
+      if (valuePart.startsWith("[")) {
+        let arrayStr = valuePart;
+        while (!arrayStr.includes("]") && i + 1 < lines.length) {
+          i++;
+          arrayStr += " " + lines[i]!.trim();
+        }
+        const items = arrayStr
+          .slice(1, arrayStr.lastIndexOf("]"))
+          .split(",")
+          .map(item => {
+            const trimmed = item.trim();
+            if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+              return trimmed.slice(1, -1);
+            }
+            return trimmed;
+          })
+          .filter(item => item !== "");
+        
+        currentSection[key] = items;
+      } else {
+        if ((valuePart.startsWith('"') && valuePart.endsWith('"')) || (valuePart.startsWith("'") && valuePart.endsWith("'"))) {
+          valuePart = valuePart.slice(1, -1);
+        }
+        currentSection[key] = valuePart;
+      }
+    }
+    i++;
+  }
+  return result;
+}
+
