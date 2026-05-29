@@ -65,6 +65,9 @@ function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
   if (!parent) return false;
 
   if (parent.type === "MemberExpression" && parent.property === node && !parent.computed) {
+    if (node.name === "require") {
+      return false;
+    }
     return true;
   }
   if (parent.type === "Property" && parent.key === node && !parent.computed) {
@@ -103,7 +106,7 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         const name = node.name;
         if (
           typeof name === "string" && 
-          ["eval", "fetch", "Function"].includes(name) &&
+          ["eval", "fetch", "Function", "require"].includes(name) &&
           !isPropertyOrParameter(node, parent)
         ) {
           errors.push({
@@ -147,6 +150,30 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
               type: "behavioral",
               file: filename,
               message: `Unauthorized import of system module: '${value}'`,
+              severity: "error"
+            });
+          }
+        }
+      }
+
+      if (node.type === "MemberExpression") {
+        const object = node.object;
+        if (isASTNode(object) && object.type === "Identifier" && typeof object.name === "string" && ["globalThis", "window", "global"].includes(object.name)) {
+          let propName: string | null = null;
+          if (!node.computed) {
+            const property = node.property;
+            if (isASTNode(property) && property.type === "Identifier" && typeof property.name === "string") {
+              propName = property.name;
+            }
+          } else {
+            propName = getLiteralOrTemplateString(node.property);
+          }
+
+          if (propName && ["eval", "fetch", "Function"].includes(propName)) {
+            errors.push({
+              type: "behavioral",
+              file: filename,
+              message: `Unauthorized global identifier usage via namespace: '${propName}'`,
               severity: "error"
             });
           }
@@ -213,6 +240,10 @@ function cleanComments(code: string, isShell: boolean): string {
               continue;
             }
             if (prevTwo === "${") {
+              i++;
+              continue;
+            }
+            if (prevChar !== "" && !/[\s;|&(){}[\]<>]/.test(prevChar)) {
               i++;
               continue;
             }
