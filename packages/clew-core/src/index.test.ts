@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import {
   ActivationEngine,
   composeRegistrySkill,
@@ -2755,6 +2756,80 @@ describe("SessionManager Execution Gating", () => {
     const run2 = await managerApproved.createSession("test-cmd-skill");
     const resultApproved = await managerApproved.verifyCurrentStep(run2.id);
     expect(resultApproved.success).toBe(true);
+  });
+
+  it("should fail verification and append an active_conflict warning if security configurations are degraded", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "clew-session-sec-"));
+    // Setup mock files and sqlite database inside tempDir
+    const dbPath = join(tempDir, "session.db");
+    const db = new DatabaseSync(dbPath);
+    
+    // Create session table states and runs schemas as in standard tests
+    db.exec(`
+      CREATE TABLE session_runs (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_step_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE session_step_states (
+        session_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        last_verified_at TEXT,
+        error_log TEXT,
+        PRIMARY KEY (session_id, step_id)
+      );
+    `);
+
+    const mockRegistry = {
+      getSkill: async (id: string) => ({
+        id,
+        name: "Test Skill",
+        steps: [
+          {
+            id: "step1",
+            title: "First Step",
+            instruction: "Verify something",
+            gates: [
+              { type: "file", path: join(tempDir, "signal.txt") }
+            ]
+          }
+        ]
+      })
+    };
+
+    // Create signal.txt so standard file gate passes
+    writeFileSync(join(tempDir, "signal.txt"), "ok");
+
+    // Degrade pyproject.toml in the working directory
+    const pyprojectPath = join(tempDir, "pyproject.toml");
+    writeFileSync(pyprojectPath, `
+      [tool.ruff.lint]
+      ignore = ["S101"]
+    `);
+
+    const manager = new SessionManager(db, mockRegistry);
+    const session = await manager.createSession("test-skill");
+
+    // Change directory to tempDir so checkSecuritySettings runs there
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      const result = await manager.verifyCurrentStep(session.id);
+      expect(result.success).toBe(false);
+      const gate = result.gates.find(g => g.error && g.error.includes("[CONSTITUTIONAL_VETO]"));
+      expect(gate).toBeDefined();
+      expect(gate?.error).toContain("Ruff security rule 'S101' added to ignore list");
+    } finally {
+      process.chdir(originalCwd);
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

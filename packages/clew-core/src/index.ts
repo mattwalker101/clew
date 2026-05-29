@@ -864,6 +864,19 @@ export class SessionManager {
     const gateResults: VerificationResult["gates"] = [];
     let allPassed = true;
 
+    // Run constitutional security checks
+    const secCheck = await checkSecuritySettings(process.cwd(), { cached: false });
+    if (!secCheck.valid) {
+      allPassed = false;
+      for (const err of secCheck.errors) {
+        gateResults.push({
+          type: "file" as any,
+          success: false,
+          error: `[CONSTITUTIONAL_VETO] ${err}`
+        });
+      }
+    }
+
     for (const gate of step.gates) {
       let passed = false;
       let errorMsg: string | undefined;
