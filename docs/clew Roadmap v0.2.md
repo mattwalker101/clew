@@ -28,19 +28,19 @@ Transition `clew` from a declarative skill discovery tool to a context-aware int
 ## **Phased Execution**
 
 ### **Phase 8: Semantic Foundations**
-- [ ] Research and select local embedding library.
-- [ ] Update `@clew-ops/core` to generate and store embeddings for skill instructions.
-- [ ] Implement `clew-cli search --semantic` and integrate into `recommend`.
+- [x] Research and select local embedding library.
+- [x] Update `@clew-ops/core` to generate and store embeddings for skill instructions.
+- [x] Implement `clew-cli search --semantic` and integrate into `recommend`.
 
 ### **Phase 9: Relationship Overlays**
-- [ ] Implement "Redundancy Suppression" in the Activation Engine.
-- [ ] Add "Preference-Based Exclusion" (mandates from `AGENTS.md`).
-- [ ] Update `clew-cli explain` to show relationship-based logic (e.g., "Skill X suppressed because Skill Y is more specific").
+- [x] Implement "Redundancy Suppression" in the Activation Engine.
+- [x] Add "Preference-Based Exclusion" (mandates from `AGENTS.md`).
+- [x] Update `clew-cli explain` to show relationship-based logic (e.g., "Skill X suppressed because Skill Y is more specific").
 
 ### **Phase 10: The clew Cockpit**
-- [ ] Create `@clew-ops/dashboard` package (React/Vite or similar lightweight stack).
-- [ ] Implement `clew-cli dashboard` command to launch the local server.
-- [ ] Build visual "Signal Debugger" for Activation Engine verification.
+- [x] Create `@clew-ops/dashboard` package (React/Vite or similar lightweight stack).
+- [x] Implement `clew-cli dashboard` command to launch the local server.
+- [x] Build visual "Signal Debugger" for Activation Engine verification.
 
 ---
 

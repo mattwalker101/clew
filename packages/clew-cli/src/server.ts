@@ -12,7 +12,8 @@ import {
   findOverlaps,
   getAgentsMdDiagnostics,
   openSessionDatabase,
-  SessionManager
+  SessionManager,
+  openRegistryDb
 } from "@clew-ops/core";
 
 const require = createRequire(import.meta.url);
@@ -137,6 +138,68 @@ export async function startDashboardServer(port = 7708): Promise<http.Server> {
           const analysis = await engine.analyzeRecommendations(context);
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(analysis));
+        } catch (err: any) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // API: POST /api/telemetry/favorite
+    if (url.pathname === "/api/telemetry/favorite" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const payload = JSON.parse(body);
+          const { skillId, favorite } = payload;
+          if (!skillId || typeof favorite !== "boolean") {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Missing skillId or invalid favorite state" }));
+            return;
+          }
+
+          const dbPath = join(process.cwd(), ".clew-registry.db");
+          const db = openRegistryDb(dbPath);
+          try {
+            db.setSkillFavorite(skillId, favorite);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+          } finally {
+            db.close();
+          }
+        } catch (err: any) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // API: POST /api/telemetry/disable
+    if (url.pathname === "/api/telemetry/disable" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const payload = JSON.parse(body);
+          const { skillId, disabled } = payload;
+          if (!skillId || typeof disabled !== "boolean") {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Missing skillId or invalid disabled state" }));
+            return;
+          }
+
+          const dbPath = join(process.cwd(), ".clew-registry.db");
+          const db = openRegistryDb(dbPath);
+          try {
+            db.setSkillDisabled(skillId, disabled);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+          } finally {
+            db.close();
+          }
         } catch (err: any) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: err.message }));

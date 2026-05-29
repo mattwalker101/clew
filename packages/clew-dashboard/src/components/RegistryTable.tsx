@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Search, Filter, Layers, BookOpen, Settings, CheckCircle2, XCircle } from "lucide-react";
+import { Search, Filter, Layers, BookOpen, Settings, CheckCircle2, XCircle, Star, Eye, EyeOff } from "lucide-react";
 
 export type RegistryEntry = {
   skillId: string;
@@ -16,14 +16,20 @@ export type RegistryEntry = {
   hasSteps?: boolean;
 };
 
-export function RegistryTable({ entries, onSelectSkill }: { 
+export function RegistryTable({ entries, onSelectSkill, onToggleFavorite, onToggleDisable }: { 
   entries: RegistryEntry[];
   onSelectSkill: (skillId: string) => void;
+  onToggleFavorite: (skillId: string, favorite: boolean) => void;
+  onToggleDisable: (skillId: string, disabled: boolean) => void;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLayer, setSelectedLayer] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [selectedSkill, setSelectedSkill] = useState<RegistryEntry | null>(null);
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+
+  const selectedSkill = useMemo(() => {
+    return entries.find(e => e.skillId === selectedSkillId) || null;
+  }, [entries, selectedSkillId]);
 
   // Filter entries
   const filteredEntries = useMemo(() => {
@@ -113,9 +119,9 @@ export function RegistryTable({ entries, onSelectSkill }: {
                   filteredEntries.map((e) => (
                     <tr 
                       key={e.skillId}
-                      onClick={() => setSelectedSkill(e)}
+                      onClick={() => setSelectedSkillId(e.skillId)}
                       className={`hover:bg-gray-800/30 transition-colors cursor-pointer ${
-                        selectedSkill?.skillId === e.skillId ? "bg-blue-500/5 border-l-2 border-l-blue-500" : ""
+                        selectedSkillId === e.skillId ? "bg-blue-500/5 border-l-2 border-l-blue-500" : ""
                       }`}
                     >
                       <td className="py-4 px-6">
@@ -210,9 +216,42 @@ export function RegistryTable({ entries, onSelectSkill }: {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <button
+                onClick={() => onToggleFavorite(selectedSkill.skillId, !selectedSkill.favorite)}
+                className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold border transition-all ${
+                  selectedSkill.favorite
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                    : "bg-gray-950 text-gray-400 border-gray-800 hover:text-white hover:border-gray-700"
+                }`}
+              >
+                <Star className={`h-4 w-4 ${selectedSkill.favorite ? "fill-amber-400 text-amber-400" : ""}`} />
+                {selectedSkill.favorite ? "Favorited" : "Favorite"}
+              </button>
+
+              <button
+                onClick={() => onToggleDisable(selectedSkill.skillId, !selectedSkill.disabled)}
+                className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold border transition-all ${
+                  selectedSkill.disabled
+                    ? "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
+                    : "bg-gray-950 text-gray-400 border-gray-800 hover:text-white hover:border-gray-700"
+                }`}
+              >
+                {selectedSkill.disabled ? (
+                  <>
+                    <Eye className="h-4 w-4 text-green-400" /> Enable
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-4 w-4" /> Disable
+                  </>
+                )}
+              </button>
+            </div>
+
             <button
               onClick={() => onSelectSkill(selectedSkill.skillId)}
-              className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+              className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
               <BookOpen className="h-4 w-4" /> Trace Activation
             </button>

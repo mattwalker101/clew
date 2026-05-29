@@ -48,6 +48,36 @@ describe("clew Dashboard API Server", () => {
     expect(body).toHaveProperty("warnings");
   });
 
+  it("allows favoriting and disabling skills via POST /api/telemetry/favorite and /api/telemetry/disable", async () => {
+    // 1. Favorite a skill
+    const resFav = await fetch("http://localhost:7709/api/telemetry/favorite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId: "engineering-core", favorite: true }),
+    });
+    const bodyFav = (await resFav.json()) as any;
+    expect(resFav.status).toBe(200);
+    expect(bodyFav.success).toBe(true);
+
+    // 2. Disable a skill
+    const resDis = await fetch("http://localhost:7709/api/telemetry/disable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId: "engineering-core", disabled: true }),
+    });
+    const bodyDis = (await resDis.json()) as any;
+    expect(resDis.status).toBe(200);
+    expect(bodyDis.success).toBe(true);
+
+    // 3. Verify registry shows modified states
+    const resReg = await fetch("http://localhost:7709/api/registry");
+    const bodyReg = (await resReg.json()) as any;
+    const entry = bodyReg.entries.find((e: any) => e.skillId === "engineering-core");
+    expect(entry).toBeDefined();
+    expect(entry.favorite).toBe(true);
+    expect(entry.disabled).toBe(true);
+  });
+
   describe("Cockpit API Runbook Endpoints", () => {
     let projectRoot: string;
     const originalCwd = process.cwd();

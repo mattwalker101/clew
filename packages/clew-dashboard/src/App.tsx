@@ -62,6 +62,52 @@ function App() {
     }
   }
 
+  async function handleToggleFavorite(skillId: string, favorite: boolean) {
+    try {
+      const res = await fetch("/api/telemetry/favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId, favorite }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle favorite");
+      
+      // Update local state to be fast and responsive, and re-fetch diagnostics
+      setRegistryEntries(prev => prev.map(e => e.skillId === skillId ? { ...e, favorite } : e));
+      
+      // Refresh doctor diagnostics in background
+      const docRes = await fetch("/api/doctor");
+      if (docRes.ok) {
+        const docJson = await docRes.json();
+        setDoctorData(docJson);
+      }
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  }
+
+  async function handleToggleDisable(skillId: string, disabled: boolean) {
+    try {
+      const res = await fetch("/api/telemetry/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId, disabled }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle disable");
+      
+      // Update local state to be fast and responsive, and re-fetch diagnostics
+      setRegistryEntries(prev => prev.map(e => e.skillId === skillId ? { ...e, disabled } : e));
+      
+      // Refresh doctor diagnostics in background
+      const docRes = await fetch("/api/doctor");
+      if (docRes.ok) {
+        const docJson = await docRes.json();
+        setDoctorData(docJson);
+      }
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  }
+
   useEffect(() => {
     loadData();
   }, []);
@@ -250,6 +296,8 @@ function App() {
                     setSelectedSkillId(id);
                     setActiveTab("trace");
                   }}
+                  onToggleFavorite={handleToggleFavorite}
+                  onToggleDisable={handleToggleDisable}
                 />
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
