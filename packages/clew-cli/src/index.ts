@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -507,19 +507,61 @@ const commands: Record<string, Command> = {
     if (subcommand !== "install") {
       fail("usage: clew security install");
     }
-    const gitDir = join(process.cwd(), ".git");
-    const fs = await import("node:fs");
-    if (!fs.existsSync(gitDir)) {
+    
+    // Find the actual git directory dynamically (supporting subdirectories)
+    let gitDir = "";
+    try {
+      const { execSync } = await import("node:child_process");
+      const gitCommonDir = execSync("git rev-parse --git-common-dir", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      gitDir = join(process.cwd(), gitCommonDir);
+    } catch {
+      // Fallback recursive parent search
+      let current = process.cwd();
+      while (current !== join(current, "..")) {
+        const testDir = join(current, ".git");
+        if (existsSync(testDir)) {
+          gitDir = testDir;
+          break;
+        }
+        current = join(current, "..");
+      }
+    }
+    
+    if (!gitDir) {
       fail("❌ Not a git repository.");
     }
+    
     const hookDir = join(gitDir, "hooks");
-    if (!fs.existsSync(hookDir)) {
-      fs.mkdirSync(hookDir, { recursive: true });
+    if (!existsSync(hookDir)) {
+      mkdirSync(hookDir, { recursive: true });
     }
+    
     const hookPath = join(hookDir, "pre-commit");
-    const hookContent = `#!/bin/sh\n# clew constitutional security gate\nnpx clew check-security --cached\n`;
-    fs.writeFileSync(hookPath, hookContent, { mode: 0o755 });
-    console.log("🎉 Successfully installed constitutional pre-commit hook!");
+    const clewHookLine = "npx clew check-security --cached";
+    const hookContent = `#!/bin/sh\n# clew constitutional security gate\n${clewHookLine}\n`;
+    
+    if (existsSync(hookPath)) {
+      const existing = readFileSync(hookPath, "utf-8");
+      if (existing.includes("clew check-security")) {
+        console.log("🎉 Constitutional pre-commit hook is already installed!");
+        return;
+      }
+      
+      // Backup the old hook
+      writeFileSync(`${hookPath}.bak`, existing);
+      
+      let updated = existing;
+      if (existing.includes("#!/bin/sh")) {
+        updated = existing.replace("#!/bin/sh", `#!/bin/sh\n\n# clew constitutional security gate\n${clewHookLine}\n`);
+      } else {
+        updated = `${existing}\n\n# clew constitutional security gate\n${clewHookLine}\n`;
+      }
+      writeFileSync(hookPath, updated, { mode: 0o755 });
+      console.log("🎉 Successfully appended clew security gate to existing pre-commit hook (backed up original to pre-commit.bak)!");
+    } else {
+      writeFileSync(hookPath, hookContent, { mode: 0o755 });
+      console.log("🎉 Successfully installed constitutional pre-commit hook!");
+    }
   },
 };
 
