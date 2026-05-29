@@ -368,52 +368,83 @@ describe("Script Behavioral Scanner", () => {
       });
     });
 
-    it("should not flag fetch/eval/Function/require when destructured from safe local objects or shadowed in local declarations", () => {
-      // 1. Shorthand and nested destructuring from safe local objects
+    it("should not flag fetch/eval/Function/require when destructured from safe local objects or shadowed in local declarations, even when referenced later", () => {
+      // 1. Shorthand and nested destructuring from safe local objects, followed by references
       const code1 = `
         const responseData = { fetch: "fetchData" };
         const { fetch } = responseData;
+        console.log(fetch);
         
         const props = { require: "someValue" };
         const { require } = props;
+        console.log(require);
         
         const myArr = ["first", "second"];
         const [Function] = myArr;
+        console.log(Function);
         
         const { ...customRequire } = responseData;
+        console.log(customRequire);
       `;
       const result1 = scanScriptSafety("script.js", code1);
       expect(result1.valid).toBe(true);
       expect(result1.errors).toHaveLength(0);
 
-      // 2. Variable/Function shadowing of global names
+      // 2. Variable/Function shadowing of global names and subsequent reference
       const code2 = `
         const fetch = 123;
-        let myEval = "hello";
+        console.log(fetch);
         
         function Function() {
           return "test";
         }
+        console.log(Function());
         
         try {
           throw new Error("error");
         } catch (require) {
-          // shadowed parameter require is whitelisted!
+          console.log(require);
         }
       `;
       const result2 = scanScriptSafety("script.js", code2);
       expect(result2.valid).toBe(true);
       expect(result2.errors).toHaveLength(0);
 
-      // 3. Import shadowing
+      // 3. Import shadowing and subsequent reference
       const code3 = `
         import { custom as fetch } from "module";
         import Function from "another-module";
         import * as require from "namespace";
+        
+        console.log(fetch, Function, require);
       `;
       const result3 = scanScriptSafety("script.js", code3);
       expect(result3.valid).toBe(true);
       expect(result3.errors).toHaveLength(0);
+
+      // 4. Verifying that a restricted identifier used without a declaration still fails!
+      const code4 = `
+        console.log(fetch);
+      `;
+      const result4 = scanScriptSafety("script.js", code4);
+      expect(result4.valid).toBe(false);
+      expect(result4.errors).toHaveLength(1);
+      expect(result4.errors[0]?.message).toContain("Unauthorized global identifier usage: 'fetch'");
+
+      // 5. Verifying modern TS extensions (.mts and .cts) support and no false positives with local shadows
+      const tsCode = `
+        export const myFunc = (fetch: string) => {
+          console.log(fetch);
+        };
+      `;
+      
+      const mtsResult = scanScriptSafety("script.mts", tsCode);
+      expect(mtsResult.valid).toBe(true);
+      expect(mtsResult.errors).toHaveLength(0);
+
+      const ctsResult = scanScriptSafety("script.cts", tsCode);
+      expect(ctsResult.valid).toBe(true);
+      expect(ctsResult.errors).toHaveLength(0);
     });
   });
 });

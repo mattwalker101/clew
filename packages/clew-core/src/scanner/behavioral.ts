@@ -213,17 +213,134 @@ function checkObjectPatternDestructuring(
   }
 }
 
+function collectBindings(node: unknown, bindings: Set<string>): void {
+  if (!isASTNode(node)) return;
+
+  if (node.type === "Identifier" && typeof node.name === "string") {
+    bindings.add(node.name);
+  } else if (node.type === "Property") {
+    collectBindings(node.value, bindings);
+  } else if (node.type === "ObjectPattern") {
+    const properties = node.properties;
+    if (Array.isArray(properties)) {
+      for (const prop of properties) {
+        collectBindings(prop, bindings);
+      }
+    }
+  } else if (node.type === "ArrayPattern") {
+    const elements = node.elements;
+    if (Array.isArray(elements)) {
+      for (const elem of elements) {
+        collectBindings(elem, bindings);
+      }
+    }
+  } else if (node.type === "AssignmentPattern") {
+    collectBindings(node.left, bindings);
+  } else if (node.type === "RestElement") {
+    collectBindings(node.argument, bindings);
+  }
+}
+
+function collectScopeDeclarations(node: ASTNode, scope: string[]): void {
+  // 1. Collect parameters for functions
+  if (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(node.type)) {
+    const params = node.params;
+    if (Array.isArray(params)) {
+      const bindingsSet = new Set<string>();
+      for (const param of params) {
+        collectBindings(param, bindingsSet);
+      }
+      scope.push(...bindingsSet);
+    }
+  }
+
+  // 2. Collect catch clause parameter
+  if (node.type === "CatchClause" && node.param) {
+    const bindingsSet = new Set<string>();
+    collectBindings(node.param, bindingsSet);
+    scope.push(...bindingsSet);
+  }
+
+  // 3. Recursive traversal for other declarations in this scope
+  const visit = (n: unknown): void => {
+    if (!isASTNode(n)) return;
+
+    if (n.type === "VariableDeclarator") {
+      const bindingsSet = new Set<string>();
+      collectBindings(n.id, bindingsSet);
+      scope.push(...bindingsSet);
+    } else if (n.type === "FunctionDeclaration" || n.type === "ClassDeclaration") {
+      if (n.id && isASTNode(n.id) && typeof n.id.name === "string") {
+        scope.push(n.id.name);
+      }
+      // Do not enter nested function/class bodies for their scope declarations
+      return;
+    } else if (
+      ["ImportSpecifier", "ImportDefaultSpecifier", "ImportNamespaceSpecifier"].includes(n.type)
+    ) {
+      if (n.local && isASTNode(n.local) && typeof n.local.name === "string") {
+        scope.push(n.local.name);
+      }
+    }
+
+    // Do not enter nested scope-creating nodes during the declarations scan
+    if (n !== node && ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "ClassDeclaration", "BlockStatement", "CatchClause"].includes(n.type)) {
+      return;
+    }
+
+    for (const key of Object.keys(n)) {
+      const child = n[key];
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          visit(item);
+        }
+      } else if (isASTNode(child)) {
+        visit(child);
+      }
+    }
+  };
+
+  visit(node);
+}
+
+function isScopeCreatingNode(node: ASTNode): boolean {
+  return [
+    "Program",
+    "FunctionDeclaration",
+    "FunctionExpression",
+    "ArrowFunctionExpression",
+    "BlockStatement",
+    "CatchClause"
+  ].includes(node.type);
+}
+
 function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
   try {
     const lowerFn = filename.toLowerCase();
-    const isTypeScript = lowerFn.endsWith(".ts") || lowerFn.endsWith(".tsx") || lowerFn.endsWith(".jsx");
+    const isTypeScript =
+      lowerFn.endsWith(".ts") ||
+      lowerFn.endsWith(".tsx") ||
+      lowerFn.endsWith(".jsx") ||
+      lowerFn.endsWith(".mts") ||
+      lowerFn.endsWith(".cts");
     const transpiledCode = isTypeScript ? preprocessTypeScript(code) : code;
 
     const ast = acorn.parse(transpiledCode, { ecmaVersion: "latest", sourceType: "module" });
+    const scopeStack: string[][] = [];
     
     const walk = (node: unknown, parent: ASTNode | null = null, grandparent: ASTNode | null = null): void => {
       if (!isASTNode(node)) return;
+
+      let pushedScope = false;
+
+      // 1. If scope-creating, push a new scope and populate it
+      if (isScopeCreatingNode(node)) {
+        const newScope: string[] = [];
+        collectScopeDeclarations(node, newScope);
+        scopeStack.push(newScope);
+        pushedScope = true;
+      }
 
       if (node.type === "Identifier") {
         const name = node.name;
@@ -232,12 +349,23 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
           ["eval", "fetch", "Function", "require"].includes(name) &&
           !isPropertyOrParameter(node, parent, grandparent)
         ) {
-          errors.push({
-            type: "behavioral",
-            file: filename,
-            message: `Unauthorized global identifier usage: '${name}'`,
-            severity: "error"
-          });
+          // Check if name is shadowed in the scope stack
+          let isShadowed = false;
+          for (let i = scopeStack.length - 1; i >= 0; i--) {
+            if (scopeStack[i]!.includes(name)) {
+              isShadowed = true;
+              break;
+            }
+          }
+
+          if (!isShadowed) {
+            errors.push({
+              type: "behavioral",
+              file: filename,
+              message: `Unauthorized global identifier usage: '${name}'`,
+              severity: "error"
+            });
+          }
         }
       }
 
@@ -336,6 +464,10 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
         } else if (isASTNode(child)) {
           walk(child, node, parent);
         }
+      }
+
+      if (pushedScope) {
+        scopeStack.pop();
       }
     };
     walk(ast);
@@ -510,7 +642,9 @@ export function scanScriptSafety(filename: string, code: string): ScriptScanResu
     lowerName.endsWith(".tsx") ||
     lowerName.endsWith(".jsx") ||
     lowerName.endsWith(".mjs") ||
-    lowerName.endsWith(".cjs")
+    lowerName.endsWith(".cjs") ||
+    lowerName.endsWith(".mts") ||
+    lowerName.endsWith(".cts")
   ) {
     detectedExt = ".js";
   } else if (lowerName.endsWith(".py")) {
