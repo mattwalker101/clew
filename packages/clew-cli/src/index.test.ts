@@ -1924,7 +1924,7 @@ describe("@clew-ops/cli", () => {
         const hookPath = join(gitDir, "hooks", "pre-commit");
         expect(existsSync(hookPath)).toBe(true);
         const content = readFileSync(hookPath, "utf-8");
-        expect(content).toContain("clew check-security --cached");
+        expect(content).toContain("clew check-security --cached || exit 1");
         expect(logSpy).toHaveBeenCalled();
         expect(logSpy.mock.calls[0]?.[0]).toContain("Successfully installed constitutional pre-commit hook");
       } finally {
@@ -1962,7 +1962,7 @@ describe("@clew-ops/cli", () => {
         // Assert updated hook contains original and clew hook
         const content = readFileSync(hookPath, "utf-8");
         expect(content).toContain("echo 'hello world'");
-        expect(content).toContain("npx clew check-security --cached");
+        expect(content).toContain("npx clew check-security --cached || exit 1");
         expect(logSpy).toHaveBeenCalled();
         expect(logSpy.mock.calls[0]?.[0]).toContain("Successfully appended clew security gate");
       } finally {

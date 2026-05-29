@@ -520,7 +520,7 @@ const commands: Record<string, Command> = {
     }
     
     const hookPath = join(hookDir, "pre-commit");
-    const clewHookLine = "npx clew check-security --cached";
+    const clewHookLine = "npx clew check-security --cached || exit 1";
     const hookContent = `#!/bin/sh\n# clew constitutional security gate\n${clewHookLine}\n`;
     
     if (existsSync(hookPath)) {
@@ -534,9 +534,12 @@ const commands: Record<string, Command> = {
       writeFileSync(`${hookPath}.bak`, existing);
       
       let updated = existing;
-      const shebangRegex = /^#!.*\r?\n/;
+      const shebangRegex = /^#!.*(?:\r?\n|$)/;
       if (shebangRegex.test(existing)) {
-        updated = existing.replace(shebangRegex, (match) => `${match}\n# clew constitutional security gate\n${clewHookLine}\n`);
+        updated = existing.replace(shebangRegex, (match) => {
+          const newline = match.endsWith("\n") ? "" : "\n";
+          return `${match}${newline}\n# clew constitutional security gate\n${clewHookLine}\n`;
+        });
       } else {
         updated = `#!/bin/sh\n\n# clew constitutional security gate\n${clewHookLine}\n\n${existing}`;
       }
