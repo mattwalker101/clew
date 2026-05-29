@@ -2149,6 +2149,11 @@ export function parseToml(content: string): any {
   return result;
 }
 
+function stripJsonComments(jsonStr: string): string {
+  // Strips single-line and multi-line comments from JSON string
+  return jsonStr.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+}
+
 export interface SecurityCheckResult {
   valid: boolean;
   errors: string[];
@@ -2169,40 +2174,62 @@ export async function checkSecuritySettings(
       try {
         return execSync(`git show :${relPath}`, { cwd: workspacePath, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
       } catch {
-        // Fallback to disk if git index doesn't have it
+        // Fallback to disk
       }
     }
-    if (fs.existsSync(fullPath)) {
-      return fs.readFileSync(fullPath, "utf-8");
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        return fs.readFileSync(fullPath, "utf-8");
+      }
+    } catch {
+      // Ignore read errors and return null
     }
     return null;
   };
 
-  // 1. Pyproject TOML Checker
-  const ruffContent = getFileContent("pyproject.toml");
-  if (ruffContent) {
+  // 1. Ruff Checker (pyproject.toml, ruff.toml, .ruff.toml)
+  const ruffFiles = ["pyproject.toml", "ruff.toml", ".ruff.toml"];
+  for (const file of ruffFiles) {
+    const ruffContent = getFileContent(file);
+    if (!ruffContent) continue;
     try {
       const parsed = parseToml(ruffContent);
-      const lintIgnore = parsed.tool?.ruff?.lint?.ignore || [];
-      const lintExtendIgnore = parsed.tool?.ruff?.lint?.["extend-ignore"] || [];
-      const ruffIgnore = parsed.tool?.ruff?.ignore || [];
-      const ruffExtendIgnore = parsed.tool?.ruff?.["extend-ignore"] || [];
+      const ruffConfig = file === "pyproject.toml" ? parsed.tool?.ruff : parsed;
+      if (!ruffConfig) continue;
+
+      const lintIgnore = ruffConfig.lint?.ignore || [];
+      const lintExtendIgnore = ruffConfig.lint?.["extend-ignore"] || [];
+      const ruffIgnore = ruffConfig.ignore || [];
+      const ruffExtendIgnore = ruffConfig["extend-ignore"] || [];
       
       const allIgnored = [...lintIgnore, ...lintExtendIgnore, ...ruffIgnore, ...ruffExtendIgnore];
       const sIgnore = allIgnored.filter((rule: any) => typeof rule === "string" && rule.startsWith("S"));
       if (sIgnore.length > 0) {
-        errors.push(`Ruff security rule '${sIgnore.join(", ")}' added to ignore list in pyproject.toml!`);
+        errors.push(`Ruff security rule '${sIgnore.join(", ")}' added to ignore list in ${file}!`);
+      }
+
+      // Check for selective customized rules that omit security linting
+      const lintSelect = ruffConfig.lint?.select;
+      const ruffSelect = ruffConfig.select;
+      if (lintSelect !== undefined || ruffSelect !== undefined) {
+        const selects = [...(lintSelect || []), ...(ruffSelect || [])];
+        if (selects.length > 0 && !selects.includes("S") && !selects.includes("ALL")) {
+          errors.push(`Ruff security rules ('S') must be explicitly selected when customizing select rules in ${file}!`);
+        }
       }
     } catch (e: any) {
-      errors.push(`Failed to parse pyproject.toml: ${e.message}`);
+      errors.push(`Failed to parse ${file}: ${e.message}`);
     }
   }
 
-  // 2. Biome Checker
-  const biomeContent = getFileContent("biome.json");
-  if (biomeContent) {
+  // 2. Biome Checker (biome.json, biome.jsonc)
+  const biomeFiles = ["biome.json", "biome.jsonc"];
+  for (const file of biomeFiles) {
+    const biomeContent = getFileContent(file);
+    if (!biomeContent) continue;
     try {
-      const parsed = JSON.parse(biomeContent);
+      const cleanContent = stripJsonComments(biomeContent);
+      const parsed = JSON.parse(cleanContent);
       const secRules = parsed.linter?.rules?.security || {};
       for (const [rule, val] of Object.entries(secRules)) {
         let isDisabled = false;
@@ -2212,11 +2239,11 @@ export async function checkSecuritySettings(
           isDisabled = true;
         }
         if (isDisabled) {
-          errors.push(`Biome linter rule '${rule}' was disabled (set to 'off') in biome.json!`);
+          errors.push(`Biome linter rule '${rule}' was disabled (set to 'off') in ${file}!`);
         }
       }
     } catch (e: any) {
-      errors.push(`Failed to parse biome.json: ${e.message}`);
+      errors.push(`Failed to parse ${file}: ${e.message}`);
     }
   }
 
@@ -2226,7 +2253,9 @@ export async function checkSecuritySettings(
     try {
       const parsed = parseToml(gitleaksContent);
       const allowlistPaths = parsed.allowlist?.paths || [];
-      const suspicious = allowlistPaths.filter((p: string) => p === "*" || p === "/" || p === "src" || p === "src/" || p.startsWith("../"));
+      const suspicious = allowlistPaths.filter((p: string) => 
+        p === "*" || p === "/" || p === "src" || p === "src/" || p === "." || p === "./" || p === "**" || p.startsWith("../")
+      );
       if (suspicious.length > 0) {
         errors.push(`.gitleaks.toml allowlist contains unsafe generic path: '${suspicious.join(", ")}'!`);
       }

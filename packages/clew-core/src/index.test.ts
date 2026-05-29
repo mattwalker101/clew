@@ -3013,6 +3013,67 @@ describe("checkSecuritySettings", () => {
       } catch {}
     }
   });
+
+  it("should fail when standalone ruff.toml ignores security rules", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "ruff.toml": `
+          ignore = ["S101"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S101' added to ignore list in ruff.toml!");
+  });
+
+  it("should fail when standalone ruff.toml customizes select rules omitting 'S'", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".ruff.toml": `
+          select = ["E", "F"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rules ('S') must be explicitly selected when customizing select rules in .ruff.toml!");
+  });
+
+  it("should parse biome.jsonc containing inline and block comments", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.jsonc": `
+          {
+            // This is a single-line comment
+            "linter": {
+              "rules": {
+                /*
+                  This is a multi-line comment
+                */
+                "security": {
+                  "noEval": "off"
+                }
+              }
+            }
+          }
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off') in biome.jsonc!");
+  });
+
+  it("should fail when .gitleaks.toml allowlist contains generic path wildcards like '.', './', or '**'", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".gitleaks.toml": `
+          [allowlist]
+          paths = [".", "./", "**"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain(".gitleaks.toml allowlist contains unsafe generic path: '., ./, **'");
+  });
 });
 
 
