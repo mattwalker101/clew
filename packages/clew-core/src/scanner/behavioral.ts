@@ -90,6 +90,69 @@ function isPropertyOrParameter(node: ASTNode, parent: ASTNode | null): boolean {
   return false;
 }
 
+function isGlobalObject(node: unknown): boolean {
+  if (!isASTNode(node)) return false;
+
+  if (node.type === "Identifier") {
+    return typeof node.name === "string" && ["globalThis", "window", "global", "self"].includes(node.name);
+  }
+
+  if (node.type === "MemberExpression") {
+    if (isGlobalObject(node.object)) {
+      let propName: string | null = null;
+      if (!node.computed) {
+        const property = node.property;
+        if (isASTNode(property) && property.type === "Identifier" && typeof property.name === "string") {
+          propName = property.name;
+        }
+      } else {
+        propName = getLiteralOrTemplateString(node.property);
+      }
+      if (propName && ["globalThis", "window", "global", "self"].includes(propName)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function checkObjectPatternDestructuring(
+  pattern: ASTNode,
+  source: unknown,
+  filename: string,
+  errors: ScanError[]
+): void {
+  if (pattern.type !== "ObjectPattern") return;
+  if (!isGlobalObject(source)) return;
+
+  const properties = pattern.properties;
+  if (Array.isArray(properties)) {
+    for (const prop of properties) {
+      if (isASTNode(prop) && prop.type === "Property") {
+        let propName: string | null = null;
+        if (!prop.computed) {
+          const key = prop.key;
+          if (isASTNode(key) && key.type === "Identifier" && typeof key.name === "string") {
+            propName = key.name;
+          }
+        } else {
+          propName = getLiteralOrTemplateString(prop.key);
+        }
+
+        if (propName && ["eval", "fetch", "Function", "require"].includes(propName)) {
+          errors.push({
+            type: "behavioral",
+            file: filename,
+            message: `Unauthorized global identifier usage via destructuring: '${propName}'`,
+            severity: "error"
+          });
+        }
+      }
+    }
+  }
+}
+
 function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
   try {
@@ -158,7 +221,7 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
 
       if (node.type === "MemberExpression") {
         const object = node.object;
-        if (isASTNode(object) && object.type === "Identifier" && typeof object.name === "string" && ["globalThis", "window", "global"].includes(object.name)) {
+        if (isGlobalObject(object)) {
           let propName: string | null = null;
           if (!node.computed) {
             const property = node.property;
@@ -169,7 +232,7 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
             propName = getLiteralOrTemplateString(node.property);
           }
 
-          if (propName && ["eval", "fetch", "Function"].includes(propName)) {
+          if (propName && ["eval", "fetch", "Function", "require"].includes(propName)) {
             errors.push({
               type: "behavioral",
               file: filename,
@@ -177,6 +240,30 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
               severity: "error"
             });
           }
+        }
+      }
+
+      if (node.type === "VariableDeclarator") {
+        const id = node.id;
+        const init = node.init;
+        if (isASTNode(id) && init) {
+          checkObjectPatternDestructuring(id, init, filename, errors);
+        }
+      }
+
+      if (node.type === "AssignmentExpression") {
+        const left = node.left;
+        const right = node.right;
+        if (isASTNode(left) && right) {
+          checkObjectPatternDestructuring(left, right, filename, errors);
+        }
+      }
+
+      if (node.type === "AssignmentPattern") {
+        const left = node.left;
+        const right = node.right;
+        if (isASTNode(left) && right) {
+          checkObjectPatternDestructuring(left, right, filename, errors);
         }
       }
 

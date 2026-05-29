@@ -309,6 +309,48 @@ describe("Script Behavioral Scanner", () => {
         const result3 = scanScriptSafety("script.js", code3);
         expect(result3.valid).toBe(false);
         expect(result3.errors.some(e => e.message.includes("eval"))).toBe(true);
+
+        // globalThis['require'] computed property bypass
+        const code4 = "globalThis['require']('child_process');";
+        const result4 = scanScriptSafety("script.js", code4);
+        expect(result4.valid).toBe(false);
+        expect(result4.errors.some(e => e.message.includes("require"))).toBe(true);
+
+        // globalThis.globalThis.eval chained bypass
+        const code5 = "globalThis.globalThis.eval('2+2');";
+        const result5 = scanScriptSafety("script.js", code5);
+        expect(result5.valid).toBe(false);
+        expect(result5.errors.some(e => e.message.includes("eval"))).toBe(true);
+
+        // self global namespace bypass
+        const code6 = "self.fetch('http://leak.com');";
+        const result6 = scanScriptSafety("script.js", code6);
+        expect(result6.valid).toBe(false);
+        expect(result6.errors.some(e => e.message.includes("fetch"))).toBe(true);
+      });
+
+      it("destructuring bypasses on global objects", () => {
+        // const { require: myReq } = globalThis;
+        const code1 = "const { require: myReq } = globalThis; myReq('child_process');";
+        const result1 = scanScriptSafety("script.js", code1);
+        expect(result1.valid).toBe(false);
+        expect(result1.errors.some(e => e.message.includes("require"))).toBe(true);
+
+        // ({ eval } = globalThis);
+        const code2 = "let customEval; ({ eval: customEval } = window);";
+        const result2 = scanScriptSafety("script.js", code2);
+        expect(result2.valid).toBe(false);
+        expect(result2.errors.some(e => e.message.includes("eval"))).toBe(true);
+
+        // function destructuring assignment pattern
+        const code3 = "function test({ fetch = globalThis } = {}) {}";
+        const result3 = scanScriptSafety("script.js", code3);
+        // Note: fetch is key, but wait, the default assignment is destructured from globalThis if fetch is a parameter destructured default.
+        // Let's verify standard destructured fetch parameter from globalThis:
+        const code4 = "const run = ({ fetch } = globalThis) => {};";
+        const result4 = scanScriptSafety("script.js", code4);
+        expect(result4.valid).toBe(false);
+        expect(result4.errors.some(e => e.message.includes("fetch"))).toBe(true);
       });
 
       it("indirect require bypasses", () => {
