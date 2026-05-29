@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.0 (2026-05-29)
+
+### Added
+- **Guided Runbooks State Machine**: Complete SQLite-based local execution engine inside `@clew-ops/core` utilizing `.clew-session.db` and state checking for verification gates (`command`, `file`, `grep`).
+- **CLI Runbook Verification Commands**: Subcommands `clew run start`, `clew run status`, and `clew run verify` to enable interactive runbook progress stepper inside developer environments.
+- **Cockpit Runbook Stepper**: Beautiful, real-time dashboard UI panel visualizing active step descriptions, progress meters, and verification gate results.
+- **Interactive Telemetry Controls**: Writable favorite/disable control endpoints (`POST /api/telemetry/favorite`, `POST /api/telemetry/disable`) and dashboard UI toggle buttons allowing custom operational custom overrides.
+- **Shell Command Safety Prompting**: Secure verification gates that prompt the developer in the CLI before running untrusted or arbitrary shell commands, with `--yes` or `--force` opt-in bypasses.
+- **Three Canonical Operational Skills**: Implemented high-quality self-documenting skills inside the workspace (`clew-tdd` enforcing red-green-refactor cycles, `clew-diagnose` for defect loops, and `clew-grill-me` for design alignment).
+
 ## v0.2.0 (2026-05-27)
 
 ### Added

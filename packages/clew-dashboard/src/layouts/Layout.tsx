@@ -49,7 +49,7 @@ export function Layout({ children, activeTab, onTabChange }: {
 
       <footer className="border-t border-gray-900 bg-gray-950 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm">
-          clew Cockpit v0.2.0 — Local Operational Registry Intelligence
+          clew Cockpit v0.3.0 — Local Operational Registry Intelligence
         </div>
       </footer>
     </div>
