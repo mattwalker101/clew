@@ -2338,3 +2338,4 @@ export async function checkSecuritySettings(
 }
 
 export * from "./scanner/static.js";
+export * from "./scanner/behavioral.js";
