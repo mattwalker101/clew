@@ -177,13 +177,50 @@ function scanJavaScriptAST(filename: string, code: string): ScanError[] {
   return errors;
 }
 
-function cleanPythonComments(code: string): string {
+function cleanComments(code: string, isShell: boolean): string {
   return code
     .split("\n")
-    .map(line => {
-      const hashIdx = line.indexOf("#");
-      if (hashIdx !== -1) {
-        return line.slice(0, hashIdx);
+    .map((line, idx) => {
+      // Preserve shebang on line 1
+      if (idx === 0 && line.trim().startsWith("#!")) {
+        return line;
+      }
+      
+      let inDoubleQuote = false;
+      let inSingleQuote = false;
+      let i = 0;
+      
+      while (i < line.length) {
+        const char = line[i];
+        const prevChar = i > 0 ? line[i - 1] : "";
+        const prevTwo = i > 1 ? line.substring(i - 2, i) : "";
+        
+        // Handle escaped characters inside quotes
+        if (char === "\\" && (inDoubleQuote || inSingleQuote)) {
+          i += 2;
+          continue;
+        }
+        
+        if (char === '"' && !inSingleQuote) {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (char === "'" && !inDoubleQuote) {
+          inSingleQuote = !inSingleQuote;
+        } else if (char === "#" && !inDoubleQuote && !inSingleQuote) {
+          // Check for Shell parameter expansions: $# or ${#
+          if (isShell) {
+            if (prevChar === "$") {
+              i++;
+              continue;
+            }
+            if (prevTwo === "${") {
+              i++;
+              continue;
+            }
+          }
+          // Found a comment! Truncate the line here.
+          return line.substring(0, i);
+        }
+        i++;
       }
       return line;
     })
@@ -192,7 +229,7 @@ function cleanPythonComments(code: string): string {
 
 function scanPythonHeuristics(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
-  const cleanCode = cleanPythonComments(code);
+  const cleanCode = cleanComments(code, false);
 
   const rules = [
     { pattern: /\bimport\s+subprocess\b/i, msg: "subprocess" },
@@ -224,25 +261,9 @@ function scanPythonHeuristics(filename: string, code: string): ScanError[] {
   return errors;
 }
 
-function cleanShellComments(code: string): string {
-  return code
-    .split("\n")
-    .map((line, idx) => {
-      if (idx === 0 && line.trim().startsWith("#!")) {
-        return line;
-      }
-      const hashIdx = line.indexOf("#");
-      if (hashIdx !== -1) {
-        return line.slice(0, hashIdx);
-      }
-      return line;
-    })
-    .join("\n");
-}
-
 function scanShellHeuristics(filename: string, code: string): ScanError[] {
   const errors: ScanError[] = [];
-  const cleanCode = cleanShellComments(code);
+  const cleanCode = cleanComments(code, true);
   const rules = [
     { pattern: /\bcurl\b/, msg: "curl" },
     { pattern: /\bwget\b/, msg: "wget" },
