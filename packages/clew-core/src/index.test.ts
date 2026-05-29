@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import {
   ActivationEngine,
   composeRegistrySkill,
@@ -2756,6 +2757,413 @@ describe("SessionManager Execution Gating", () => {
     const resultApproved = await managerApproved.verifyCurrentStep(run2.id);
     expect(resultApproved.success).toBe(true);
   });
+
+  it("should fail verification and append an active_conflict warning if security configurations are degraded", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "clew-session-sec-"));
+    // Setup mock files and sqlite database inside tempDir
+    const dbPath = join(tempDir, "session.db");
+    const db = new DatabaseSync(dbPath);
+    
+    // Create session table states and runs schemas as in standard tests
+    db.exec(`
+      CREATE TABLE session_runs (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_step_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE session_step_states (
+        session_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        last_verified_at TEXT,
+        error_log TEXT,
+        PRIMARY KEY (session_id, step_id)
+      );
+    `);
+
+    const mockRegistry = {
+      getSkill: async (id: string) => ({
+        id,
+        name: "Test Skill",
+        steps: [
+          {
+            id: "step1",
+            title: "First Step",
+            instruction: "Verify something",
+            gates: [
+              { type: "file", path: join(tempDir, "signal.txt") }
+            ]
+          }
+        ]
+      })
+    };
+
+    // Create signal.txt so standard file gate passes
+    writeFileSync(join(tempDir, "signal.txt"), "ok");
+
+    // Degrade pyproject.toml in the working directory
+    const pyprojectPath = join(tempDir, "pyproject.toml");
+    writeFileSync(pyprojectPath, `
+      [tool.ruff.lint]
+      ignore = ["S101"]
+    `);
+
+    const manager = new SessionManager(db, mockRegistry);
+    const session = await manager.createSession("test-skill");
+
+    // Change directory to tempDir so checkSecuritySettings runs there
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      const result = await manager.verifyCurrentStep(session.id);
+      expect(result.success).toBe(false);
+      const gate = result.gates.find(g => g.error && g.error.includes("[CONSTITUTIONAL_VETO]"));
+      expect(gate).toBeDefined();
+      expect(gate?.error).toContain("Ruff security rule 'S101' added to ignore list");
+    } finally {
+      process.chdir(originalCwd);
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
+
+import { parseToml } from "./index.js";
+
+describe("parseToml", () => {
+  it("should parse simple key-values, sections, and arrays", () => {
+    const toml = `
+      # Comment
+      global_key = "global_value"
+
+      [tool.ruff.lint]
+      ignore = ["S101", "S102"]
+      extend-select = [
+        "S",
+        "B"
+      ]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.global_key).toBe("global_value");
+    expect(parsed.tool.ruff.lint.ignore).toEqual(["S101", "S102"]);
+    expect(parsed.tool.ruff.lint["extend-select"]).toEqual(["S", "B"]);
+  });
+
+  it("should parse inline trailing comments on section headers", () => {
+    const toml = `
+      [tool.ruff.lint] # settings
+      ignore = ["S101"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.tool.ruff.lint.ignore).toEqual(["S101"]);
+  });
+
+  it("should throw on overwrite redefinitions", () => {
+    const tomlDuplicateKey = `
+      key = "value1"
+      key = "value2"
+    `;
+    expect(() => parseToml(tomlDuplicateKey)).toThrow("Duplicate key or redefinition in TOML: key");
+
+    const tomlRedefinePrimitiveAsTable = `
+      key = "value"
+      [key.nested]
+      other = 1
+    `;
+    expect(() => parseToml(tomlRedefinePrimitiveAsTable)).toThrow("Duplicate key or redefinition in TOML: key");
+  });
+
+  it("should parse array elements containing commas inside quotes", () => {
+    const toml = `
+      paths = ["src/a,b.ts", "src/c.ts"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.paths).toEqual(["src/a,b.ts", "src/c.ts"]);
+  });
+
+  it("should parse arrays with inline comments", () => {
+    const toml = `
+      ignore = [
+        "S101", # disable s101
+        "S102"
+      ]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.ignore).toEqual(["S101", "S102"]);
+  });
+
+  it("should parse booleans and numbers correctly", () => {
+    const toml = `
+      enabled = true
+      disabled = false
+      count = 42
+      pi = 3.14
+      str = "true"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.enabled).toBe(true);
+    expect(parsed.disabled).toBe(false);
+    expect(parsed.count).toBe(42);
+    expect(parsed.pi).toBe(3.14);
+    expect(parsed.str).toBe("true");
+  });
+
+  it("should parse array strings resembling primitives as strings", () => {
+    const toml = `
+      values = ["true", "false", "123", "3.14"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.values).toEqual(["true", "false", "123", "3.14"]);
+  });
+
+  it("should allow keys named the same as segments of section headers", () => {
+    const toml = `
+      [tool.ruff]
+      tool = "value"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.tool.ruff.tool).toBe("value");
+  });
+
+  it("should parse escaped quotes correctly", () => {
+    const toml = `
+      key = "val\\\"ue"
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.key).toBe('val"ue');
+  });
+
+  it("should parse escaped quotes inside an array correctly", () => {
+    const toml = `
+      paths = ["src/a\\\"b,c.ts", "src/d.ts"]
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.paths).toEqual(["src/a\"b,c.ts", "src/d.ts"]);
+  });
+
+  it("should not process escape sequences in single-quoted strings", () => {
+    const toml = `
+      path = 'C:\\\\Users\\\\admin'
+      escaped_single = 'val\\\"ue'
+    `;
+    const parsed = parseToml(toml);
+    expect(parsed.path).toBe('C:\\\\Users\\\\admin');
+    expect(parsed.escaped_single).toBe('val\\\"ue');
+  });
+
+  it("should throw an error on prototype pollution attempts", () => {
+    const tomlSection = `
+      [__proto__.polluted]
+      key = "value"
+    `;
+    expect(() => parseToml(tomlSection)).toThrow("Prototype pollution attempt detected");
+
+    const tomlKey = `
+      __proto__ = "polluted"
+    `;
+    expect(() => parseToml(tomlKey)).toThrow("Prototype pollution attempt detected");
+  });
+});
+
+import { checkSecuritySettings } from "./index.js";
+
+describe("checkSecuritySettings", () => {
+  it("should fail when Ruff security rules are added to ignore list", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "pyproject.toml": `
+          [tool.ruff.lint]
+          ignore = ["S101"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S101' added to ignore list");
+  });
+
+  it("should fail when Biome security linter rules are set to off", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.json": JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: "off"
+              }
+            }
+          }
+        })
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+  });
+
+  it("should fail when .gitleaks.toml allowlist contains unsafe generic path", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".gitleaks.toml": `
+          [allowlist]
+          paths = ["*"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain(".gitleaks.toml allowlist contains unsafe generic path: '*'");
+  });
+
+  it("should fail when Biome security rules are disabled using object style settings", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.json": JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: {
+                  level: "off"
+                }
+              }
+            }
+          }
+        })
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+  });
+
+  it("should fail when Ruff security rules are added directly to tool.ruff.ignore", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "pyproject.toml": `
+          [tool.ruff]
+          ignore = ["S102"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S102' added to ignore list");
+  });
+
+  it("should retrieve staged-only file content when cached: true", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "clew-security-test-"));
+    const { execSync } = await import("node:child_process");
+    
+    try {
+      // Initialize Git repo
+      execSync("git init", { cwd: tempDir, stdio: "ignore" });
+      execSync("git config user.name 'Test'", { cwd: tempDir, stdio: "ignore" });
+      execSync("git config user.email 'test@test.com'", { cwd: tempDir, stdio: "ignore" });
+
+      // Create biome.json with security rules disabled
+      const biomePath = join(tempDir, "biome.json");
+      writeFileSync(
+        biomePath,
+        JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: "off"
+              }
+            }
+          }
+        })
+      );
+
+      // Stage biome.json to git index
+      execSync("git add biome.json", { cwd: tempDir, stdio: "ignore" });
+
+      // Now delete biome.json from disk, so it ONLY exists in git stage
+      unlinkSync(biomePath);
+
+      // Verify that checkSecuritySettings with cached: true still detects it and fails!
+      const resultCached = await checkSecuritySettings(tempDir, { cached: true });
+      expect(resultCached.valid).toBe(false);
+      expect(resultCached.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+
+      // Verify that without cached: true, it doesn't fail because the file is deleted from disk
+      const resultUncached = await checkSecuritySettings(tempDir, { cached: false });
+      expect(resultUncached.valid).toBe(true);
+
+    } finally {
+      // Clean up tempDir
+      try {
+        if (existsSync(join(tempDir, "biome.json"))) {
+          unlinkSync(join(tempDir, "biome.json"));
+        }
+        const rimraf = await import("node:fs");
+        rimraf.rmSync(tempDir, { recursive: true, force: true });
+      } catch {}
+    }
+  });
+
+  it("should fail when standalone ruff.toml ignores security rules", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "ruff.toml": `
+          ignore = ["S101"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S101' added to ignore list in ruff.toml!");
+  });
+
+  it("should fail when standalone ruff.toml customizes select rules omitting 'S'", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".ruff.toml": `
+          select = ["E", "F"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rules ('S') must be explicitly selected when customizing select rules in .ruff.toml!");
+  });
+
+  it("should parse biome.jsonc containing inline and block comments", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.jsonc": `
+          {
+            // This is a single-line comment
+            "linter": {
+              "rules": {
+                /*
+                  This is a multi-line comment
+                */
+                "security": {
+                  "noEval": "off"
+                }
+              }
+            }
+          }
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off') in biome.jsonc!");
+  });
+
+  it("should fail when .gitleaks.toml allowlist contains generic path wildcards like '.', './', or '**'", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        ".gitleaks.toml": `
+          [allowlist]
+          paths = [".", "./", "**"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain(".gitleaks.toml allowlist contains unsafe generic path: '., ./, **'");
+  });
+});
+
+
 
 

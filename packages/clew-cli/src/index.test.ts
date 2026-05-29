@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1813,6 +1813,201 @@ describe("@clew-ops/cli", () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  describe("clew check-security", () => {
+    it("should run check-security and pass if clean", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("process.exit called");
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-clean-"));
+      const originalCwd = process.cwd();
+      process.chdir(projectRoot);
+
+      try {
+        await main(["check-security"]);
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Constitution review passed");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        logSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should fail check-security and print veto details on configuration degradation", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      // Mock project path and inject mock pyproject.toml
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-"));
+      writeFileSync(
+        join(projectRoot, "pyproject.toml"),
+        `
+        [tool.ruff.lint]
+        ignore = ["S101"]
+        `
+      );
+
+      const originalCwd = process.cwd();
+      process.chdir(projectRoot);
+
+      try {
+        await expect(main(["check-security"])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Security configuration degraded!");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should fail check-security when executed from a subdirectory if root config is degraded", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-subdir-"));
+      const subDir = join(projectRoot, "packages", "some-pkg");
+      mkdirSync(subDir, { recursive: true });
+
+      // Degraded config in root
+      writeFileSync(
+        join(projectRoot, "pyproject.toml"),
+        `
+        [tool.ruff.lint]
+        ignore = ["S101"]
+        `
+      );
+
+      // Initialize mock .git folder so findRepoRoot resolves it
+      mkdirSync(join(projectRoot, ".git"), { recursive: true });
+
+      const originalCwd = process.cwd();
+      process.chdir(subDir);
+
+      try {
+        await expect(main(["check-security"])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Security configuration degraded!");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("clew security install", () => {
+    it("should write a new pre-commit hook if one does not exist", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-install-"));
+      const originalCwd = process.cwd();
+      
+      // Create .git directory
+      const gitDir = join(projectRoot, ".git");
+      mkdirSync(gitDir, { recursive: true });
+      process.chdir(projectRoot);
+
+      try {
+        await main(["security", "install"]);
+        const hookPath = join(gitDir, "hooks", "pre-commit");
+        expect(existsSync(hookPath)).toBe(true);
+        const content = readFileSync(hookPath, "utf-8");
+        expect(content).toContain("node packages/clew-cli/dist/index.js check-security --cached || exit 1");
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Successfully installed constitutional pre-commit hook");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        logSpy.mockRestore();
+      }
+    });
+
+    it("should append to an existing hook and create a backup .bak file", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-install-append-"));
+      const originalCwd = process.cwd();
+      
+      // Create .git/hooks directory
+      const gitDir = join(projectRoot, ".git");
+      const hookDir = join(gitDir, "hooks");
+      mkdirSync(hookDir, { recursive: true });
+      
+      // Create existing pre-commit hook
+      const hookPath = join(hookDir, "pre-commit");
+      const originalHookContent = "#!/bin/sh\necho 'hello world'\n";
+      writeFileSync(hookPath, originalHookContent);
+      
+      process.chdir(projectRoot);
+
+      try {
+        await main(["security", "install"]);
+        
+        // Assert backup exists with original content
+        const backupPath = `${hookPath}.bak`;
+        expect(existsSync(backupPath)).toBe(true);
+        expect(readFileSync(backupPath, "utf-8")).toBe(originalHookContent);
+
+        // Assert updated hook contains original and clew hook
+        const content = readFileSync(hookPath, "utf-8");
+        expect(content).toContain("echo 'hello world'");
+        expect(content).toContain("node packages/clew-cli/dist/index.js check-security --cached || exit 1");
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Successfully appended clew security gate");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        logSpy.mockRestore();
+      }
+    });
+
+    it("should skip installation if hook is already installed", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-sec-install-skip-"));
+      const originalCwd = process.cwd();
+      
+      // Create .git/hooks directory
+      const gitDir = join(projectRoot, ".git");
+      const hookDir = join(gitDir, "hooks");
+      mkdirSync(hookDir, { recursive: true });
+      
+      // Create pre-commit hook that already contains clew
+      const hookPath = join(hookDir, "pre-commit");
+      const existingHookContent = `#!/bin/sh\n# clew constitutional security gate\nnode packages/clew-cli/dist/index.js check-security --cached || exit 1\n`;
+      writeFileSync(hookPath, existingHookContent);
+      
+      process.chdir(projectRoot);
+
+      try {
+        await main(["security", "install"]);
+        
+        // Assert backup DOES NOT exist
+        const backupPath = `${hookPath}.bak`;
+        expect(existsSync(backupPath)).toBe(false);
+
+        // Assert content is unchanged
+        expect(readFileSync(hookPath, "utf-8")).toBe(existingHookContent);
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("already installed");
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(projectRoot, { recursive: true, force: true });
+        logSpy.mockRestore();
+      }
+    });
+  });
 });
+
 
 

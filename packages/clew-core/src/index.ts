@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import * as fs from "node:fs";
-import { exec } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
@@ -863,6 +863,19 @@ export class SessionManager {
 
     const gateResults: VerificationResult["gates"] = [];
     let allPassed = true;
+
+    // Run constitutional security checks
+    const secCheck = await checkSecuritySettings(process.cwd(), { cached: false });
+    if (!secCheck.valid) {
+      allPassed = false;
+      for (const err of secCheck.errors) {
+        gateResults.push({
+          type: "file" as any,
+          success: false,
+          error: `[CONSTITUTIONAL_VETO] ${err}`
+        });
+      }
+    }
 
     for (const gate of step.gates) {
       let passed = false;
@@ -1993,3 +2006,336 @@ function sortWarnings(warnings: CompatibilityWarning[]): CompatibilityWarning[] 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+function stripComments(line: string): string {
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  let escaped = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && inDoubleQuote) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    } else if ((char === "#" || char === ";") && !inDoubleQuote && !inSingleQuote) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+function parseValue(valStr: string): any {
+  const s = valStr.trim();
+  if (s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1).replace(/\\"/g, '"');
+  }
+  if (s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1);
+  }
+  if (s === "true") return true;
+  if (s === "false") return false;
+  if (!isNaN(Number(s)) && s !== "") return Number(s);
+  return s;
+}
+
+function parseArray(valStr: string): any[] {
+  const result: any[] = [];
+  let currentToken = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  let escaped = false;
+  for (let i = 0; i < valStr.length; i++) {
+    const char = valStr[i];
+    if (escaped) {
+      escaped = false;
+      currentToken += char;
+      continue;
+    }
+    if (char === '\\' && inDoubleQuote) {
+      escaped = true;
+      currentToken += char;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      currentToken += char;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      currentToken += char;
+      continue;
+    }
+    if (inDoubleQuote || inSingleQuote) {
+      currentToken += char;
+      continue;
+    }
+    if (char === "#" || char === ";") {
+      break;
+    }
+    if (char === ",") {
+      const trimmed = currentToken.trim();
+      if (trimmed) {
+        result.push(parseValue(trimmed));
+      }
+      currentToken = "";
+    } else {
+      currentToken += char;
+    }
+  }
+  const trimmed = currentToken.trim();
+  if (trimmed) {
+    result.push(parseValue(trimmed));
+  }
+  return result;
+}
+
+export function parseToml(content: string): any {
+  const result: any = {};
+  let currentSection: any = result;
+  const lines = content.split(/\r?\n/);
+  
+  let i = 0;
+  while (i < lines.length) {
+    let line = stripComments(lines[i]!).trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) {
+      i++;
+      continue;
+    }
+    
+    if (line.startsWith("[") && line.endsWith("]")) {
+      const sectionName = line.slice(1, -1).trim();
+      const parts = sectionName.split(".");
+      let temp = result;
+      for (const part of parts) {
+        const p = part.trim();
+        if (p === "__proto__" || p === "constructor" || p === "prototype") {
+          throw new Error(`Prototype pollution attempt detected: ${p}`);
+        }
+        if (temp[p] !== undefined && typeof temp[p] !== "object") {
+          throw new Error(`Duplicate key or redefinition in TOML: ${p}`);
+        }
+        if (!temp[p]) {
+          temp[p] = {};
+        }
+        temp = temp[p];
+      }
+      currentSection = temp;
+      i++;
+      continue;
+    }
+    
+    const eqIdx = line.indexOf("=");
+    if (eqIdx !== -1) {
+      const key = line.slice(0, eqIdx).trim();
+      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+        throw new Error(`Prototype pollution attempt detected: ${key}`);
+      }
+      if (currentSection[key] !== undefined) {
+        throw new Error(`Duplicate key or redefinition in TOML: ${key}`);
+      }
+      
+      let valuePart = line.slice(eqIdx + 1).trim();
+      
+      if (valuePart.startsWith("[")) {
+        let arrayStr = valuePart;
+        while (!arrayStr.includes("]") && i + 1 < lines.length) {
+          i++;
+          const nextLine = stripComments(lines[i]!).trim();
+          arrayStr += " " + nextLine;
+        }
+        
+        const firstBracket = arrayStr.indexOf("[");
+        const lastBracket = arrayStr.lastIndexOf("]");
+        const innerArrayStr = arrayStr.slice(firstBracket + 1, lastBracket);
+        
+        const items = parseArray(innerArrayStr);
+        currentSection[key] = items;
+      } else {
+        currentSection[key] = parseValue(valuePart);
+      }
+    }
+    i++;
+  }
+  return result;
+}
+
+function stripJsonComments(jsonStr: string): string {
+  let result = "";
+  let inDoubleQuote = false;
+  let escaped = false;
+  let i = 0;
+  while (i < jsonStr.length) {
+    const char = jsonStr[i]!;
+    if (escaped) {
+      result += char;
+      escaped = false;
+      i++;
+      continue;
+    }
+    if (char === '\\') {
+      result += char;
+      if (inDoubleQuote) {
+        escaped = true;
+      }
+      i++;
+      continue;
+    }
+    if (char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+      i++;
+      continue;
+    }
+    if (!inDoubleQuote) {
+      if (char === '/' && jsonStr[i + 1] === '*') {
+        i += 2;
+        while (i < jsonStr.length) {
+          if (jsonStr[i] === '*' && jsonStr[i + 1] === '/') {
+            i += 2;
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      if (char === '/' && jsonStr[i + 1] === '/') {
+        i += 2;
+        while (i < jsonStr.length && jsonStr[i] !== '\n' && jsonStr[i] !== '\r') {
+          i++;
+        }
+        continue;
+      }
+    }
+    result += char;
+    i++;
+  }
+  return result;
+}
+
+export interface SecurityCheckResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export async function checkSecuritySettings(
+  workspacePath: string,
+  options?: { cached?: boolean; mockFiles?: Record<string, string> }
+): Promise<SecurityCheckResult> {
+  const errors: string[] = [];
+  
+  const getFileContent = (relPath: string): string | null => {
+    if (options?.mockFiles && relPath in options.mockFiles) {
+      return options.mockFiles[relPath] ?? null;
+    }
+    const fullPath = join(workspacePath, relPath);
+    if (options?.cached) {
+      try {
+        return execSync(`git show :${relPath}`, { cwd: workspacePath, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
+      } catch {
+        // Fallback to disk
+      }
+    }
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        return fs.readFileSync(fullPath, "utf-8");
+      }
+    } catch {
+      // Ignore read errors and return null
+    }
+    return null;
+  };
+
+  // 1. Ruff Checker (pyproject.toml, ruff.toml, .ruff.toml)
+  const ruffFiles = ["pyproject.toml", "ruff.toml", ".ruff.toml"];
+  for (const file of ruffFiles) {
+    const ruffContent = getFileContent(file);
+    if (!ruffContent) continue;
+    try {
+      const parsed = parseToml(ruffContent);
+      const ruffConfig = file === "pyproject.toml" ? parsed.tool?.ruff : parsed;
+      if (!ruffConfig) continue;
+
+      const lintIgnore = ruffConfig.lint?.ignore || [];
+      const lintExtendIgnore = ruffConfig.lint?.["extend-ignore"] || [];
+      const ruffIgnore = ruffConfig.ignore || [];
+      const ruffExtendIgnore = ruffConfig["extend-ignore"] || [];
+      
+      const allIgnored = [...lintIgnore, ...lintExtendIgnore, ...ruffIgnore, ...ruffExtendIgnore];
+      const sIgnore = allIgnored.filter((rule: any) => typeof rule === "string" && rule.startsWith("S"));
+      if (sIgnore.length > 0) {
+        errors.push(`Ruff security rule '${sIgnore.join(", ")}' added to ignore list in ${file}!`);
+      }
+
+      // Check for selective customized rules that omit security linting
+      const lintSelect = ruffConfig.lint?.select;
+      const ruffSelect = ruffConfig.select;
+      if (lintSelect !== undefined || ruffSelect !== undefined) {
+        const selects = [...(lintSelect || []), ...(ruffSelect || [])];
+        if (selects.length > 0 && !selects.includes("S") && !selects.includes("ALL")) {
+          errors.push(`Ruff security rules ('S') must be explicitly selected when customizing select rules in ${file}!`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse ${file}: ${e.message}`);
+    }
+  }
+
+  // 2. Biome Checker (biome.json, biome.jsonc)
+  const biomeFiles = ["biome.json", "biome.jsonc"];
+  for (const file of biomeFiles) {
+    const biomeContent = getFileContent(file);
+    if (!biomeContent) continue;
+    try {
+      const cleanContent = stripJsonComments(biomeContent);
+      const parsed = JSON.parse(cleanContent);
+      const secRules = parsed.linter?.rules?.security || {};
+      for (const [rule, val] of Object.entries(secRules)) {
+        let isDisabled = false;
+        if (val === "off") {
+          isDisabled = true;
+        } else if (val && typeof val === "object" && (val as any).level === "off") {
+          isDisabled = true;
+        }
+        if (isDisabled) {
+          errors.push(`Biome linter rule '${rule}' was disabled (set to 'off') in ${file}!`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse ${file}: ${e.message}`);
+    }
+  }
+
+  // 3. Gitleaks Checker
+  const gitleaksContent = getFileContent(".gitleaks.toml");
+  if (gitleaksContent) {
+    try {
+      const parsed = parseToml(gitleaksContent);
+      const allowlistPaths = parsed.allowlist?.paths || [];
+      const suspicious = allowlistPaths.filter((p: string) => 
+        p === "*" || p === "/" || p === "src" || p === "src/" || p === "." || p === "./" || p === "**" || p.startsWith("../")
+      );
+      if (suspicious.length > 0) {
+        errors.push(`.gitleaks.toml allowlist contains unsafe generic path: '${suspicious.join(", ")}'!`);
+      }
+    } catch (e: any) {
+      errors.push(`Failed to parse .gitleaks.toml: ${e.message}`);
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+
+

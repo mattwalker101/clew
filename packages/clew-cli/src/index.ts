@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   ActivationEngine,
+  checkSecuritySettings,
   detectRepoSignals,
   findConflicts,
   findOverlaps,
@@ -484,7 +486,108 @@ const commands: Record<string, Command> = {
     }
 
   },
+  async "check-security"(args) {
+    const cached = args.includes("--cached");
+    const repoRoot = findRepoRoot() || process.cwd();
+    const result = await checkSecuritySettings(repoRoot, { cached });
+    if (!result.valid) {
+      console.error("\x1b[31m✖ [clew security] VETO: Security configuration degraded!\x1b[0m");
+      console.error("  -------------------------------------------------------------");
+      for (const err of result.errors) {
+        console.error(`  Violation:    ${err}`);
+      }
+      console.error("\n  Rationale:    Deactivating AST-based security rules is prohibited by the");
+      console.error("                project's security constitution.");
+      console.error("  -------------------------------------------------------------");
+      console.error("  ⚠️ Commit aborted. Please restore the security rules and try again.");
+      process.exit(1);
+    }
+    console.log("✔ [clew security] Constitution review passed successfully!");
+  },
+  async security(args) {
+    const [subcommand] = args;
+    if (subcommand !== "install") {
+      fail("usage: clew security install");
+    }
+    
+    const hookDir = findHooksDir();
+    if (!hookDir) {
+      fail("❌ Not a git repository.");
+    }
+    
+    if (!existsSync(hookDir)) {
+      mkdirSync(hookDir, { recursive: true });
+    }
+    
+    const hookPath = join(hookDir, "pre-commit");
+    const clewHookLine = "node packages/clew-cli/dist/index.js check-security --cached || exit 1";
+    const hookContent = `#!/bin/sh\n# clew constitutional security gate\n${clewHookLine}\n`;
+    
+    if (existsSync(hookPath)) {
+      const existing = readFileSync(hookPath, "utf-8");
+      if (existing.includes("check-security")) {
+        console.log("🎉 Constitutional pre-commit hook is already installed!");
+        return;
+      }
+      
+      // Backup the old hook
+      writeFileSync(`${hookPath}.bak`, existing);
+      
+      let updated = existing;
+      const shebangRegex = /^#!.*(?:\r?\n|$)/;
+      if (shebangRegex.test(existing)) {
+        updated = existing.replace(shebangRegex, (match) => {
+          const newline = match.endsWith("\n") ? "" : "\n";
+          return `${match}${newline}\n# clew constitutional security gate\n${clewHookLine}\n`;
+        });
+      } else {
+        updated = `#!/bin/sh\n\n# clew constitutional security gate\n${clewHookLine}\n\n${existing}`;
+      }
+      writeFileSync(hookPath, updated, { mode: 0o755 });
+      console.log("🎉 Successfully appended clew security gate to existing pre-commit hook (backed up original to pre-commit.bak)!");
+    } else {
+      writeFileSync(hookPath, hookContent, { mode: 0o755 });
+      console.log("🎉 Successfully installed constitutional pre-commit hook!");
+    }
+  },
 };
+
+function findRepoRoot(): string {
+  try {
+    const { execSync } = createRequire(import.meta.url)("node:child_process");
+    return execSync("git rev-parse --show-toplevel", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    // Fallback recursive parent search
+    let current = process.cwd();
+    while (current !== join(current, "..")) {
+      const testDir = join(current, ".git");
+      if (existsSync(testDir)) {
+        return current;
+      }
+      current = join(current, "..");
+    }
+  }
+  return "";
+}
+
+function findHooksDir(): string {
+  try {
+    const { execSync } = createRequire(import.meta.url)("node:child_process");
+    const hooksPath = execSync("git rev-parse --git-path hooks", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return join(process.cwd(), hooksPath);
+  } catch {
+    // Fallback recursive parent search
+    let current = process.cwd();
+    while (current !== join(current, "..")) {
+      const testDir = join(current, ".git");
+      if (existsSync(testDir) && statSync(testDir).isDirectory()) {
+        return join(testDir, "hooks");
+      }
+      current = join(current, "..");
+    }
+  }
+  return "";
+}
 
 async function readRegistry() {
   const snapshot = await rebuildRegistryIndex({ projectRoot: process.cwd(), dbPath: registryDbPath() });
@@ -611,6 +714,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  mcp [run|install]",
         "  dashboard [--port=<number>]",
         "  run <start|status|verify>",
+        "  check-security",
+        "  security install",
       ].join("\n"),
     );
     return;
