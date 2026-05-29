@@ -2165,16 +2165,17 @@ export async function checkSecuritySettings(
       return options.mockFiles[relPath] ?? null;
     }
     const fullPath = join(workspacePath, relPath);
-    if (!fs.existsSync(fullPath)) return null;
-    
     if (options?.cached) {
       try {
         return execSync(`git show :${relPath}`, { cwd: workspacePath, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
       } catch {
-        return fs.readFileSync(fullPath, "utf-8");
+        // Fallback to disk if git index doesn't have it
       }
     }
-    return fs.readFileSync(fullPath, "utf-8");
+    if (fs.existsSync(fullPath)) {
+      return fs.readFileSync(fullPath, "utf-8");
+    }
+    return null;
   };
 
   // 1. Pyproject TOML Checker
@@ -2184,8 +2185,11 @@ export async function checkSecuritySettings(
       const parsed = parseToml(ruffContent);
       const lintIgnore = parsed.tool?.ruff?.lint?.ignore || [];
       const lintExtendIgnore = parsed.tool?.ruff?.lint?.["extend-ignore"] || [];
+      const ruffIgnore = parsed.tool?.ruff?.ignore || [];
+      const ruffExtendIgnore = parsed.tool?.ruff?.["extend-ignore"] || [];
       
-      const sIgnore = [...lintIgnore, ...lintExtendIgnore].filter((rule: any) => typeof rule === "string" && rule.startsWith("S"));
+      const allIgnored = [...lintIgnore, ...lintExtendIgnore, ...ruffIgnore, ...ruffExtendIgnore];
+      const sIgnore = allIgnored.filter((rule: any) => typeof rule === "string" && rule.startsWith("S"));
       if (sIgnore.length > 0) {
         errors.push(`Ruff security rule '${sIgnore.join(", ")}' added to ignore list in pyproject.toml!`);
       }
@@ -2200,8 +2204,14 @@ export async function checkSecuritySettings(
     try {
       const parsed = JSON.parse(biomeContent);
       const secRules = parsed.linter?.rules?.security || {};
-      for (const [rule, status] of Object.entries(secRules)) {
-        if (status === "off") {
+      for (const [rule, val] of Object.entries(secRules)) {
+        let isDisabled = false;
+        if (val === "off") {
+          isDisabled = true;
+        } else if (val && typeof val === "object" && (val as any).level === "off") {
+          isDisabled = true;
+        }
+        if (isDisabled) {
           errors.push(`Biome linter rule '${rule}' was disabled (set to 'off') in biome.json!`);
         }
       }

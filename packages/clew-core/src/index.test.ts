@@ -2928,6 +2928,91 @@ describe("checkSecuritySettings", () => {
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain(".gitleaks.toml allowlist contains unsafe generic path: '*'");
   });
+
+  it("should fail when Biome security rules are disabled using object style settings", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "biome.json": JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: {
+                  level: "off"
+                }
+              }
+            }
+          }
+        })
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+  });
+
+  it("should fail when Ruff security rules are added directly to tool.ruff.ignore", async () => {
+    const result = await checkSecuritySettings("/mock/path", {
+      mockFiles: {
+        "pyproject.toml": `
+          [tool.ruff]
+          ignore = ["S102"]
+        `
+      }
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("Ruff security rule 'S102' added to ignore list");
+  });
+
+  it("should retrieve staged-only file content when cached: true", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "clew-security-test-"));
+    const { execSync } = await import("node:child_process");
+    
+    try {
+      // Initialize Git repo
+      execSync("git init", { cwd: tempDir, stdio: "ignore" });
+      execSync("git config user.name 'Test'", { cwd: tempDir, stdio: "ignore" });
+      execSync("git config user.email 'test@test.com'", { cwd: tempDir, stdio: "ignore" });
+
+      // Create biome.json with security rules disabled
+      const biomePath = join(tempDir, "biome.json");
+      writeFileSync(
+        biomePath,
+        JSON.stringify({
+          linter: {
+            rules: {
+              security: {
+                noEval: "off"
+              }
+            }
+          }
+        })
+      );
+
+      // Stage biome.json to git index
+      execSync("git add biome.json", { cwd: tempDir, stdio: "ignore" });
+
+      // Now delete biome.json from disk, so it ONLY exists in git stage
+      unlinkSync(biomePath);
+
+      // Verify that checkSecuritySettings with cached: true still detects it and fails!
+      const resultCached = await checkSecuritySettings(tempDir, { cached: true });
+      expect(resultCached.valid).toBe(false);
+      expect(resultCached.errors[0]).toContain("Biome linter rule 'noEval' was disabled (set to 'off')");
+
+      // Verify that without cached: true, it doesn't fail because the file is deleted from disk
+      const resultUncached = await checkSecuritySettings(tempDir, { cached: false });
+      expect(resultUncached.valid).toBe(true);
+
+    } finally {
+      // Clean up tempDir
+      try {
+        if (existsSync(join(tempDir, "biome.json"))) {
+          unlinkSync(join(tempDir, "biome.json"));
+        }
+        const rimraf = await import("node:fs");
+        rimraf.rmSync(tempDir, { recursive: true, force: true });
+      } catch {}
+    }
+  });
 });
 
 
