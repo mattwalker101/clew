@@ -194,7 +194,46 @@ describe("Semantic LLM Scanner", () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    it("should successfully parse and extract JSON even when wrapped in conversational markdown text", async () => {
+      const mockResponse = {
+        safe: false,
+        riskScore: 7,
+        findings: [
+          {
+            vector: "prompt_injection",
+            severity: "high",
+            snippet: "overriding prompt",
+            explanation: "Injection vector"
+          }
+        ]
+      };
+
+      const rawConversationalOutput = `
+        Certainly! Here is the security analysis JSON output you requested:
+        \`\`\`json
+        ${JSON.stringify(mockResponse)}
+        \`\`\`
+        Let me know if you need further help!
+      `;
+
+      vi.spyOn(global, "fetch").mockImplementation(async () => {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: rawConversationalOutput } }]
+          })
+        } as any;
+      });
+
+      const result = await scanSemanticInstructions("instruction.md", "some injection content");
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]?.severity).toBe("error");
+      expect(result.errors[0]?.message).toContain("[prompt_injection]");
+    });
   });
+
 
   describe("Graceful Degradation and Unreachable Endpoints", () => {
     it("should gracefully degrade and return valid: true when no API keys or Ollama hosts are configured", async () => {

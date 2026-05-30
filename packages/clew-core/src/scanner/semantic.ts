@@ -49,10 +49,20 @@ Output your response strictly as a JSON object matching this structure:
   let judgeRawResponse = "";
   let providerUsed = false;
 
+  const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   try {
     if (geminiKey) {
       providerUsed = true;
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -68,7 +78,7 @@ Output your response strictly as a JSON object matching this structure:
       judgeRawResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     } else if (anthropicKey) {
       providerUsed = true;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,7 +99,7 @@ Output your response strictly as a JSON object matching this structure:
       judgeRawResponse = data.content?.[0]?.text || "";
     } else if (openaiKey) {
       providerUsed = true;
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -112,7 +122,7 @@ Output your response strictly as a JSON object matching this structure:
     } else if (ollamaHost || options?.ollama) {
       providerUsed = true;
       const host = (ollamaHost || "http://127.0.0.1:11434").replace(/\/$/, "");
-      const res = await fetch(`${host}/api/generate`, {
+      const res = await fetchWithTimeout(`${host}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -154,7 +164,13 @@ Output your response strictly as a JSON object matching this structure:
 
   if (judgeRawResponse) {
     try {
-      const cleaned = judgeRawResponse.replace(/```json|```/g, "").trim();
+      const trimmed = judgeRawResponse.trim();
+      const firstBracket = trimmed.indexOf("{");
+      const lastBracket = trimmed.lastIndexOf("}");
+      if (firstBracket === -1 || lastBracket === -1) {
+        throw new Error("No JSON object structure found in response");
+      }
+      const cleaned = trimmed.substring(firstBracket, lastBracket + 1);
       const parsed = JSON.parse(cleaned);
       const riskScore = typeof parsed.riskScore === "number" ? parsed.riskScore : 0;
       
