@@ -2476,5 +2476,7 @@ export * from "./scanner/static.js";
 export * from "./scanner/behavioral.js";
 export * from "./scanner/semantic.js";
 export { writeAuditEvent, type AuditEvent } from "./audit/logger.js";
+export { syncAuditLedger } from "./audit/sync.js";
+
 
 
