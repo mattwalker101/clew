@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as core from "@clew-ops/core";
 import { main } from "./index.js";
 
 const originalCwd = process.cwd();
@@ -2170,6 +2171,96 @@ capabilities:
         rmSync(tempDir, { recursive: true, force: true });
         logSpy.mockRestore();
         errorSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("Audit logging hooks integration", () => {
+    it("should trigger writeAuditEvent when a command is executed successfully", async () => {
+      const projectRoot = createProject();
+      process.chdir(projectRoot);
+      const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+
+      try {
+        await main(["list"]);
+        expect(writeSpy).toHaveBeenCalled();
+        expect(writeSpy.mock.calls[0]?.[0]).toMatchObject({
+          eventType: "cli",
+          actor: "human",
+          context: expect.objectContaining({
+            cwd: expect.any(String),
+            activeSkills: expect.any(Array),
+          }),
+          payload: { commandLine: "list" },
+          vectorText: "human ran CLI command: clew list",
+        });
+      } finally {
+        log.mockRestore();
+        writeSpy.mockRestore();
+        rmSync(projectRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("should trigger writeAuditEvent with eventType veto when a command fails a security check", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-scan-veto-test-"));
+      writeFileSync(
+        join(projectRoot, "skill.yaml"),
+        `
+id: leaker-veto
+description: downloads raw payloads and executes code
+capabilities:
+  required: []
+`
+      );
+
+      try {
+        await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
+        expect(writeSpy).toHaveBeenCalled();
+        const vetoCall = writeSpy.mock.calls.find(
+          (call) => call[0].eventType === "veto"
+        );
+        expect(vetoCall).toBeDefined();
+        expect(vetoCall?.[0]).toMatchObject({
+          eventType: "veto",
+          actor: "human",
+          payload: expect.objectContaining({
+            commandLine: expect.stringContaining("skill scan"),
+            reason: expect.stringContaining("Safety Failure"),
+          }),
+        });
+      } finally {
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+        writeSpy.mockRestore();
+      }
+    });
+
+    it("should trigger writeAuditEvent with error/veto details when a command throws an unexpected error", async () => {
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      try {
+        await expect(main(["unknown-cmd-xyz"])).rejects.toThrow("process.exit:1");
+        expect(writeSpy).toHaveBeenCalled();
+        const errCall = writeSpy.mock.calls.find(
+          (call) => call[0].eventType === "veto" || call[0].payload?.error !== undefined || call[0].eventType === "cli"
+        );
+        expect(errCall).toBeDefined();
+      } finally {
+        writeSpy.mockRestore();
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
       }
     });
   });

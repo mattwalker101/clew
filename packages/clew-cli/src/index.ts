@@ -21,6 +21,7 @@ import {
   SkillRegistry,
   stringifyYaml,
   scanSkillBundle,
+  writeAuditEvent,
 } from "@clew-ops/core";
 import { exportProviderSkill } from "@clew-ops/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew-ops/importers";
@@ -221,6 +222,7 @@ const commands: Record<string, Command> = {
         }
         console.error("  -------------------------------------------------------------");
         console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
+        logSecurityVeto("Skill Scan Safety Failure", { violations: scanErrors });
         process.exit(1);
       }
     }
@@ -269,6 +271,7 @@ const commands: Record<string, Command> = {
       }
       console.error("  -------------------------------------------------------------");
       console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
+      logSecurityVeto("Skill Scan Safety Failure", { violations: result.errors });
       process.exit(1);
     }
 
@@ -603,6 +606,7 @@ const commands: Record<string, Command> = {
       console.error("                project's security constitution.");
       console.error("  -------------------------------------------------------------");
       console.error("  ⚠️ Commit aborted. Please restore the security rules and try again.");
+      logSecurityVeto("Security configuration degraded", { violations: result.errors });
       process.exit(1);
     }
     console.log("✔ [clew security] Constitution review passed successfully!");
@@ -785,8 +789,40 @@ function printJsonEnvelope(data: Record<string, unknown> & { warnings: Compatibi
   printJson(data);
 }
 
+let currentCommandLine = "";
+
+function logSecurityVeto(reason: string, details?: any) {
+  writeAuditEvent({
+    eventType: "veto",
+    actor: "human",
+    context: {
+      cwd: process.cwd(),
+      activeSkills: readAgentsContext().activeSkillIds
+    },
+    payload: {
+      commandLine: currentCommandLine,
+      reason,
+      details
+    },
+    vectorText: `Security veto: ${reason}. Command: clew ${currentCommandLine}`
+  });
+}
+
 function fail(message: string): never {
   console.error(message);
+  writeAuditEvent({
+    eventType: "veto",
+    actor: "human",
+    context: {
+      cwd: process.cwd(),
+      activeSkills: readAgentsContext().activeSkillIds
+    },
+    payload: {
+      commandLine: currentCommandLine,
+      error: message
+    },
+    vectorText: `CLI command failure: ${message}`
+  });
   process.exit(1);
 }
 
@@ -824,11 +860,48 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     );
     return;
   }
+
+  currentCommandLine = argv.join(" ");
+
+  let activeSkills: string[] = [];
+  try {
+    activeSkills = readAgentsContext().activeSkillIds;
+  } catch {
+    // Ignore
+  }
+
+  writeAuditEvent({
+    eventType: "cli",
+    actor: "human",
+    context: {
+      cwd: process.cwd(),
+      activeSkills,
+    },
+    payload: {
+      commandLine: currentCommandLine,
+    },
+    vectorText: "human ran CLI command: clew " + currentCommandLine,
+  });
+
   const command = commands[name];
   if (!command) fail(`unknown command: ${name}`);
   try {
     await command(args);
   } catch (error) {
+    writeAuditEvent({
+      eventType: "veto",
+      actor: "human",
+      context: {
+        cwd: process.cwd(),
+        activeSkills: readAgentsContext().activeSkillIds
+      },
+      payload: {
+        commandLine: currentCommandLine,
+        error: error instanceof Error ? error.message : String(error)
+      },
+      vectorText: `CLI command error: ${error instanceof Error ? error.message : String(error)}`
+    });
+
     if (error instanceof SkillBundleValidationError) {
       printJson({
         ok: false,
