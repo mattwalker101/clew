@@ -186,6 +186,8 @@ const commands: Record<string, Command> = {
       const { mkdtempSync, rmSync } = await import("node:fs");
       const { tmpdir } = await import("node:os");
       const tempRoot = mkdtempSync(join(tmpdir(), "clew-import-scan-"));
+      let failed = false;
+      let scanErrors: string[] = [];
       try {
         for (const bundle of result.bundles) {
           const tempSkillPath = join(tempRoot, bundle.manifest.id);
@@ -195,20 +197,31 @@ const commands: Record<string, Command> = {
             writeFileSync(join(tempSkillPath, "skill.md"), bundle.instructions);
           }
 
-          const scanResult = await scanSkillBundle(tempSkillPath, { semantic, ollama, ollamaModel });
+          const scanOptions: any = {};
+          if (semantic) scanOptions.semantic = true;
+          if (ollama) scanOptions.ollama = true;
+          if (ollamaModel !== undefined) scanOptions.ollamaModel = ollamaModel;
+
+          const scanResult = await scanSkillBundle(tempSkillPath, scanOptions);
           if (!scanResult.valid) {
-            console.error("\x1b[31m✖ [clew security] VETO: Skill Scan Safety Failure!\x1b[0m");
-            console.error("  -------------------------------------------------------------");
-            for (const err of scanResult.errors) {
-              console.error(`  Violation:    ${err}`);
-            }
-            console.error("  -------------------------------------------------------------");
-            console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
-            process.exit(1);
+            failed = true;
+            scanErrors = scanResult.errors;
+            break;
           }
         }
       } finally {
         rmSync(tempRoot, { recursive: true, force: true });
+      }
+
+      if (failed) {
+        console.error("\x1b[31m✖ [clew security] VETO: Skill Scan Safety Failure!\x1b[0m");
+        console.error("  -------------------------------------------------------------");
+        for (const err of scanErrors) {
+          console.error(`  Violation:    ${err}`);
+        }
+        console.error("  -------------------------------------------------------------");
+        console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
+        process.exit(1);
       }
     }
 
@@ -242,7 +255,12 @@ const commands: Record<string, Command> = {
     const modelIdx = optionsArgs.indexOf("--ollama-model");
     const ollamaModel = modelIdx !== -1 ? optionsArgs[modelIdx + 1] : undefined;
 
-    const result = await scanSkillBundle(targetPath, { semantic, ollama, ollamaModel });
+    const scanOptions: any = {};
+    if (semantic) scanOptions.semantic = true;
+    if (ollama) scanOptions.ollama = true;
+    if (ollamaModel !== undefined) scanOptions.ollamaModel = ollamaModel;
+
+    const result = await scanSkillBundle(targetPath, scanOptions);
     if (!result.valid) {
       console.error("\x1b[31m✖ [clew security] VETO: Skill Scan Safety Failure!\x1b[0m");
       console.error("  -------------------------------------------------------------");
@@ -253,7 +271,17 @@ const commands: Record<string, Command> = {
       console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
       process.exit(1);
     }
-    console.log("✔ [clew security] Skill scan completed successfully!");
+
+    if (result.errors.length > 0) {
+      console.warn("\x1b[33m⚠️ [clew security] WARNING: Skill scan completed with warnings:\x1b[0m");
+      console.warn("  -------------------------------------------------------------");
+      for (const err of result.errors) {
+        console.warn(`  Warning:      ${err}`);
+      }
+      console.warn("  -------------------------------------------------------------");
+    } else {
+      console.log("✔ [clew security] Skill scan completed successfully!");
+    }
   },
   async export(args) {
     const [provider, skillId] = args;

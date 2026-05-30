@@ -2029,7 +2029,7 @@ capabilities:
       try {
         await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
         expect(errorSpy).toHaveBeenCalled();
-        expect(errorSpy.mock.calls[0][0]).toContain("VETO: Skill Scan Safety Failure");
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
       } finally {
         rmSync(projectRoot, { recursive: true, force: true });
         errorSpy.mockRestore();
@@ -2064,7 +2064,7 @@ capabilities:
       try {
         await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
         expect(errorSpy).toHaveBeenCalled();
-        expect(errorSpy.mock.calls[0][0]).toContain("VETO: Skill Scan Safety Failure");
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
         const allErrors = errorSpy.mock.calls.map(call => call[0]).join("\n");
         expect(allErrors).toContain("Unauthorized import of system module: 'child_process'");
       } finally {
@@ -2101,7 +2101,7 @@ capabilities:
       try {
         await main(["skill", "scan", projectRoot]);
         expect(logSpy).toHaveBeenCalled();
-        expect(logSpy.mock.calls[0][0]).toContain("Skill scan completed successfully");
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Skill scan completed successfully");
       } finally {
         rmSync(projectRoot, { recursive: true, force: true });
         logSpy.mockRestore();
@@ -2134,7 +2134,7 @@ capabilities:
       try {
         await expect(main(["import", "claude", importFilePath, "--scan", "--save"])).rejects.toThrow("process.exit:1");
         expect(errorSpy).toHaveBeenCalled();
-        expect(errorSpy.mock.calls[0][0]).toContain("VETO: Skill Scan Safety Failure");
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
         errorSpy.mockRestore();

@@ -498,7 +498,7 @@ function cleanComments(code: string, isShell: boolean): string {
       
       while (i < line.length) {
         const char = line[i];
-        const prevChar = i > 0 ? line[i - 1] : "";
+        const prevChar = i > 0 ? line[i - 1] ?? "" : "";
         const prevTwo = i > 1 ? line.substring(i - 2, i) : "";
         
         // Handle escaped characters inside quotes

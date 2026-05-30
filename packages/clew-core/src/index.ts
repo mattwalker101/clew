@@ -2377,18 +2377,35 @@ export async function scanSkillBundle(
     };
   }
 
-  // 2. Behavioral Scan of associated files
+  // 2. Behavioral Scan of associated files recursively
+  const getAllFiles = (dir: string, baseDir = dir): { path: string; relPath: string }[] => {
+    const results: { path: string; relPath: string }[] = [];
+    try {
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const filePath = join(dir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) {
+          results.push(...getAllFiles(filePath, baseDir));
+        } else {
+          const relPath = filePath.substring(baseDir.length).replace(/^[/\\]+/, "");
+          results.push({ path: filePath, relPath });
+        }
+      }
+    } catch {
+      // Ignore read errors for recursion safety
+    }
+    return results;
+  };
+
   try {
-    const files = fs.readdirSync(bundlePath);
-    for (const file of files) {
-      if (file !== manifestFile) {
-        const filePath = join(bundlePath, file);
-        if (fs.statSync(filePath).isFile()) {
-          const scriptContent = fs.readFileSync(filePath, "utf-8");
-          const bhResult = scanScriptSafety(file, scriptContent);
-          if (!bhResult.valid) {
-            errorsList.push(...bhResult.errors);
-          }
+    const allFiles = getAllFiles(bundlePath);
+    for (const fileInfo of allFiles) {
+      if (fileInfo.relPath !== manifestFile) {
+        const scriptContent = fs.readFileSync(fileInfo.path, "utf-8");
+        const bhResult = scanScriptSafety(fileInfo.relPath, scriptContent);
+        if (!bhResult.valid) {
+          errorsList.push(...bhResult.errors);
         }
       }
     }
@@ -2426,11 +2443,11 @@ export async function scanSkillBundle(
       if (fs.existsSync(instructionsPath)) {
         try {
           const instContent = fs.readFileSync(instructionsPath, "utf-8");
-          const semResult = await scanSemanticInstructions(instructionFile, instContent, {
-            ollama: options.ollama,
-            ollamaModel: options.ollamaModel,
-            required: false
-          });
+          const semOptions: any = { required: false };
+          if (options.ollama !== undefined) semOptions.ollama = options.ollama;
+          if (options.ollamaModel !== undefined) semOptions.ollamaModel = options.ollamaModel;
+
+          const semResult = await scanSemanticInstructions(instructionFile, instContent, semOptions);
           if (!semResult.valid) {
             errorsList.push(...semResult.errors);
           }
