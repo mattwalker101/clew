@@ -9,6 +9,7 @@ import { join, relative } from "node:path";
 import { pipeline } from "@huggingface/transformers";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
+import * as lancedb from "@lancedb/lancedb";
 import {
   type ActivationContext,
   activationContextSchema,
@@ -2477,6 +2478,72 @@ export * from "./scanner/behavioral.js";
 export * from "./scanner/semantic.js";
 export { writeAuditEvent, type AuditEvent } from "./audit/logger.js";
 export { syncAuditLedger } from "./audit/sync.js";
+
+export async function queryAuditLedger(
+  queryText: string,
+  dbPath?: string
+): Promise<any[]> {
+  const finalDbPath = dbPath || join(homedir(), ".clew", "lancedb");
+  const db = await lancedb.connect(finalDbPath);
+  let table: lancedb.Table;
+  try {
+    table = await db.openTable("audit_events");
+  } catch {
+    return [];
+  }
+
+  const embedder = new EmbeddingEngine();
+  const vector = await embedder.embed(queryText);
+  const results = await table
+    .vectorSearch(Array.from(vector))
+    .limit(5)
+    .toArray();
+
+  return results;
+}
+
+export async function analyzeAuditLedger(
+  dbPath?: string
+): Promise<Array<{
+  event: any;
+  closestNeighbor?: any;
+}>> {
+  const finalDbPath = dbPath || join(homedir(), ".clew", "lancedb");
+  const db = await lancedb.connect(finalDbPath);
+  let table: lancedb.Table;
+  try {
+    table = await db.openTable("audit_events");
+  } catch {
+    return [];
+  }
+
+  const last15 = await table
+    .query()
+    .orderBy({ columnName: "timestamp", ascending: false })
+    .limit(15)
+    .toArray();
+
+  const analysisResults = [];
+
+  for (const ev of last15) {
+    if (!ev.vector) continue;
+
+    const neighbors = await table
+      .vectorSearch(Array.from(ev.vector as Iterable<number>))
+      .limit(4)
+      .toArray();
+
+    const others = neighbors.filter((n) => n.eventId !== ev.eventId);
+    const closestNeighbor = others[0];
+
+    analysisResults.push({
+      event: ev,
+      closestNeighbor,
+    });
+  }
+
+  return analysisResults;
+}
 
 
 

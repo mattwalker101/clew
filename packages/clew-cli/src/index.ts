@@ -22,6 +22,10 @@ import {
   stringifyYaml,
   scanSkillBundle,
   writeAuditEvent,
+  syncAuditLedger,
+  EmbeddingEngine,
+  queryAuditLedger,
+  analyzeAuditLedger,
 } from "@clew-ops/core";
 import { exportProviderSkill } from "@clew-ops/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew-ops/importers";
@@ -657,6 +661,80 @@ const commands: Record<string, Command> = {
       console.log("🎉 Successfully installed constitutional pre-commit hook!");
     }
   },
+  async audit(args) {
+    const [subcommand, ...subArgs] = args;
+    if (subcommand === "sync") {
+      const result = await syncAuditLedger();
+      console.log(`Successfully synced ${result.synced} new events to LanceDB.`);
+    } else if (subcommand === "query") {
+      const queryText = subArgs.join(" ");
+      if (!queryText) {
+        fail("usage: clew audit query <query>");
+      }
+      
+      const results = await queryAuditLedger(queryText);
+
+      if (results.length === 0) {
+        console.log("No matching events found.");
+        return;
+      }
+
+      for (const row of results) {
+        console.log(`Timestamp: ${row.timestamp}`);
+        console.log(`Event ID: ${row.eventId}`);
+        console.log(`Type: ${row.eventType}`);
+        console.log(`Actor: ${row.actor}`);
+        console.log(`Payload Summary: ${row.payloadJson || row.vectorText}`);
+        console.log(`Distance: ${row._distance}`);
+        console.log("-----------------------------------------");
+      }
+    } else if (subcommand === "analyze") {
+      // Run sync pass first
+      await syncAuditLedger();
+
+      const results = await analyzeAuditLedger();
+
+      if (results.length === 0) {
+        console.log("\x1b[32m✔ [clew security] Audit ledger review complete. No anomalies detected!\x1b[0m");
+        return;
+      }
+
+      let anomalyCount = 0;
+
+      for (const res of results) {
+        const ev = res.event;
+        const closest = res.closestNeighbor;
+
+        if (closest && closest._distance > 0.75) {
+          anomalyCount++;
+          let cmdLine = ev.vectorText;
+          let executionCwd = ev.cwd || "unknown";
+          try {
+            const payload = JSON.parse(ev.payloadJson);
+            if (payload.commandLine) {
+              cmdLine = payload.commandLine;
+            }
+          } catch {
+            // ignore
+          }
+
+          console.log("\x1b[31m✖ [clew security] ANOMALY VETO DETECTED!\x1b[0m");
+          console.log("\x1b[31m  -------------------------------------------------------------\x1b[0m");
+          console.log(`\x1b[31m  Command Line:   ${cmdLine}\x1b[0m`);
+          console.log(`\x1b[31m  Execution CWD:  ${executionCwd}\x1b[0m`);
+          console.log(`\x1b[31m  Timestamp:      ${ev.timestamp}\x1b[0m`);
+          console.log(`\x1b[31m  Anomaly Distance Score: ${closest._distance.toFixed(4)} (Threshold: 0.75)\x1b[0m`);
+          console.log("\x1b[31m  -------------------------------------------------------------\x1b[0m");
+        }
+      }
+
+      if (anomalyCount === 0) {
+        console.log("\x1b[32m✔ [clew security] Audit ledger review complete. No anomalies detected!\x1b[0m");
+      }
+    } else {
+      fail("usage: clew audit <sync|query|analyze> [args]");
+    }
+  },
 };
 
 function findRepoRoot(): string {
@@ -856,6 +934,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  run <start|status|verify>",
         "  check-security",
         "  security install",
+        "  audit sync",
+        "  audit query <query>",
+        "  audit analyze",
       ].join("\n"),
     );
     return;
