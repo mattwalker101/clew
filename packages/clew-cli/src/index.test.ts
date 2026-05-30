@@ -1,8 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as core from "@clew-ops/core";
 import { main } from "./index.js";
+
+let mockHomedirPath = "";
+
+vi.mock("node:os", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:os")>();
+  return {
+    ...original,
+    homedir: () => mockHomedirPath || original.homedir(),
+  };
+});
 
 const originalCwd = process.cwd();
 
@@ -2173,7 +2184,275 @@ capabilities:
       }
     });
   });
+
+  describe("Audit logging hooks integration", () => {
+    it("should trigger writeAuditEvent when a command is executed successfully", async () => {
+      const projectRoot = createProject();
+      process.chdir(projectRoot);
+      const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+
+      try {
+        await main(["list"]);
+        expect(writeSpy).toHaveBeenCalled();
+        expect(writeSpy.mock.calls[0]?.[0]).toMatchObject({
+          eventType: "cli",
+          actor: "human",
+          context: expect.objectContaining({
+            cwd: expect.any(String),
+            activeSkills: expect.any(Array),
+          }),
+          payload: { commandLine: "list" },
+          vectorText: "human ran CLI command: clew list",
+        });
+      } finally {
+        log.mockRestore();
+        writeSpy.mockRestore();
+        rmSync(projectRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("should trigger writeAuditEvent with eventType veto when a command fails a security check", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-scan-veto-test-"));
+      writeFileSync(
+        join(projectRoot, "skill.yaml"),
+        `
+id: leaker-veto
+description: downloads raw payloads and executes code
+capabilities:
+  required: []
+`
+      );
+
+      try {
+        await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
+        expect(writeSpy).toHaveBeenCalled();
+        const vetoCall = writeSpy.mock.calls.find(
+          (call) => call[0].eventType === "veto"
+        );
+        expect(vetoCall).toBeDefined();
+        expect(vetoCall?.[0]).toMatchObject({
+          eventType: "veto",
+          actor: "human",
+          payload: expect.objectContaining({
+            commandLine: expect.stringContaining("skill scan"),
+            reason: expect.stringContaining("Safety Failure"),
+          }),
+        });
+      } finally {
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+        writeSpy.mockRestore();
+      }
+    });
+
+    it("should trigger writeAuditEvent with error/veto details when a command throws an unexpected error", async () => {
+      const writeSpy = vi.spyOn(core, "writeAuditEvent");
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+      try {
+        await expect(main(["unknown-cmd-xyz"])).rejects.toThrow("process.exit:1");
+        expect(writeSpy).toHaveBeenCalled();
+        const errCall = writeSpy.mock.calls.find(
+          (call) => call[0].eventType === "veto" || call[0].payload?.error !== undefined || call[0].eventType === "cli"
+        );
+        expect(errCall).toBeDefined();
+      } finally {
+        writeSpy.mockRestore();
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("clew audit CLI subcommands", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = mkdtempSync(join(tmpdir(), "clew-audit-cli-test-"));
+      mockHomedirPath = tempDir;
+      // Ensure the .clew directory inside the mock homedir exists
+      mkdirSync(join(tempDir, ".clew"), { recursive: true });
+    });
+
+    afterEach(() => {
+      mockHomedirPath = "";
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it("should sync audit ledger and output sync count", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      // Write some mock events to the audit log path inside tempDir
+      const logPath = join(tempDir, ".clew", "audit.jsonl");
+      const ev = {
+        timestamp: "2026-05-30T10:00:00.000Z",
+        eventId: "test-event-1",
+        eventType: "cli",
+        actor: "human",
+        context: { cwd: tempDir, activeSkills: [] },
+        payload: { commandLine: "list" },
+        vectorText: "human ran CLI command: clew list",
+      };
+      writeFileSync(logPath, JSON.stringify(ev) + "\n", "utf-8");
+
+      // We need to mock EmbeddingEngine so we don't try to fetch or run Xenova
+      const embedSpy = vi.spyOn(core.EmbeddingEngine.prototype, "embed").mockImplementation(async () => {
+        return new Float32Array(384).fill(0.1);
+      });
+
+      try {
+        await main(["audit", "sync"]);
+
+        expect(logSpy).toHaveBeenCalled();
+        const output = logSpy.mock.calls.map(c => c[0]).join("\n");
+        expect(output).toContain("Successfully synced 2 new events to LanceDB.");
+      } finally {
+        embedSpy.mockRestore();
+        logSpy.mockRestore();
+      }
+    });
+
+    it("should query similarity search and print matching events", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const logPath = join(tempDir, ".clew", "audit.jsonl");
+      const ev = {
+        timestamp: "2026-05-30T10:00:00.000Z",
+        eventId: "test-event-1",
+        eventType: "cli",
+        actor: "human",
+        context: { cwd: tempDir, activeSkills: [] },
+        payload: { commandLine: "list" },
+        vectorText: "human ran CLI command: clew list",
+      };
+      writeFileSync(logPath, JSON.stringify(ev) + "\n", "utf-8");
+
+      // We need to mock EmbeddingEngine
+      const embedSpy = vi.spyOn(core.EmbeddingEngine.prototype, "embed").mockImplementation(async () => {
+        return new Float32Array(384).fill(0.1);
+      });
+
+      try {
+        // Sync first
+        await main(["audit", "sync"]);
+
+        // Now query
+        logSpy.mockClear();
+        await main(["audit", "query", "list"]);
+
+        expect(logSpy).toHaveBeenCalled();
+        const output = logSpy.mock.calls.map(c => c[0]).join("\n");
+        expect(output).toContain("test-event-1");
+        expect(output).toContain("cli");
+        expect(output).toContain("human");
+      } finally {
+        embedSpy.mockRestore();
+        logSpy.mockRestore();
+      }
+    });
+
+    it("should detect and report anomalies under analyze", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const logPath = join(tempDir, ".clew", "audit.jsonl");
+
+      // Write multiple normal events
+      const evs = [];
+      for (let i = 0; i < 5; i++) {
+        evs.push({
+          timestamp: `2026-05-30T10:0${i}:00.000Z`,
+          eventId: `normal-event-${i}`,
+          eventType: "cli",
+          actor: "human",
+          context: { cwd: tempDir, activeSkills: [] },
+          payload: { commandLine: `list-${i}` },
+          vectorText: "normal event text similarity",
+        });
+      }
+
+      // Write one anomalous event
+      evs.push({
+        timestamp: "2026-05-30T10:10:00.000Z",
+        eventId: "anomalous-event-1",
+        eventType: "cli",
+        actor: "human",
+        context: { cwd: "/dangerous-cwd", activeSkills: [] },
+        payload: { commandLine: "rm -rf /" },
+        vectorText: "anomalous event completely different text payload",
+      });
+
+      writeFileSync(logPath, evs.map(e => JSON.stringify(e)).join("\n") + "\n", "utf-8");
+
+      // Mock EmbeddingEngine.prototype.embed to return different vectors for anomalous text
+      const embedSpy = vi.spyOn(core.EmbeddingEngine.prototype, "embed").mockImplementation(async (text) => {
+        const vec = new Float32Array(384);
+        if (text.includes("anomalous") || text.includes("dangerous") || text.includes("rm -rf")) {
+          vec[1] = 1.0;
+        } else {
+          vec[0] = 1.0;
+        }
+        return vec;
+      });
+
+      try {
+        await main(["audit", "analyze"]);
+
+        expect(logSpy).toHaveBeenCalled();
+        const output = logSpy.mock.calls.map(c => c[0]).join("\n");
+        expect(output).toContain("ANOMALY VETO DETECTED!");
+        expect(output).toContain("rm -rf /");
+        expect(output).toContain("/dangerous-cwd");
+      } finally {
+        embedSpy.mockRestore();
+        logSpy.mockRestore();
+      }
+    });
+
+    it("should print green success message under analyze if no anomalies are found", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const logPath = join(tempDir, ".clew", "audit.jsonl");
+
+      // Write multiple normal events only
+      const evs = [];
+      for (let i = 0; i < 5; i++) {
+        evs.push({
+          timestamp: `2026-05-30T10:0${i}:00.000Z`,
+          eventId: `normal-event-${i}`,
+          eventType: "cli",
+          actor: "human",
+          context: { cwd: tempDir, activeSkills: [] },
+          payload: { commandLine: `list-${i}` },
+          vectorText: "normal event text similarity",
+        });
+      }
+
+      writeFileSync(logPath, evs.map(e => JSON.stringify(e)).join("\n") + "\n", "utf-8");
+
+      // Mock embed to return identical vectors
+      const embedSpy = vi.spyOn(core.EmbeddingEngine.prototype, "embed").mockImplementation(async () => {
+        const vec = new Float32Array(384);
+        vec.fill(0.1);
+        return vec;
+      });
+
+      try {
+        await main(["audit", "analyze"]);
+
+        expect(logSpy).toHaveBeenCalled();
+        const output = logSpy.mock.calls.map(c => c[0]).join("\n");
+        expect(output).not.toContain("ANOMALY VETO DETECTED!");
+        expect(output).toContain("No anomalies detected");
+      } finally {
+        embedSpy.mockRestore();
+        logSpy.mockRestore();
+      }
+    });
+  });
 });
-
-
-

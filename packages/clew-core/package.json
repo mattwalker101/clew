@@ -14,14 +14,16 @@
     "test": "cd ../.. && vitest run packages/clew-core/src/index.test.ts"
   },
   "dependencies": {
-    "acorn": "^8.13.0",
     "@clew-ops/schema": "workspace:*",
     "@huggingface/transformers": "^4.2.0",
+    "@lancedb/lancedb": "^0.30.0",
+    "acorn": "^8.13.0",
     "better-sqlite3": "^12.10.0",
     "sqlite-vec": "^0.1.9"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "tslib": "^2.8.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
