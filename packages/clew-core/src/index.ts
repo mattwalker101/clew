@@ -34,6 +34,10 @@ import {
   skillSearchSemanticAnalysisResultSchema,
 } from "@clew-ops/schema";
 
+import { scanStaticManifest } from "./scanner/static.js";
+import { scanScriptSafety } from "./scanner/behavioral.js";
+import { scanSemanticInstructions } from "./scanner/semantic.js";
+
 export type RegistryEntry = {
   bundle: SkillBundle;
   layer: RegistryLayer;
@@ -2337,5 +2341,138 @@ export async function checkSecuritySettings(
   };
 }
 
+export async function scanSkillBundle(
+  bundlePath: string,
+  options?: { semantic?: boolean; ollama?: boolean; ollamaModel?: string }
+): Promise<SecurityCheckResult> {
+  const errorsList: any[] = [];
 
+  let manifestFile = "skill.yaml";
+  let skillYamlPath = join(bundlePath, manifestFile);
+  if (!fs.existsSync(skillYamlPath)) {
+    manifestFile = "clew.yaml";
+    skillYamlPath = join(bundlePath, manifestFile);
+  }
+
+  if (!fs.existsSync(skillYamlPath)) {
+    return {
+      valid: false,
+      errors: ["Missing skill.yaml manifest in skill bundle"]
+    };
+  }
+
+  // 1. Static Scan
+  let parsed: any;
+  try {
+    const content = fs.readFileSync(skillYamlPath, "utf-8");
+    parsed = parseYaml(content) as any;
+    const staticResult = scanStaticManifest(parsed);
+    if (!staticResult.valid) {
+      errorsList.push(...staticResult.errors);
+    }
+  } catch (e: any) {
+    return {
+      valid: false,
+      errors: [`Failed to parse ${manifestFile}: ${e.message}`]
+    };
+  }
+
+  // 2. Behavioral Scan of associated files recursively
+  const getAllFiles = (dir: string, baseDir = dir): { path: string; relPath: string }[] => {
+    const results: { path: string; relPath: string }[] = [];
+    try {
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const filePath = join(dir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) {
+          results.push(...getAllFiles(filePath, baseDir));
+        } else {
+          const relPath = filePath.substring(baseDir.length).replace(/^[/\\]+/, "");
+          results.push({ path: filePath, relPath });
+        }
+      }
+    } catch {
+      // Ignore read errors for recursion safety
+    }
+    return results;
+  };
+
+  try {
+    const allFiles = getAllFiles(bundlePath);
+    for (const fileInfo of allFiles) {
+      if (fileInfo.relPath !== manifestFile) {
+        const scriptContent = fs.readFileSync(fileInfo.path, "utf-8");
+        const bhResult = scanScriptSafety(fileInfo.relPath, scriptContent);
+        if (!bhResult.valid) {
+          errorsList.push(...bhResult.errors);
+        }
+      }
+    }
+  } catch (e: any) {
+    return {
+      valid: false,
+      errors: [`Scanner behavioral scan failed: ${e.message}`]
+    };
+  }
+
+  // 3. Optional Semantic Scan
+  if (options?.semantic) {
+    let instructionFile = "";
+    if (parsed && typeof parsed === "object") {
+      if (parsed.instructions) {
+        if (typeof parsed.instructions === "string") {
+          instructionFile = parsed.instructions;
+        } else if (typeof parsed.instructions === "object" && parsed.instructions.file) {
+          instructionFile = parsed.instructions.file;
+        }
+      }
+    }
+
+    if (!instructionFile) {
+      for (const f of ["skill.md", "instructions.md", "clew.md"]) {
+        if (fs.existsSync(join(bundlePath, f))) {
+          instructionFile = f;
+          break;
+        }
+      }
+    }
+
+    if (instructionFile) {
+      const instructionsPath = join(bundlePath, instructionFile);
+      if (fs.existsSync(instructionsPath)) {
+        try {
+          const instContent = fs.readFileSync(instructionsPath, "utf-8");
+          const semOptions: any = { required: false };
+          if (options.ollama !== undefined) semOptions.ollama = options.ollama;
+          if (options.ollamaModel !== undefined) semOptions.ollamaModel = options.ollamaModel;
+
+          const semResult = await scanSemanticInstructions(instructionFile, instContent, semOptions);
+          if (!semResult.valid) {
+            errorsList.push(...semResult.errors);
+          }
+        } catch (e: any) {
+          errorsList.push({
+            type: "semantic",
+            file: instructionFile,
+            message: `Semantic scan failed: ${e.message}`,
+            severity: "error"
+          });
+        }
+      }
+    }
+  }
+
+  const hardErrors = errorsList.filter(e => e.severity === "error");
+  const formattedErrors = errorsList.map(e => `[${e.type.toUpperCase()} VETO] ${e.file}: ${e.message}`);
+
+  return {
+    valid: hardErrors.length === 0,
+    errors: formattedErrors
+  };
+}
+
+export * from "./scanner/static.js";
+export * from "./scanner/behavioral.js";
+export * from "./scanner/semantic.js";
 

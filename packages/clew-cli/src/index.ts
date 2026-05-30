@@ -20,6 +20,7 @@ import {
   SessionManager,
   SkillRegistry,
   stringifyYaml,
+  scanSkillBundle,
 } from "@clew-ops/core";
 import { exportProviderSkill } from "@clew-ops/exporters";
 import { importClaudeSkill, importOpenCodeSkill } from "@clew-ops/importers";
@@ -159,13 +160,70 @@ const commands: Record<string, Command> = {
     }
     },  async import(args) {
     const save = args.includes("--save");
-    const filteredArgs = args.filter((arg) => arg !== "--save");
+    const scan = args.includes("--scan");
+    const semantic = args.includes("--semantic");
+    const ollama = args.includes("--ollama") || args.includes("--ollama-model");
+    const modelIdx = args.indexOf("--ollama-model");
+    const ollamaModel = modelIdx !== -1 ? args[modelIdx + 1] : undefined;
+
+    const filteredArgs = args.filter(
+      (arg, idx) =>
+        arg !== "--save" &&
+        arg !== "--scan" &&
+        arg !== "--semantic" &&
+        arg !== "--ollama" &&
+        arg !== "--ollama-model" &&
+        (modelIdx === -1 || idx !== modelIdx + 1)
+    );
     const [provider, file] = filteredArgs;
     if ((provider !== "claude" && provider !== "opencode") || !file) {
       fail("usage: clew import <claude|opencode> <json-file> [--save]");
     }
     const input = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
     const result = provider === "claude" ? importClaudeSkill(input) : importOpenCodeSkill(input);
+
+    if (scan) {
+      const { mkdtempSync, rmSync } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const tempRoot = mkdtempSync(join(tmpdir(), "clew-import-scan-"));
+      let failed = false;
+      let scanErrors: string[] = [];
+      try {
+        for (const bundle of result.bundles) {
+          const tempSkillPath = join(tempRoot, bundle.manifest.id);
+          mkdirSync(tempSkillPath, { recursive: true });
+          writeFileSync(join(tempSkillPath, "clew.yaml"), stringifyYaml(bundle.manifest));
+          if (bundle.instructions) {
+            writeFileSync(join(tempSkillPath, "skill.md"), bundle.instructions);
+          }
+
+          const scanOptions: any = {};
+          if (semantic) scanOptions.semantic = true;
+          if (ollama) scanOptions.ollama = true;
+          if (ollamaModel !== undefined) scanOptions.ollamaModel = ollamaModel;
+
+          const scanResult = await scanSkillBundle(tempSkillPath, scanOptions);
+          if (!scanResult.valid) {
+            failed = true;
+            scanErrors = scanResult.errors;
+            break;
+          }
+        }
+      } finally {
+        rmSync(tempRoot, { recursive: true, force: true });
+      }
+
+      if (failed) {
+        console.error("\x1b[31m✖ [clew security] VETO: Skill Scan Safety Failure!\x1b[0m");
+        console.error("  -------------------------------------------------------------");
+        for (const err of scanErrors) {
+          console.error(`  Violation:    ${err}`);
+        }
+        console.error("  -------------------------------------------------------------");
+        console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
+        process.exit(1);
+      }
+    }
 
     if (save) {
       const projectRegistryRoot = join(process.cwd(), ".clew");
@@ -179,6 +237,51 @@ const commands: Record<string, Command> = {
     }
 
     printJson(result);
+  },
+  async "skill"(args) {
+    const [sub, pathArg] = args;
+    if (sub !== "scan") {
+      fail("usage: clew skill scan [path] [--semantic] [--ollama] [--ollama-model <model>]");
+    }
+    let targetPath = process.cwd();
+    let optionsStartIdx = 1;
+    if (pathArg && !pathArg.startsWith("-")) {
+      targetPath = pathArg;
+      optionsStartIdx = 2;
+    }
+    const optionsArgs = args.slice(optionsStartIdx);
+    const semantic = optionsArgs.includes("--semantic");
+    const ollama = optionsArgs.includes("--ollama") || optionsArgs.includes("--ollama-model");
+    const modelIdx = optionsArgs.indexOf("--ollama-model");
+    const ollamaModel = modelIdx !== -1 ? optionsArgs[modelIdx + 1] : undefined;
+
+    const scanOptions: any = {};
+    if (semantic) scanOptions.semantic = true;
+    if (ollama) scanOptions.ollama = true;
+    if (ollamaModel !== undefined) scanOptions.ollamaModel = ollamaModel;
+
+    const result = await scanSkillBundle(targetPath, scanOptions);
+    if (!result.valid) {
+      console.error("\x1b[31m✖ [clew security] VETO: Skill Scan Safety Failure!\x1b[0m");
+      console.error("  -------------------------------------------------------------");
+      for (const err of result.errors) {
+        console.error(`  Violation:    ${err}`);
+      }
+      console.error("  -------------------------------------------------------------");
+      console.error("  ⚠️ Validation aborted. Skill package possesses critical risks.");
+      process.exit(1);
+    }
+
+    if (result.errors.length > 0) {
+      console.warn("\x1b[33m⚠️ [clew security] WARNING: Skill scan completed with warnings:\x1b[0m");
+      console.warn("  -------------------------------------------------------------");
+      for (const err of result.errors) {
+        console.warn(`  Warning:      ${err}`);
+      }
+      console.warn("  -------------------------------------------------------------");
+    } else {
+      console.log("✔ [clew security] Skill scan completed successfully!");
+    }
   },
   async export(args) {
     const [provider, skillId] = args;
@@ -702,10 +805,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         "  recommend <query>",
         "  recommend --explain <query>",
         "  explain <skill-id> [query]",
-        "  import <claude|opencode> <json-file> [--save]",
+        "  import <claude|opencode> <json-file> [--save] [--scan] [--semantic] [--ollama] [--ollama-model <model>]",
         "  export <claude|opencode> <skill-id>",
         "  enable <skill-id>",
         "  disable <skill-id>",
+        "  skill scan [path] [--semantic] [--ollama] [--ollama-model <model>]",
         "  overlaps",
         "  conflicts",
         "  telemetry",

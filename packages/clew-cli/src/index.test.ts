@@ -2007,6 +2007,172 @@ describe("@clew-ops/cli", () => {
       }
     });
   });
+
+  describe("clew skill scan command", () => {
+    it("should fail and output veto messages if a manifest has a cap-mismatch", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-scan-cap-"));
+      writeFileSync(
+        join(projectRoot, "skill.yaml"),
+        `
+id: leaker
+description: downloads raw payloads and executes code
+capabilities:
+  required: []
+`
+      );
+
+      try {
+        await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
+      } finally {
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should fail if any behavioral checks fail on associated scripts", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-scan-behavioral-"));
+      writeFileSync(
+        join(projectRoot, "skill.yaml"),
+        `
+id: safe-looking
+description: a harmless helper
+capabilities:
+  required: []
+`
+      );
+      writeFileSync(
+        join(projectRoot, "script.js"),
+        `
+        const { execSync } = require('child_process');
+        execSync('id');
+        `
+      );
+
+      try {
+        await expect(main(["skill", "scan", projectRoot])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
+        const allErrors = errorSpy.mock.calls.map(call => call[0]).join("\n");
+        expect(allErrors).toContain("Unauthorized import of system module: 'child_process'");
+      } finally {
+        rmSync(projectRoot, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should pass successfully if the skill bundle is safe", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const projectRoot = mkdtempSync(join(tmpdir(), "clew-cli-scan-safe-"));
+      writeFileSync(
+        join(projectRoot, "skill.yaml"),
+        `
+id: safe-skill
+description: formatting helper
+capabilities:
+  required: []
+`
+      );
+      writeFileSync(
+        join(projectRoot, "script.js"),
+        `
+        console.log("hello world");
+        `
+      );
+
+      try {
+        await main(["skill", "scan", projectRoot]);
+        expect(logSpy).toHaveBeenCalled();
+        expect(logSpy.mock.calls[0]?.[0]).toContain("Skill scan completed successfully");
+      } finally {
+        rmSync(projectRoot, { recursive: true, force: true });
+        logSpy.mockRestore();
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("clew import --scan", () => {
+    it("should block import if the package is high risk / fails safety check", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit:${code}`);
+      });
+
+      const tempDir = mkdtempSync(join(tmpdir(), "clew-import-test-"));
+      const importFilePath = join(tempDir, "unsafe-claude-skill.json");
+      writeFileSync(
+        importFilePath,
+        JSON.stringify({
+          id: "unsafe-claude",
+          name: "Unsafe Claude Skill",
+          description: "downloads raw payloads and executes code",
+          instructions: "Refactor safely.",
+          allowed_tools: []
+        })
+      );
+
+      try {
+        await expect(main(["import", "claude", importFilePath, "--scan", "--save"])).rejects.toThrow("process.exit:1");
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls[0]?.[0]).toContain("VETO: Skill Scan Safety Failure");
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+        errorSpy.mockRestore();
+        exitSpy.mockRestore();
+      }
+    });
+
+    it("should successfully import a safe package", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const tempDir = mkdtempSync(join(tmpdir(), "clew-import-safe-test-"));
+      const importFilePath = join(tempDir, "safe-claude-skill.json");
+      writeFileSync(
+        importFilePath,
+        JSON.stringify({
+          id: "safe-claude",
+          name: "Safe Claude Skill",
+          description: "A completely safe helper skill",
+          instructions: "Refactor safely.",
+          allowed_tools: []
+        })
+      );
+
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
+
+      try {
+        await main(["import", "claude", importFilePath, "--scan", "--save"]);
+        expect(logSpy).toHaveBeenCalled();
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tempDir, { recursive: true, force: true });
+        logSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+    });
+  });
 });
 
 
