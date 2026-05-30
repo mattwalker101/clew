@@ -718,13 +718,14 @@ const commands: Record<string, Command> = {
             // ignore
           }
 
-          console.log("\x1b[31m✖ [clew security] ANOMALY VETO DETECTED!\x1b[0m");
-          console.log("\x1b[31m  -------------------------------------------------------------\x1b[0m");
-          console.log(`\x1b[31m  Command Line:   ${cmdLine}\x1b[0m`);
-          console.log(`\x1b[31m  Execution CWD:  ${executionCwd}\x1b[0m`);
-          console.log(`\x1b[31m  Timestamp:      ${ev.timestamp}\x1b[0m`);
-          console.log(`\x1b[31m  Anomaly Distance Score: ${closest._distance.toFixed(4)} (Threshold: 0.75)\x1b[0m`);
-          console.log("\x1b[31m  -------------------------------------------------------------\x1b[0m");
+          console.log("\x1b[31m┌─────────────────────────────────────────────────────────────┐\x1b[0m");
+          console.log("\x1b[31m│ ✖ [clew security] ANOMALY VETO DETECTED!                    │\x1b[0m");
+          console.log("\x1b[31m├─────────────────────────────────────────────────────────────┤\x1b[0m");
+          console.log(`\x1b[31m│ Command Line:   ${cmdLine}\x1b[0m`);
+          console.log(`\x1b[31m│ Execution CWD:  ${executionCwd}\x1b[0m`);
+          console.log(`\x1b[31m│ Timestamp:      ${ev.timestamp}\x1b[0m`);
+          console.log(`\x1b[31m│ Anomaly Distance Score: ${closest._distance.toFixed(4)} (Threshold: 0.75)\x1b[0m`);
+          console.log("\x1b[31m└─────────────────────────────────────────────────────────────┘\x1b[0m");
         }
       }
 
